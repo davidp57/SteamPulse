@@ -1,0 +1,62 @@
+name: Build executables
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build Windows executables
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[build]"
+
+      - name: Build executables
+        working-directory: build
+        run: pyinstaller steampulse.spec --distpath ../dist --workpath ../build/work --noconfirm
+
+      - name: Smoke-test executable
+        run: .\dist\steampulse.exe --help
+
+      - name: Compute version
+        id: version
+        shell: pwsh
+        run: |
+          $v = (python -c "import importlib.metadata; print(importlib.metadata.version('steampulse'))")
+          echo "VERSION=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Create release archive
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $archive = "steampulse-v$version-windows-x64.zip"
+          Compress-Archive -Path dist\steampulse.exe -DestinationPath $archive
+          echo "ARCHIVE=$archive" >> $env:GITHUB_OUTPUT
+        id: archive
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: steampulse-windows-x64
+          path: ${{ steps.archive.outputs.ARCHIVE }}
+          if-no-files-found: error
+
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.archive.outputs.ARCHIVE }}
+          generate_release_notes: true

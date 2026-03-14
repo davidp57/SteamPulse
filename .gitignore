@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Distribution / packaging
+dist/
+build/work/
+*.egg-info/
+
+# PyInstaller spec build outputs (keep source files in build/)
+build/__pycache__/
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Mypy
+.mypy_cache/
+
+# Ruff
+.ruff_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# Project artefacts
+steam_library.db
+steam_library.html
+steam_news.html
+steam_cache.json
+steam_library.py

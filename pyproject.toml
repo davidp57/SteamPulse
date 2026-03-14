@@ -1,0 +1,68 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "steampulse"
+version = "1.0.0"
+description = "Fetches your Steam library, wishlist, and game news via the Steam API and renders them as a filterable offline HTML dashboard."
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "types-requests>=2.31",
+    "responses>=0.25",
+]
+build = [
+    "pyinstaller>=6.0",
+]
+
+[project.scripts]
+steampulse   = "steam_tracker.cli:cmd_run"
+steam-fetch  = "steam_tracker.cli:cmd_fetch"
+steam-render = "steam_tracker.cli:cmd_render"
+
+[tool.ruff]
+line-length   = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select  = ["E", "F", "W", "I", "UP", "N", "B", "A", "C4", "SIM"]
+ignore  = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# HTML template contains long CSS/JS lines that must not be wrapped
+"steam_tracker/renderer.py" = ["E501"]
+
+[tool.mypy]
+python_version         = "3.11"
+strict                 = true
+ignore_missing_imports = false
+
+[[tool.mypy.overrides]]
+# test files use untyped decorators (pytest.fixture, responses.activate)
+module = ["tests.*"]
+disallow_untyped_decorators = false
+
+[[tool.mypy.overrides]]
+# responses ships no PEP 561 stubs
+module = ["responses"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts   = "-v --tb=short --cov=steam_tracker --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["steam_tracker"]
+
+[tool.coverage.report]
+exclude_lines = ["if __name__ == .__main__.:"]
