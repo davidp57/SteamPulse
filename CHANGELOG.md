@@ -11,6 +11,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.0.1] — 2026-03-15
+
+### Fixed
+
+- **Packaging** — declare `steam_tracker` as the wheel package in `pyproject.toml` so that `pip install` (and the CI) can resolve the package correctly when the project name differs from the source directory
+
+---
+
 ## [1.0.0] — 2026-03-14
 
 ### Added
@@ -63,6 +71,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - HTTP 403/404 on news/details endpoints logged at DEBUG (not WARNING)
 - `pyproject.toml`-based packaging with `hatchling`
 
-[Unreleased]: https://github.com/davidp57/SteamPulse/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/davidp57/SteamPulse/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/davidp57/SteamPulse/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/davidp57/SteamPulse/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/davidp57/SteamPulse/releases/tag/v0.1.0
