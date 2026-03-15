@@ -11,23 +11,27 @@
 5. [Référence des modules](#5-référence-des-modules)
 6. [Lancer les tests](#6-lancer-les-tests)
 7. [Lint et vérification de types](#7-lint-et-vérification-de-types)
-8. [Ajouter une source de données](#8-ajouter-une-source-de-données)
-9. [Contribuer](#9-contribuer)
+8. [Ajouter une traduction](#8-ajouter-une-traduction)
+9. [Ajouter une source de données](#9-ajouter-une-source-de-données)
+10. [Contribuer](#10-contribuer)
 
 ---
 
 ## 1. Structure du projet
 
 ```
-steampulse/
-├── steam_tracker/
-│   ├── __init__.py
-│   ├── models.py      # Modèles Pydantic v2
-│   ├── api.py         # Wrappers HTTP typés vers l'API Steam
-│   ├── db.py          # Couche de persistance SQLite
-│   ├── fetcher.py     # Fetcher multi-threadé + RateLimiter
-│   ├── renderer.py    # Générateur HTML statique
-│   └── cli.py         # Points d'entrée steam-fetch / steam-render
+steam_tracker/
+├── __init__.py
+├── models.py      # Modèles Pydantic v2
+├── api.py         # Wrappers HTTP typés vers l'API Steam
+├── db.py          # Couche de persistance SQLite
+├── fetcher.py     # Fetcher multi-threadé + RateLimiter
+├── renderer.py    # Générateur HTML statique
+├── cli.py         # Points d'entrée steam-fetch / steam-render
+└── i18n/
+    ├── __init__.py  # Translator, get_translator(), detect_lang()
+    ├── en.py        # Chaînes anglaises
+    └── fr.py        # Chaînes françaises
 ├── tests/
 │   ├── conftest.py
 │   ├── test_api.py
@@ -250,9 +254,17 @@ SteamFetcher(
 
 ### `renderer.py`
 
-Deux fonctions publiques : `write_html` et `write_news_html`. Elles prennent une `list[GameRecord]`, un `steam_id` pour l'en-tête, un `Path` de sortie et optionnellement un href de lien croisé.
+Deux fonctions publiques : `write_html` et `write_news_html`. Elles acceptent une `list[GameRecord]`, un `steam_id` pour l'en-tête, un `Path` de sortie, optionnellement un href de lien croisé, et un code `lang` optionnel.
 
-Le HTML est construit par interpolation de chaînes dans les raw strings `_HTML_TEMPLATE` et `_NEWS_TEMPLATE`. Aucune bibliothèque de templating externe n'est utilisée.
+Le HTML est construit par interpolation de chaînes dans les raw strings `_HTML_TEMPLATE` et `_NEWS_TEMPLATE`. Aucune bibliothèque de templating externe n'est utilisée. Les libellés visibles utilisent des placeholders `__T_key__` remplacés au moment du rendu via `_apply_html_t()` ; les chaînes JavaScript sont injectées sous forme d'un bloc `const I18N = {...}` via `_build_i18n_js()`.
+
+### `i18n/__init__.py`
+
+| Symbole | Description |
+|---|---|
+| `detect_lang()` | Lit les variables d'env `LANGUAGE` / `LC_ALL` / `LC_MESSAGES` / `LANG` puis `locale.getdefaultlocale()`, retourne un code à 2 lettres, défaut `"en"` |
+| `Translator` | Classe appelable ; `t("key")` retourne la chaîne traduite, `t("key", param=val)` effectue une substitution `str.format` ; repli sur l'anglais si la clé manque |
+| `get_translator(lang)` | Retourne un `Translator` pour le code lang donné (ou auto-détecté) ; les codes inconnus replient sur `"en"` |
 
 ---
 
@@ -302,7 +314,20 @@ Points notables :
 
 ---
 
-## 8. Ajouter une source de données
+## 8. Ajouter une traduction
+
+1. Créer `steam_tracker/i18n/<code>.py` (ex. `de.py` pour l'allemand) avec un unique `STRINGS: dict[str, str]` qui reprend les clés de `en.py`. Seules les clés à traduire sont nécessaires — les clés manquantes replient automatiquement sur l'anglais.
+
+2. Enregistrer le module dans `steam_tracker/i18n/__init__.py` :
+   ```python
+   _SUPPORTED = {"en": en, "fr": fr, "de": de}   # ajouter l'import et l'entrée
+   ```
+
+3. Les utilisateurs pourront alors passer `--lang de` ou utiliser une locale système allemande.
+
+---
+
+## 9. Ajouter une source de données
 
 Pour ajouter une nouvelle source de jeux (ex. Epic Games, GOG) :
 
@@ -320,7 +345,7 @@ Pour ajouter une nouvelle source de jeux (ex. Epic Games, GOG) :
 
 ---
 
-## 9. Contribuer
+## 10. Contribuer
 
 ```bash
 # 1. Créer une branche

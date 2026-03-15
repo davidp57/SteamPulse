@@ -1,0 +1,99 @@
+"""French translation strings."""
+STRINGS: dict[str, str] = {
+    # ── CLI ──────────────────────────────────────────────────────────────────
+    "cli_fetching_library":  "📦 Récupération de la bibliothèque Steam...",
+    "cli_owned_count":       "   ✅ {count} jeu(x) possédé(s)",
+    "cli_fetching_wishlist": "🎁 Récupération de la wishlist...",
+    "cli_wishlist_count":    "   ✅ {total} jeu(x) en wishlist · {new} nouveau(x)",
+    "cli_wishlist_error":    "   ⚠ Wishlist inaccessible ({error})",
+    "cli_fetching_followed": "👁 Récupération des jeux suivis...",
+    "cli_followed_count":    "   ✅ {total} jeu(x) suivi(s) · {new} nouveau(x)",
+    "cli_followed_error":    "   ⚠ Jeux suivis inaccessibles ({error})",
+    "cli_pending": (
+        "   {details} jeu(x) à récupérer · {news} news à rafraîchir ({cached} déjà à jour)"
+    ),
+    "cli_interrupted":       "\nArrêt.",
+    "cli_fetch_done":        "\n✅ Terminé — {count} entrée(s) mise(s) à jour dans {db}",
+    "cli_rendering":         "🖥  Génération des pages HTML...",
+    "cli_render_library":    "✅ {count} jeux · bibliothèque → {path}",
+    "cli_render_news":       "   {count} news → {path}",
+
+    # ── HTML – common ─────────────────────────────────────────────────────────
+    "html_lang":             "fr",
+    "generated_at":          "Généré le",
+    "search_placeholder":    "Rechercher un jeu...",
+    "btn_filters":           "Filtres",
+    "btn_reset":             "Reset",
+    "btn_list_view":         "Liste",
+    "btn_grid_view":         "Grille",
+    "title_btn_filters":     "Afficher / masquer les filtres",
+    "title_btn_reset":       "Réinitialiser tous les filtres",
+    "title_view_toggle":     "Basculer Grille / Liste",
+    "title_scroll_top":      "Retour en haut",
+    "title_theme":           "Changer de thème",
+    "filter_status":         "Statut",
+    "filter_source":         "Source",
+    "filter_news_type":      "Type news",
+    "filter_playtime":       "Temps de jeu",
+    "filter_metacritic":     "Metacritic",
+    "filter_recent":         "Màj récente",
+    "lbl_all":               "Tous",
+    "lbl_released":          "Sortis",
+    "lbl_upcoming":          "À venir",
+    "lbl_owned":             "Possédés",
+    "lbl_followed":          "Suivis",
+    "lbl_all_types":         "Tous types",
+    "lbl_never_played":      "Jamais joué",
+    "lbl_no_score":          "Sans score",
+    "lbl_2_days":            "2 jours",
+    "lbl_5_days":            "5 jours",
+    "lbl_15_days":           "15 jours",
+    "lbl_30_days":           "30 jours",
+    "footer": (
+        "SteamPulse · Données via Steam Web API &amp; Store API · Non affilié à Valve"
+    ),
+
+    # ── HTML – library page ───────────────────────────────────────────────────
+    "stat_total":            "Jeux total",
+    "stat_released":         "Sortis 1.0",
+    "stat_unreleased":       "Pas sortis",
+    "stat_hours":            "Heures jouées",
+    "sort_name_asc":         "Trier : Nom A→Z",
+    "sort_name_desc":        "Trier : Nom Z→A",
+    "sort_playtime":         "Trier : Temps de jeu ↓",
+    "sort_release":          "Trier : Date de sortie ↓",
+    "sort_lastupdate":       "Trier : Dernière MàJ ↓",
+    "sort_metacritic":       "Trier : Metacritic ↓",
+    "link_news":             "News",
+    "col_game":              "Jeu",
+    "col_dev_score":         "Développeur / Score",
+    "col_playtime_date":     "Temps de jeu · Date",
+
+    # ── HTML – news page ──────────────────────────────────────────────────────
+    "link_library":          "Bibliothèque",
+
+    # ── Badge labels (renderer) ───────────────────────────────────────────────
+    "badge_earlyaccess":     "Early Access",
+    "badge_released":        "Sorti (1.0)",
+    "badge_unreleased":      "Pas encore sorti",
+    "badge_unknown":         "Inconnu",
+
+    # ── Card (Python-generated) ───────────────────────────────────────────────
+    "price_free":            "Gratuit",
+    "source_wishlist":       "🎁 Wishlist",
+    "source_followed":       "👁 Suivi",
+    "card_no_news_html":     "Aucune news disponible",
+    "card_news_toggle_0":    "Aucune news",
+    "card_news_toggle_1":    "1 mise à jour",
+    "card_news_toggle_n":    "{count} mises à jour",
+
+    # ── JS i18n (injected as window.I18N) ────────────────────────────────────
+    "js_news_0":             "Aucune news",
+    "js_news_1":             "1 mise à jour",
+    "js_news_n":             "{n} mises à jour",
+    "js_no_match_games":     "Aucun jeu ne correspond à ta recherche.",
+    "js_count_game_1":       "1 jeu",
+    "js_count_game_n":       "{n} jeux",
+    "js_no_match_news":      "Aucune news ne correspond.",
+    "js_count_news":         "{n} news",
+}

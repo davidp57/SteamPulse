@@ -104,6 +104,7 @@ Pour chaque jeu (possédé, wishlist ou suivi) :
 | `--news-age HOURS` | `24` | Rafraîchir les news des jeux dont le cache dépasse N heures |
 | `--no-wishlist` | désactivé | Ne pas récupérer la wishlist |
 | `--followed` | désactivé | Récupérer les jeux suivis (opt-in, voir note) |
+| `--lang` | *(système)* | Forcer la langue de l'interface (`en`, `fr`, …). Par défaut la locale système, repli sur `en`. |
 | `-v` / `--verbose` | désactivé | Afficher les logs DEBUG |
 
 > **Note `--followed`** : l'API Steam Web ne retourne plus les jeux suivis avec une clé standard. Cette option est disponible mais retournera généralement une liste vide.
@@ -131,7 +132,7 @@ Pour chaque jeu (possédé, wishlist ou suivi) :
 | **Type news** | Tous types · 📋 Patch notes · 📰 News |
 | **Temps de jeu** | Tous · Jamais joué · < 1 h · 1–10 h · > 10 h |
 | **Metacritic** | Tous · Sans score · < 50 · 50–75 · > 75 |
-| **Màj récente** | Tous · 1 jour · 2 jours · 5 jours (basé sur la date du dernier patch note) |
+| **Màj récente** | Tous · 2 jours · 5 jours · 15 jours · 30 jours (basé sur la date du dernier patch note) |
 
 Tout l'état du filtre et du tri est persisté dans le hash URL, ce qui permet de sauvegarder ou partager une vue filtrée.
 
@@ -194,6 +195,7 @@ steam-render --steamid <STEAMID64>
 | `--db` | `steam_library.db` | Base SQLite source |
 | `--steamid` | *(requis)* | SteamID64 (affiché dans l'en-tête) |
 | `--output` | `steam_library.html` | Chemin de la page bibliothèque |
+| `--lang` | *(système)* | Forcer la langue de l'interface (`en`, `fr`, …) |
 
 Lit uniquement la base SQLite et régénère le HTML à partir des données existantes. Utile pour relancer le rendu après une mise à jour de SteamPulse sans refaire le fetch.
 

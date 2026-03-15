@@ -74,9 +74,13 @@ def test_make_card_falls_back_to_cdn_url_when_no_details() -> None:
 
 def test_generate_html_replaces_all_placeholders(sample_record: GameRecord) -> None:
     page = generate_html([sample_record], "76561198000000000")
-    for ph in ["__SHARED_JS__", "__GENERATED_AT__", "__STEAM_ID__", "__TOTAL__", "__EA__", "__REL__", "__UNREL__",
-               "__CARDS__"]:
+    placeholders = [
+        "__SHARED_JS__", "__GENERATED_AT__", "__STEAM_ID__", "__TOTAL__",
+        "__EA__", "__REL__", "__UNREL__", "__CARDS__", "__I18N_JS__",
+    ]
+    for ph in placeholders:
         assert ph not in page, f"Placeholder {ph} not replaced"
+    assert "__T_" not in page, "Some __T_ i18n placeholder was not replaced"
 
 
 def test_generate_html_stat_counts(sample_record: GameRecord) -> None:
@@ -112,7 +116,16 @@ def test_metacritic_html_zero_returns_empty() -> None:
 
 def test_price_html_free_game() -> None:
     d = AppDetails(appid=1, is_free=True)
-    assert "Gratuit" in _price_html(d)
+    assert "Free" in _price_html(d)
+
+
+def test_price_html_free_game_i18n() -> None:
+    d = AppDetails(appid=1, is_free=True)
+
+    def translator(key: str, **kwargs: object) -> str:
+        return "Gratuit" if key == "price_free" else key
+
+    assert "Gratuit" in _price_html(d, t=translator)  # type: ignore[arg-type]
 
 
 def test_price_html_paid_with_discount() -> None:

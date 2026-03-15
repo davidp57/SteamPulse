@@ -104,6 +104,7 @@ For each game (owned, wishlist, or followed):
 | `--news-age HOURS` | `24` | Re-fetch news for games whose cached news is older than N hours |
 | `--no-wishlist` | off | Skip wishlist fetch |
 | `--followed` | off | Fetch followed games (opt-in, see note) |
+| `--lang` | *(system)* | Force interface language (`en`, `fr`, …). Defaults to the system locale, falls back to `en`. |
 | `-v` / `--verbose` | off | Enable DEBUG logging |
 
 > **Note on `--followed`**: the Steam Web API no longer returns followed games with a standard key. This flag is available but will generally return an empty list.
@@ -131,7 +132,7 @@ For each game (owned, wishlist, or followed):
 | **Type news** | All types · 📋 Patch notes · 📰 News |
 | **Temps de jeu** | All · Never played · < 1 h · 1–10 h · > 10 h |
 | **Metacritic** | All · No score · < 50 · 50–75 · > 75 |
-| **Màj récente** | All · 1 day · 2 days · 5 days (based on last patch note date) |
+| **Recent update** | All · 2 days · 5 days · 15 days · 30 days (based on last patch note date) |
 
 All filter and sort state is persisted in the URL hash so you can bookmark or share a filtered view.
 
@@ -194,6 +195,7 @@ steam-render --steamid <STEAMID64>
 | `--db` | `steam_library.db` | Source SQLite database |
 | `--steamid` | *(required)* | SteamID64 (shown in page header) |
 | `--output` | `steam_library.html` | Library page output path |
+| `--lang` | *(system)* | Force interface language (`en`, `fr`, …) |
 
 Reads the SQLite database and regenerates the HTML from existing data. Useful for re-rendering after a SteamPulse update without re-fetching.
 
