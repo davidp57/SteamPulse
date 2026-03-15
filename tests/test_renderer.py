@@ -74,7 +74,7 @@ def test_make_card_falls_back_to_cdn_url_when_no_details() -> None:
 
 def test_generate_html_replaces_all_placeholders(sample_record: GameRecord) -> None:
     page = generate_html([sample_record], "76561198000000000")
-    for ph in ["__GENERATED_AT__", "__STEAM_ID__", "__TOTAL__", "__EA__", "__REL__", "__UNREL__",
+    for ph in ["__SHARED_JS__", "__GENERATED_AT__", "__STEAM_ID__", "__TOTAL__", "__EA__", "__REL__", "__UNREL__",
                "__CARDS__"]:
         assert ph not in page, f"Placeholder {ph} not replaced"
 
@@ -305,7 +305,7 @@ def test_make_news_row_escapes_xss_in_title() -> None:
 
 def test_generate_news_html_replaces_all_placeholders(sample_record: GameRecord) -> None:
     page = generate_news_html([sample_record], "76561198000000000")
-    for ph in ["__GENERATED_AT__", "__STEAM_ID__", "__ROWS__", "__LIB_HREF__"]:
+    for ph in ["__SHARED_JS__", "__GENERATED_AT__", "__STEAM_ID__", "__ROWS__", "__LIB_HREF__"]:
         assert ph not in page, f"Placeholder {ph} not replaced"
 
 

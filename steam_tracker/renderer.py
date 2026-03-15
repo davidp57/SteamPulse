@@ -8,6 +8,83 @@ from pathlib import Path
 
 from .models import GameRecord, NewsItem
 
+# ─── Shared JavaScript (injected into both HTML templates) ───────────────────
+_SHARED_JS = """\
+// --- Shared utilities ---
+function checkPtFilter(pt, el) {
+  if (pt === 'all') return true;
+  const p = parseInt(el.dataset.playtime) || 0;
+  if (pt === '0')   return p === 0;
+  if (pt === '60')  return p > 0 && p < 60;
+  if (pt === '600') return p >= 60 && p <= 600;
+  if (pt === '601') return p > 600;
+  return true;
+}
+
+function checkRecentFilter(recent, el) {
+  if (recent === 'all') return true;
+  const ts = parseInt(el.dataset.lastPatchTs) || 0;
+  if (ts === 0) return false;
+  const days = parseInt(recent);
+  return ts * 1000 > Date.now() - days * 86400000;
+}
+
+function activateBtn(selector, dataAttr, value) {
+  let found = false;
+  document.querySelectorAll(selector).forEach(b => {
+    const match = b.dataset[dataAttr] === value;
+    b.classList.toggle('active', match);
+    if (match) found = true;
+  });
+  if (!found) { const first = document.querySelector(selector); if (first) first.classList.add('active'); }
+}
+
+function updateResetBtn() {
+  document.getElementById('resetBtn').classList.toggle('show', !isDefaultState());
+  updateFilterBadge();
+}
+
+// Filter panel toggle
+document.getElementById('filtersToggle').addEventListener('click', () => {
+  document.getElementById('toolbarFilters').classList.toggle('open');
+});
+
+// Scroll-to-top
+const scrollBtn = document.getElementById('scrollTop');
+window.addEventListener('scroll', () => {
+  scrollBtn.classList.toggle('visible', window.scrollY > 400);
+}, {passive: true});
+scrollBtn.addEventListener('click', () => {
+  window.scrollTo({top: 0, behavior: 'smooth'});
+});
+
+// Theme toggle
+const themeBtn = document.getElementById('themeToggle');
+function applyTheme(light) {
+  document.documentElement.classList.toggle('light', light);
+  themeBtn.textContent = light ? '🌙' : '☀️';
+  try { localStorage.setItem('sp-theme', light ? 'light' : 'dark'); } catch(e) {}
+}
+themeBtn.addEventListener('click', () => {
+  applyTheme(!document.documentElement.classList.contains('light'));
+});
+try { if (localStorage.getItem('sp-theme') === 'light') applyTheme(true); } catch(e) {}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+    if (e.key === 'Escape') { e.target.blur(); document.getElementById('resetBtn').click(); }
+    return;
+  }
+  if (e.key === '/' || (e.ctrlKey && e.key === 'k')) {
+    e.preventDefault();
+    document.getElementById('search').focus();
+  }
+  if (e.key === 'Escape') {
+    document.getElementById('resetBtn').click();
+  }
+});"""
+
 # ─── HTML Template ────────────────────────────────────────────────────────────
 _HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="fr">
@@ -803,7 +880,7 @@ __CARDS__
 
 <script>
 const allCards = Array.from(document.querySelectorAll('.card'));
-
+__SHARED_JS__
 function getFilter()    { return document.querySelector('#filterBtns .filter-btn.active').dataset.filter; }
 function getSrcFilter() { return document.querySelector('#sourceBtns .source-btn.active').dataset.source; }
 function getTagFilter() { return document.querySelector('#tagBtns .tag-btn.active').dataset.tag; }
@@ -813,16 +890,6 @@ function getRecentFilter() { return document.querySelector('#recentBtns .filter-
 function getSearch()    { return document.getElementById('search').value.toLowerCase().trim(); }
 function getSort()      { return document.getElementById('sortBy').value; }
 
-function checkPtFilter(pt, card) {
-  if (pt === 'all') return true;
-  const p = parseInt(card.dataset.playtime) || 0;
-  if (pt === '0')   return p === 0;
-  if (pt === '60')  return p > 0 && p < 60;
-  if (pt === '600') return p >= 60 && p <= 600;
-  if (pt === '601') return p > 600;
-  return true;
-}
-
 function checkMcFilter(mc, card) {
   if (mc === 'all') return true;
   const s = parseInt(card.dataset.metacritic) || 0;
@@ -831,14 +898,6 @@ function checkMcFilter(mc, card) {
   if (mc === 'mid')  return s >= 50 && s <= 75;
   if (mc === 'good') return s > 75;
   return true;
-}
-
-function checkRecentFilter(recent, card) {
-  if (recent === 'all') return true;
-  const ts = parseInt(card.dataset.lastPatchTs) || 0;
-  if (ts === 0) return false;
-  const days = parseInt(recent);
-  return ts * 1000 > Date.now() - days * 86400000;
 }
 
 function isDefaultState() {
@@ -859,11 +918,6 @@ function updateFilterBadge() {
   badge.textContent = n;
   badge.classList.toggle('show', n > 0);
   document.getElementById('filtersToggle').classList.toggle('has-active', n > 0);
-}
-
-function updateResetBtn() {
-  document.getElementById('resetBtn').classList.toggle('show', !isDefaultState());
-  updateFilterBadge();
 }
 
 function saveStateToHash() {
@@ -928,16 +982,6 @@ function loadStateFromHash() {
   if (!isDefaultState()) {
     document.getElementById('toolbarFilters').classList.add('open');
   }
-}
-
-function activateBtn(selector, dataAttr, value) {
-  let found = false;
-  document.querySelectorAll(selector).forEach(b => {
-    const match = b.dataset[dataAttr] === value;
-    b.classList.toggle('active', match);
-    if (match) found = true;
-  });
-  if (!found) { const first = document.querySelector(selector); if (first) first.classList.add('active'); }
 }
 
 function updateGrid() {
@@ -1064,11 +1108,6 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   updateGrid();
 });
 
-// Filter panel toggle
-document.getElementById('filtersToggle').addEventListener('click', () => {
-  document.getElementById('toolbarFilters').classList.toggle('open');
-});
-
 // View toggle
 document.getElementById('viewToggle').addEventListener('click', () => {
   const grid = document.getElementById('grid');
@@ -1096,44 +1135,6 @@ document.querySelectorAll('.card').forEach(card => {
     const appid = card.dataset.appid;
     if (appid) window.open('https://store.steampowered.com/app/' + appid, '_blank');
   });
-});
-
-// Scroll-to-top
-const scrollBtn = document.getElementById('scrollTop');
-window.addEventListener('scroll', () => {
-  scrollBtn.classList.toggle('visible', window.scrollY > 400);
-}, {passive: true});
-scrollBtn.addEventListener('click', () => {
-  window.scrollTo({top: 0, behavior: 'smooth'});
-});
-
-// Theme toggle
-const themeBtn = document.getElementById('themeToggle');
-function applyTheme(light) {
-  document.documentElement.classList.toggle('light', light);
-  themeBtn.textContent = light ? '🌙' : '☀️';
-  try { localStorage.setItem('sp-theme', light ? 'light' : 'dark'); } catch(e) {}
-}
-themeBtn.addEventListener('click', () => {
-  applyTheme(!document.documentElement.classList.contains('light'));
-});
-try {
-  if (localStorage.getItem('sp-theme') === 'light') applyTheme(true);
-} catch(e) {}
-
-// Keyboard shortcuts
-document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
-    if (e.key === 'Escape') { e.target.blur(); document.getElementById('resetBtn').click(); }
-    return;
-  }
-  if (e.key === '/' || (e.ctrlKey && e.key === 'k')) {
-    e.preventDefault();
-    document.getElementById('search').focus();
-  }
-  if (e.key === 'Escape') {
-    document.getElementById('resetBtn').click();
-  }
 });
 
 // Load state from URL hash
@@ -1358,8 +1359,8 @@ _NEWS_TEMPLATE = r"""<!DOCTYPE html>
       <div class="filter-btns" id="playtimeBtns">
         <button class="filter-btn active" data-pt="all">Tous</button>
         <button class="filter-btn" data-pt="0">Jamais joué</button>
-        <button class="filter-btn" data-pt="1">&lt; 1h</button>
-        <button class="filter-btn" data-pt="60">1h – 10h</button>
+        <button class="filter-btn" data-pt="60">&lt; 1h</button>
+        <button class="filter-btn" data-pt="600">1-10h</button>
         <button class="filter-btn" data-pt="601">&gt; 10h</button>
       </div>
     </div>
@@ -1397,7 +1398,7 @@ __ROWS__
 
 <script>
 const allRows = Array.from(document.querySelectorAll('.feed-item'));
-
+__SHARED_JS__
 // --- Getters ---
 function getStatusFilter() { return document.querySelector('#statusBtns .filter-btn.active').dataset.filter; }
 function getSrcFilter()    { return document.querySelector('#sourceBtns .source-btn.active').dataset.source; }
@@ -1408,15 +1409,6 @@ function getRecentFilter() { return document.querySelector('#recentBtns .filter-
 function getSearch()       { return document.getElementById('search').value.toLowerCase().trim(); }
 
 // --- Check functions ---
-function checkPtFilter(pt, row) {
-  if (pt === 'all') return true;
-  const playtime = parseInt(row.dataset.playtime) || 0;
-  if (pt === '0')   return playtime === 0;
-  if (pt === '1')   return playtime > 0 && playtime <= 60;
-  if (pt === '60')  return playtime > 60 && playtime <= 600;
-  if (pt === '601') return playtime > 600;
-  return true;
-}
 function checkMcFilter(mc, row) {
   if (mc === 'all') return true;
   const score = parseInt(row.dataset.metacritic) || 0;
@@ -1427,14 +1419,6 @@ function checkMcFilter(mc, row) {
   if (mc === 'great') return score >= 90;
   return true;
 }
-function checkRecentFilter(recent, row) {
-  if (recent === 'all') return true;
-  const ts = parseInt(row.dataset.lastPatchTs) || 0;
-  if (ts === 0) return false;
-  const days = parseInt(recent);
-  return ts * 1000 > Date.now() - days * 86400000;
-}
-
 function isDefaultState() {
   return getStatusFilter() === 'all' && getSrcFilter() === 'all' && getTagFilter() === 'all'
     && getPtFilter() === 'all' && getMcFilter() === 'all' && getRecentFilter() === 'all'
@@ -1453,11 +1437,6 @@ function updateFilterBadge() {
   badge.textContent = n;
   badge.classList.toggle('show', n > 0);
   document.getElementById('filtersToggle').classList.toggle('has-active', n > 0);
-}
-
-function updateResetBtn() {
-  document.getElementById('resetBtn').classList.toggle('show', !isDefaultState());
-  updateFilterBadge();
 }
 
 function saveStateToHash() {
@@ -1482,16 +1461,6 @@ function saveStateToHash() {
     const nh = new URLSearchParams(nf).toString();
     backLink.href = 'steam_library.html' + (nh ? '#' + nh : '');
   }
-}
-
-function activateBtn(selector, dataAttr, value) {
-  let found = false;
-  document.querySelectorAll(selector).forEach(b => {
-    const match = b.dataset[dataAttr] === value;
-    b.classList.toggle('active', match);
-    if (match) found = true;
-  });
-  if (!found) { const first = document.querySelector(selector); if (first) first.classList.add('active'); }
 }
 
 function loadStateFromHash() {
@@ -1548,11 +1517,6 @@ function updateFeed() {
 }
 
 // --- Event listeners ---
-// Filter panel toggle
-document.getElementById('filtersToggle').addEventListener('click', () => {
-  document.getElementById('toolbarFilters').classList.toggle('open');
-});
-
 let _newsSearchTimer;
 document.getElementById('search').addEventListener('input', () => {
   clearTimeout(_newsSearchTimer);
@@ -1585,42 +1549,6 @@ document.getElementById('resetBtn').addEventListener('click', () => {
     if (first) first.classList.add('active');
   });
   updateFeed();
-});
-
-// Scroll-to-top
-const scrollBtn = document.getElementById('scrollTop');
-window.addEventListener('scroll', () => {
-  scrollBtn.classList.toggle('visible', window.scrollY > 400);
-}, {passive: true});
-scrollBtn.addEventListener('click', () => {
-  window.scrollTo({top: 0, behavior: 'smooth'});
-});
-
-// Theme toggle
-const themeBtn = document.getElementById('themeToggle');
-function applyTheme(light) {
-  document.documentElement.classList.toggle('light', light);
-  themeBtn.textContent = light ? '🌙' : '☀️';
-  try { localStorage.setItem('sp-theme', light ? 'light' : 'dark'); } catch(e) {}
-}
-themeBtn.addEventListener('click', () => {
-  applyTheme(!document.documentElement.classList.contains('light'));
-});
-try { if (localStorage.getItem('sp-theme') === 'light') applyTheme(true); } catch(e) {}
-
-// Keyboard shortcuts
-document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-    if (e.key === 'Escape') { e.target.blur(); document.getElementById('resetBtn').click(); }
-    return;
-  }
-  if (e.key === '/' || (e.ctrlKey && e.key === 'k')) {
-    e.preventDefault();
-    document.getElementById('search').focus();
-  }
-  if (e.key === 'Escape') {
-    document.getElementById('resetBtn').click();
-  }
 });
 
 loadStateFromHash();
@@ -1873,7 +1801,8 @@ def generate_html(
     now_str = datetime.now().strftime("%d/%m/%Y \u00e0 %H:%M")
 
     return (
-        _HTML_TEMPLATE.replace("__GENERATED_AT__", now_str)
+        _HTML_TEMPLATE.replace("__SHARED_JS__", _SHARED_JS)
+        .replace("__GENERATED_AT__", now_str)
         .replace("__STEAM_ID__", html.escape(steam_id))
         .replace("__TOTAL__", str(total))
         .replace("__EA__", str(ea))
@@ -1964,7 +1893,8 @@ def generate_news_html(
     now_str = datetime.now().strftime("%d/%m/%Y \u00e0 %H:%M")
 
     return (
-        _NEWS_TEMPLATE.replace("__GENERATED_AT__", now_str)
+        _NEWS_TEMPLATE.replace("__SHARED_JS__", _SHARED_JS)
+        .replace("__GENERATED_AT__", now_str)
         .replace("__STEAM_ID__", html.escape(steam_id))
         .replace("__ROWS__", rows_html)
         .replace("__LIB_HREF__", html.escape(library_href))
