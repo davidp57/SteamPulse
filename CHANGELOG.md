@@ -11,6 +11,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.1.0] — 2026-03-15
+
+### Added
+
+- **Toolbar UX redesign** — Two-layer toolbar: compact sticky main row (`Search · Sort · ⚙ Filtres · Reset · View · Count · Nav`) + collapsible filter panel with 6 labeled groups (Statut, Source, Type news, Temps de jeu, Metacritic, Màj récente). Filter badge on toggle button shows count of active filters. Panel auto-opens on page load when URL hash contains active filters.
+- **"Màj récente" filter** — New filter group in the panel (Tous / 1 jour / 2 jours / 5 jours). Shows only games that received a patchnote in the selected time window, using `data-last-patch-ts`. Persisted in URL hash (`recent=` key).
+- **News page toolbar** — Same two-layer collapsible structure applied to news page (Statut + Type news groups).
+- **17 new renderer tests** — coverage for `_parse_release_ts`, `make_news_row`, `generate_news_html`, `write_html`, `write_news_html`, and news timestamp data-attributes (`data-last-patch-ts`, `data-last-other-ts`).
+
+---
+
 ## [1.0.1] — 2026-03-15
 
 ### Fixed
@@ -71,7 +82,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - HTTP 403/404 on news/details endpoints logged at DEBUG (not WARNING)
 - `pyproject.toml`-based packaging with `hatchling`
 
-[Unreleased]: https://github.com/davidp57/SteamPulse/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/davidp57/SteamPulse/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/davidp57/SteamPulse/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/davidp57/SteamPulse/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/davidp57/SteamPulse/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/davidp57/SteamPulse/releases/tag/v0.1.0

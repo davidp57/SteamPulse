@@ -114,11 +114,26 @@ Pour chaque jeu (possédé, wishlist ou suivi) :
 
 ### Page bibliothèque (`steam_library.html`)
 
-**Barre d'outils :**
-- **Recherche** — filtre les jeux par nom en temps réel
-- **Tri** — par nom, score Metacritic, temps de jeu, date de sortie, date de dernière news, date de mise à jour de la fiche
-- **Statut** — Tous / Early Access / Sortis / À venir
-- **Source** — 🎮 Tout / Possédés / 🎁 Wishlist
+**Barre d'outils — ligne principale (toujours visible) :**
+- **Recherche** — filtre les jeux par nom en temps réel (`/` ou `Ctrl+K`)
+- **Tri** — par nom, score Metacritic, temps de jeu, date de sortie, dernière mise à jour, date dernière news
+- **⚙ Filtres** — affiche / masque le panneau de filtres ; un badge indique le nombre de filtres actifs
+- **Reset** — réinitialise tous les filtres et la recherche (apparaît uniquement si quelque chose est actif)
+- **☰ Liste / ⊞ Grille** — bascule entre vue grille et vue tableau liste
+- **🗞 News** — ouvre la page de flux de news (transporte les filtres compatibles via le hash URL)
+
+**Panneau de filtres (repliable) :**
+
+| Groupe | Options |
+|---|---|
+| **Statut** | Tous · Early Access · Sortis · À venir |
+| **Source** | 🎮 Tout · Possédés · 🎁 Wishlist |
+| **Type news** | Tous types · 📋 Patch notes · 📰 News |
+| **Temps de jeu** | Tous · Jamais joué · < 1 h · 1–10 h · > 10 h |
+| **Metacritic** | Tous · Sans score · < 50 · 50–75 · > 75 |
+| **Màj récente** | Tous · 1 jour · 2 jours · 5 jours (basé sur la date du dernier patch note) |
+
+Tout l'état du filtre et du tri est persisté dans le hash URL, ce qui permet de sauvegarder ou partager une vue filtrée.
 
 **Cartes :**
 
@@ -136,8 +151,7 @@ Un clic sur la carte ouvre la fiche Steam dans un nouvel onglet.
 ### Page news (`steam_news.html`)
 
 - Toutes les news de tous les jeux, triées par date décroissante
-- Recherche par nom de jeu
-- Filtres : statut (Early Access / Sortis / À venir) et type (📋 Patch notes / 📰 News)
+- Même barre d'outils à deux niveaux : recherche + tri dans la ligne principale, filtres Statut et Type news dans le panneau repliable
 - Badge de type sur chaque ligne (vert pour `patchnotes`, gris pour les autres)
 - Compteur de résultats en temps réel
 - Un clic sur une ligne ouvre la news sur Steam

@@ -114,11 +114,26 @@ For each game (owned, wishlist, or followed):
 
 ### Library page (`steam_library.html`)
 
-**Toolbar:**
-- **Search** — filters games by name in real time
-- **Sort** — by name, Metacritic score, playtime, release date, latest news date, last details update
-- **Status** — All / Early Access / Released / Upcoming
-- **Source** — 🎮 All / Owned / 🎁 Wishlist
+**Toolbar — main row (always visible):**
+- **Search** — filters games by name in real time (`/` or `Ctrl+K`)
+- **Sort** — by name, Metacritic score, playtime, release date, last update, last news date
+- **⚙ Filters** — expands/collapses the filter panel; a badge shows the number of active filters
+- **Reset** — clears all filters and search (only appears when something is active)
+- **☰ Liste / ⊞ Grille** — toggle between card grid and table list view
+- **🗞 News** — opens the news feed page (carries compatible filters via URL hash)
+
+**Filter panel (collapsible):**
+
+| Group | Options |
+|---|---|
+| **Statut** | All · Early Access · Released · Upcoming |
+| **Source** | 🎮 All · Owned · 🎁 Wishlist |
+| **Type news** | All types · 📋 Patch notes · 📰 News |
+| **Temps de jeu** | All · Never played · < 1 h · 1–10 h · > 10 h |
+| **Metacritic** | All · No score · < 50 · 50–75 · > 75 |
+| **Màj récente** | All · 1 day · 2 days · 5 days (based on last patch note date) |
+
+All filter and sort state is persisted in the URL hash so you can bookmark or share a filtered view.
 
 **Cards:**
 
@@ -136,8 +151,7 @@ Clicking anywhere on a card opens the Steam store page in a new tab.
 ### News page (`steam_news.html`)
 
 - All news from all games, sorted by descending date
-- Search by game name
-- Filters: status (Early Access / Released / Upcoming) and type (📋 Patch notes / 📰 News)
+- Same two-layer toolbar: search + sort in the main row, Status and Type news filters in the collapsible panel
 - Type badge on each row (green for `patchnotes`, grey for others)
 - Live result counter
 - Click a row to open the news item on Steam

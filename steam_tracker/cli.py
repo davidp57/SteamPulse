@@ -114,10 +114,17 @@ def cmd_fetch() -> None:
         print("\nArrêt.")
         return
 
+    failed_details: set[int] = set()
+    news_fetched: set[int] = set()
     for appid, (details, news) in results.items():
         if details:
             db.upsert_app_details(details)
+        elif appid not in skip:
+            failed_details.add(appid)
         db.upsert_news(appid, news)
+        news_fetched.add(appid)
+    db.mark_fetched(failed_details, details=True)
+    db.mark_fetched(news_fetched, news=True)
 
     print(f"\n✅ Done — {len(results)} entrée(s) mise(s) à jour dans {args.db}")
 
@@ -246,10 +253,17 @@ def cmd_run() -> None:
         print("\nArrêt.")
         return
 
+    failed_details: set[int] = set()
+    news_fetched: set[int] = set()
     for appid, (details, news) in results.items():
         if details:
             db.upsert_app_details(details)
+        elif appid not in skip:
+            failed_details.add(appid)
         db.upsert_news(appid, news)
+        news_fetched.add(appid)
+    db.mark_fetched(failed_details, details=True)
+    db.mark_fetched(news_fetched, news=True)
 
     print(f"\n✅ Fetch terminé — {len(results)} entrée(s) mise(s) à jour dans {args.db}")
 

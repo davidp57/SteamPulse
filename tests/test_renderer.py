@@ -1,14 +1,22 @@
 """Tests for steam_tracker.renderer."""
 from __future__ import annotations
 
-from steam_tracker.models import AppDetails, GameRecord, GameStatus, OwnedGame
+from datetime import UTC, datetime
+from pathlib import Path
+
+from steam_tracker.models import AppDetails, GameRecord, GameStatus, NewsItem, OwnedGame
 from steam_tracker.renderer import (
     _metacritic_html,
+    _parse_release_ts,
     _platform_html,
     _price_html,
     format_playtime,
     generate_html,
+    generate_news_html,
     make_card,
+    make_news_row,
+    write_html,
+    write_news_html,
 )
 
 
@@ -167,4 +175,170 @@ def test_make_card_shows_price(sample_record: GameRecord) -> None:
 def test_make_card_shows_platform_icons(sample_record: GameRecord) -> None:
     card = make_card(sample_record)
     assert "🪟" in card
+
+
+# ── _parse_release_ts ─────────────────────────────────────────────────────────
+
+def test_parse_release_ts_standard_date() -> None:
+    ts = _parse_release_ts("01 Jan 2020")
+    assert ts == int(datetime(2020, 1, 1, tzinfo=UTC).timestamp())
+
+
+def test_parse_release_ts_french_month() -> None:
+    ts = _parse_release_ts("23 septembre 2023")
+    assert ts == int(datetime(2023, 9, 23, tzinfo=UTC).timestamp())
+
+
+def test_parse_release_ts_year_only() -> None:
+    ts = _parse_release_ts("2024")
+    assert ts == int(datetime(2024, 1, 1, tzinfo=UTC).timestamp())
+
+
+def test_parse_release_ts_year_in_text_fallback() -> None:
+    ts = _parse_release_ts("Q1 2025")
+    assert ts == int(datetime(2025, 1, 1, tzinfo=UTC).timestamp())
+
+
+def test_parse_release_ts_empty_returns_zero() -> None:
+    assert _parse_release_ts("") == 0
+    assert _parse_release_ts("\u2014") == 0
+
+
+# ── make_card — news timestamps ───────────────────────────────────────────────
+
+def test_make_card_sets_patchnote_timestamp(sample_record: GameRecord) -> None:
+    # sample_record has a news item with tags=["patchnotes", "valve"]
+    card = make_card(sample_record)
+    expected_ts = str(int(sample_record.news[0].date.timestamp()))
+    assert f'data-last-patch-ts="{expected_ts}"' in card
+
+
+def test_make_card_no_news_has_zero_timestamps() -> None:
+    record = GameRecord(
+        game=OwnedGame(appid=1, name="Empty"),
+        status=GameStatus(label="Sorti", badge="released", release_date="\u2014"),
+    )
+    card = make_card(record)
+    assert 'data-last-update="0"' in card
+    assert 'data-last-patch-ts="0"' in card
+    assert 'data-last-other-ts="0"' in card
+
+
+def test_make_card_other_news_sets_last_other_ts() -> None:
+    news = [
+        NewsItem(
+            gid="1",
+            title="Announcement",
+            date=datetime(2024, 6, 1, tzinfo=UTC),
+            url="https://example.com/1",
+            author="Dev",
+            feedname="a",
+            feedlabel="A",
+            tags=["announcement"],
+        )
+    ]
+    record = GameRecord(
+        game=OwnedGame(appid=1, name="Game"),
+        status=GameStatus(label="Sorti", badge="released", release_date="\u2014"),
+        news=news,
+    )
+    card = make_card(record)
+    expected_ts = str(int(news[0].date.timestamp()))
+    assert f'data-last-other-ts="{expected_ts}"' in card
+    assert 'data-last-patch-ts="0"' in card
+
+
+# ── make_news_row ─────────────────────────────────────────────────────────────
+
+def test_make_news_row_contains_game_name(sample_record: GameRecord) -> None:
+    row = make_news_row(sample_record, sample_record.news[0])
+    assert "Half-Life 2" in row
+
+
+def test_make_news_row_marks_patchnotes_tag(sample_record: GameRecord) -> None:
+    row = make_news_row(sample_record, sample_record.news[0])
+    assert 'data-tag="patchnotes"' in row
+    assert "feed-tag-patchnotes" in row
+
+
+def test_make_news_row_marks_other_tag() -> None:
+    news_item = NewsItem(
+        gid="1",
+        title="Big news",
+        date=datetime(2024, 5, 1, tzinfo=UTC),
+        url="https://example.com/news",
+        author="Dev",
+        feedname="f",
+        feedlabel="F",
+        tags=["announcement"],
+    )
+    record = GameRecord(
+        game=OwnedGame(appid=1, name="MyGame"),
+        status=GameStatus(label="Sorti", badge="released", release_date="\u2014"),
+    )
+    row = make_news_row(record, news_item)
+    assert 'data-tag="other"' in row
+    assert "feed-tag-other" in row
+
+
+def test_make_news_row_escapes_xss_in_title() -> None:
+    news_item = NewsItem(
+        gid="2",
+        title="<script>alert('xss')</script>",
+        date=datetime(2024, 5, 2, tzinfo=UTC),
+        url="https://example.com/news2",
+        author="Dev",
+        feedname="f",
+        feedlabel="F",
+        tags=[],
+    )
+    record = GameRecord(
+        game=OwnedGame(appid=1, name="Game"),
+        status=GameStatus(label="Sorti", badge="released", release_date="\u2014"),
+    )
+    row = make_news_row(record, news_item)
+    assert "<script>" not in row
+    assert "&lt;script&gt;" in row
+
+
+# ── generate_news_html ────────────────────────────────────────────────────────
+
+def test_generate_news_html_replaces_all_placeholders(sample_record: GameRecord) -> None:
+    page = generate_news_html([sample_record], "76561198000000000")
+    for ph in ["__GENERATED_AT__", "__STEAM_ID__", "__ROWS__", "__LIB_HREF__"]:
+        assert ph not in page, f"Placeholder {ph} not replaced"
+
+
+def test_generate_news_html_sorts_by_date_descending() -> None:
+    older = NewsItem(
+        gid="old", title="Old news", date=datetime(2024, 1, 1, tzinfo=UTC),
+        url="https://example.com/old", author="A", feedname="f", feedlabel="F", tags=[],
+    )
+    newer = NewsItem(
+        gid="new", title="Newest news", date=datetime(2024, 6, 1, tzinfo=UTC),
+        url="https://example.com/new", author="A", feedname="f", feedlabel="F", tags=[],
+    )
+    record = GameRecord(
+        game=OwnedGame(appid=1, name="SortGame"),
+        status=GameStatus(label="Sorti", badge="released", release_date="\u2014"),
+        news=[older, newer],
+    )
+    page = generate_news_html([record], "0")
+    assert page.index("Newest news") < page.index("Old news")
+
+
+# ── write_html / write_news_html ──────────────────────────────────────────────
+
+def test_write_html_creates_file(sample_record: GameRecord, tmp_path: Path) -> None:
+    out = tmp_path / "lib.html"
+    write_html([sample_record], "76561198000000000", out)
+    assert out.exists()
+    assert "Half-Life 2" in out.read_text(encoding="utf-8")
+
+
+def test_write_news_html_creates_file(sample_record: GameRecord, tmp_path: Path) -> None:
+    out = tmp_path / "news.html"
+    write_news_html([sample_record], "76561198000000000", out)
+    assert out.exists()
+    assert "Half-Life 2" in out.read_text(encoding="utf-8")
 

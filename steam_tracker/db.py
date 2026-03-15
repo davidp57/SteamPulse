@@ -100,6 +100,8 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("news", "feedlabel", "TEXT NOT NULL DEFAULT ''"),
     ("news", "tags", "TEXT NOT NULL DEFAULT '[]'"),
     ("games", "source", "TEXT NOT NULL DEFAULT 'owned'"),
+    ("games", "details_fetched_at", "TEXT"),
+    ("games", "news_fetched_at", "TEXT"),
 ]
 
 
@@ -284,6 +286,34 @@ class Database:
                 ),
             )
 
+    def mark_fetched(
+        self, appids: set[int], *, details: bool = False, news: bool = False
+    ) -> None:
+        """Record that a fetch was attempted for *appids*, even if it returned nothing.
+
+        Pass ``details=True`` to update ``details_fetched_at`` (suppresses
+        constant retries for apps the Store API doesn't serve, e.g. DLCs).
+        Pass ``news=True`` to update ``news_fetched_at`` (prevents games with
+        zero or unchanged news from being re-fetched every run via INSERT OR IGNORE).
+        """
+        if not appids:
+            return
+        cols: list[str] = []
+        if details:
+            cols.append("details_fetched_at")
+        if news:
+            cols.append("news_fetched_at")
+        if not cols:
+            return
+        now = _now()
+        set_clause = ", ".join(f"{c} = ?" for c in cols)
+        vals = [now] * len(cols)
+        with self._connect() as con:
+            con.executemany(
+                f"UPDATE games SET {set_clause} WHERE appid = ?",  # noqa: S608
+                [[*vals, appid] for appid in appids],
+            )
+
     def upsert_news(self, appid: int, news: list[NewsItem]) -> None:
         now = _now()
         with self._connect() as con:
@@ -310,13 +340,27 @@ class Database:
                 )
 
     def get_cached_appids(self) -> set[int]:
-        """Return the set of appids already present in app_details."""
+        """Return appids that either have app_details or were attempted recently (7-day TTL)."""
+        threshold = (datetime.now(UTC) - timedelta(days=7)).isoformat()
         with self._connect() as con:
-            rows = con.execute("SELECT appid FROM app_details").fetchall()
+            rows = con.execute(
+                """
+                SELECT appid FROM app_details
+                UNION
+                SELECT appid FROM games
+                WHERE details_fetched_at IS NOT NULL AND details_fetched_at > ?
+                """,
+                (threshold,),
+            ).fetchall()
         return {int(r[0]) for r in rows}
 
     def get_stale_news_appids(self, max_age_seconds: int) -> set[int]:
-        """Return appids with no news or whose news fetched_at is older than *max_age_seconds*."""
+        """Return appids whose news has not been fetched within *max_age_seconds*.
+
+        Checks both the last news inserted and the explicit ``news_fetched_at``
+        marker so that games with zero news (INSERT OR IGNORE no-ops) are
+        correctly handled.
+        """
         threshold = (datetime.now(UTC) - timedelta(seconds=max_age_seconds)).isoformat()
         with self._connect() as con:
             rows = con.execute(
@@ -325,9 +369,10 @@ class Database:
                 LEFT JOIN (
                     SELECT appid, MAX(fetched_at) AS last_fetch FROM news GROUP BY appid
                 ) n ON g.appid = n.appid
-                WHERE n.last_fetch IS NULL OR n.last_fetch < ?
+                WHERE (n.last_fetch IS NULL OR n.last_fetch < ?)
+                  AND (g.news_fetched_at IS NULL OR g.news_fetched_at < ?)
                 """,
-                (threshold,),
+                (threshold, threshold),
             ).fetchall()
         return {int(r[0]) for r in rows}
 
