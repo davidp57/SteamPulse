@@ -8,6 +8,83 @@ from pathlib import Path
 
 from .models import GameRecord, NewsItem
 
+# ─── Shared JavaScript (injected into both HTML templates) ───────────────────
+_SHARED_JS = """\
+// --- Shared utilities ---
+function checkPtFilter(pt, el) {
+  if (pt === 'all') return true;
+  const p = parseInt(el.dataset.playtime) || 0;
+  if (pt === '0')   return p === 0;
+  if (pt === '60')  return p > 0 && p < 60;
+  if (pt === '600') return p >= 60 && p <= 600;
+  if (pt === '601') return p > 600;
+  return true;
+}
+
+function checkRecentFilter(recent, el) {
+  if (recent === 'all') return true;
+  const ts = parseInt(el.dataset.lastPatchTs) || 0;
+  if (ts === 0) return false;
+  const days = parseInt(recent);
+  return ts * 1000 > Date.now() - days * 86400000;
+}
+
+function activateBtn(selector, dataAttr, value) {
+  let found = false;
+  document.querySelectorAll(selector).forEach(b => {
+    const match = b.dataset[dataAttr] === value;
+    b.classList.toggle('active', match);
+    if (match) found = true;
+  });
+  if (!found) { const first = document.querySelector(selector); if (first) first.classList.add('active'); }
+}
+
+function updateResetBtn() {
+  document.getElementById('resetBtn').classList.toggle('show', !isDefaultState());
+  updateFilterBadge();
+}
+
+// Filter panel toggle
+document.getElementById('filtersToggle').addEventListener('click', () => {
+  document.getElementById('toolbarFilters').classList.toggle('open');
+});
+
+// Scroll-to-top
+const scrollBtn = document.getElementById('scrollTop');
+window.addEventListener('scroll', () => {
+  scrollBtn.classList.toggle('visible', window.scrollY > 400);
+}, {passive: true});
+scrollBtn.addEventListener('click', () => {
+  window.scrollTo({top: 0, behavior: 'smooth'});
+});
+
+// Theme toggle
+const themeBtn = document.getElementById('themeToggle');
+function applyTheme(light) {
+  document.documentElement.classList.toggle('light', light);
+  themeBtn.textContent = light ? '🌙' : '☀️';
+  try { localStorage.setItem('sp-theme', light ? 'light' : 'dark'); } catch(e) {}
+}
+themeBtn.addEventListener('click', () => {
+  applyTheme(!document.documentElement.classList.contains('light'));
+});
+try { if (localStorage.getItem('sp-theme') === 'light') applyTheme(true); } catch(e) {}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+    if (e.key === 'Escape') { e.target.blur(); document.getElementById('resetBtn').click(); }
+    return;
+  }
+  if (e.key === '/' || (e.ctrlKey && e.key === 'k')) {
+    e.preventDefault();
+    document.getElementById('search').focus();
+  }
+  if (e.key === 'Escape') {
+    document.getElementById('resetBtn').click();
+  }
+});"""
+
 # ─── HTML Template ────────────────────────────────────────────────────────────
 _HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="fr">
@@ -89,17 +166,66 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   /* TOOLBAR */
   .toolbar {
-    padding: 16px 40px;
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    flex-wrap: wrap;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
     position: sticky;
     top: 0;
     z-index: 100;
   }
+  .toolbar-main {
+    padding: 11px 40px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .toolbar-filters {
+    display: none;
+    gap: 16px 28px;
+    flex-wrap: wrap;
+    padding: 14px 40px 18px;
+    border-top: 1px solid var(--border);
+    background: rgba(0,0,0,.14);
+  }
+  .toolbar-filters.open { display: flex; }
+  .filter-group { display: flex; flex-direction: column; gap: 6px; }
+  .filter-group-label {
+    font-size: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .filter-toggle-btn {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .2s;
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: .5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .filter-toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .filter-toggle-btn.has-active { border-color: var(--accent); color: var(--accent); background: rgba(29,185,255,.1); }
+  .filter-badge {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px; height: 16px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #000;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 0 4px;
+  }
+  .filter-badge.show { display: inline-flex; }
   .search-wrap {
     position: relative;
     flex: 1;
@@ -385,10 +511,237 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     margin-top: 10px;
   }
 
+  /* SCROLL TO TOP */
+  .scroll-top {
+    position: fixed; bottom: 28px; right: 28px; z-index: 200;
+    width: 42px; height: 42px; border-radius: 50%;
+    background: var(--accent); color: #000; border: none;
+    font-size: 20px; cursor: pointer;
+    opacity: 0; pointer-events: none;
+    transition: opacity .3s, transform .3s;
+    transform: translateY(10px);
+    box-shadow: 0 4px 16px rgba(0,0,0,.4);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .scroll-top.visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
+  .scroll-top:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(29,185,255,.3); }
+
+  /* CARD ANIMATION */
+  .card {
+    transition: transform .18s, border-color .18s, box-shadow .18s, opacity .25s;
+  }
+  .card.fade-in { animation: fadeIn .25s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* COL wrappers — transparent in grid mode */
+  .col-title, .col-detail, .col-genres, .col-meta {
+    display: contents;
+  }
+  .grid.list-view .col-title,
+  .grid.list-view .col-detail,
+  .grid.list-view .col-genres,
+  .grid.list-view .col-meta {
+    display: block;
+  }
+
+  /* LIST VIEW */
+  .grid.list-view {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .grid.list-view .card {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .grid.list-view .card-img {
+    width: 120px;
+    height: auto;
+    min-height: 56px;
+    border-radius: 10px 0 0 10px;
+    flex-shrink: 0;
+  }
+  .grid.list-view .card-img-placeholder {
+    width: 120px;
+    height: auto;
+    min-height: 56px;
+    border-radius: 10px 0 0 10px;
+    flex-shrink: 0;
+  }
+  .grid.list-view .card-body {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0;
+    flex: 1;
+    padding: 0;
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+  /* Table columns in list view (wide screens) */
+  .grid.list-view .col-title   { flex: 0 0 260px; min-width: 0; padding: 8px 12px; overflow: hidden; }
+  .grid.list-view .col-detail  { flex: 0 0 220px; min-width: 0; padding: 8px 12px; overflow: hidden; border-left: 1px solid var(--border); }
+  .grid.list-view .col-genres  { flex: 0 0 160px; min-width: 0; padding: 8px 12px; overflow: hidden; border-left: 1px solid var(--border); }
+  .grid.list-view .col-meta    { flex: 1; min-width: 0; padding: 8px 12px; overflow: hidden; border-left: 1px solid var(--border); }
+  .grid.list-view .card-top    { margin-bottom: 0; }
+  .grid.list-view .card-detail { margin-bottom: 0; font-size: 11px; }
+  .grid.list-view .genre-tags  { margin-bottom: 0; }
+  .grid.list-view .card-meta   { margin-bottom: 0; flex-wrap: wrap; gap: 6px; }
+  .grid.list-view .news-section { display: none; }
+  .grid.list-view .card-ext-hint { display: none; }
+  /* Table header row */
+  .list-header {
+    display: none;
+    border-radius: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    font-size: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 0 40px 4px;
+  }
+  .list-header.visible { display: flex; }
+  .list-header-img   { flex: 0 0 120px; padding: 6px 12px; }
+  .list-header-title { flex: 0 0 260px; padding: 6px 12px; }
+  .list-header-detail{ flex: 0 0 220px; padding: 6px 12px; border-left: 1px solid var(--border); }
+  .list-header-genres{ flex: 0 0 160px; padding: 6px 12px; border-left: 1px solid var(--border); }
+  .list-header-meta  { flex: 1; padding: 6px 12px; border-left: 1px solid var(--border); }
+
+  /* RESET BUTTON */
+  .reset-btn {
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,80,80,.3);
+    background: transparent;
+    color: #ff6b6b;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .2s;
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: .5px;
+    display: none;
+  }
+  .reset-btn.show { display: inline-flex; align-items: center; gap: 4px; }
+  .reset-btn:hover { background: rgba(255,80,80,.12); border-color: #ff6b6b; }
+
+  /* VIEW TOGGLE */
+  .view-toggle {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .2s;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .view-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* CARD EXTERNAL LINK HINT */
+  .card-ext-hint {
+    position: absolute; top: 8px; right: 8px;
+    background: rgba(0,0,0,.65); border-radius: 4px;
+    padding: 2px 6px; font-size: 10px; color: var(--muted);
+    opacity: 0; transition: opacity .2s;
+    pointer-events: none;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .card:hover .card-ext-hint { opacity: 1; }
+  .card { position: relative; }
+
+  /* CONTENT VISIBILITY PERF */
+  .card { content-visibility: auto; contain-intrinsic-size: 340px 320px; will-change: transform; }
+  .grid.list-view .card { contain-intrinsic-size: auto 56px; }
+
+  /* PLAYTIME FILTER */
+  .source-btn {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .2s;
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: .5px;
+  }
+  .source-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .source-btn.active { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 500; }
+
+  /* THEME TOGGLE */
+  .theme-toggle {
+    position: fixed; bottom: 28px; left: 28px; z-index: 200;
+    width: 38px; height: 38px; border-radius: 50%;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--muted); font-size: 16px; cursor: pointer;
+    transition: all .2s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* LIGHT THEME */
+  html.light {
+    --bg: #f0f2f5;
+    --surface: #ffffff;
+    --surface2: #e8ecf1;
+    --border: #d0d7e0;
+    --accent: #0a7cc4;
+    --accent2: #00a87d;
+    --text: #2c3e50;
+    --muted: #6c7a8a;
+    --ea: #d4850a;
+    --released: #1a9960;
+    --unreleased: #5b5fe0;
+    --unknown: #6c7a8a;
+  }
+  html.light .card { box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  html.light .scroll-top { box-shadow: 0 4px 16px rgba(0,0,0,.15); }
+  html.light header { background: linear-gradient(180deg, #dfe6ee 0%, transparent 100%); }
+  html.light .card-title, html.light .feed-game-name { color: #1a2530; }
+  html.light .header-text h1 { color: #1a2530; }
+
+  /* KEYBOARD HINT */
+  .kbd-hint {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    margin-left: 4px;
+    opacity: .6;
+  }
+
+  /* TABLE VIEW — wide screens only */
+  @media (max-width: 1099px) {
+    /* Compact list on narrow: revert to flex-wrap */
+    .grid.list-view .card-body { flex-wrap: wrap; padding: 8px 12px; gap: 10px; }
+    .grid.list-view .col-title,
+    .grid.list-view .col-detail,
+    .grid.list-view .col-genres,
+    .grid.list-view .col-meta { flex: unset; border-left: none; padding: 0; }
+    .grid.list-view .col-title { flex: 1 1 180px; }
+    .grid.list-view .col-meta  { flex: 0 0 100%; }
+    .list-header { display: none !important; }
+  }
+  @media (max-width: 900px) {
+    .header-stats { gap: 14px; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  }
   @media (max-width: 600px) {
-    header, .toolbar, .grid { padding-left: 16px; padding-right: 16px; }
-    .header-stats { gap: 16px; }
+    header, .toolbar-main, .toolbar-filters, .grid { padding-left: 16px; padding-right: 16px; }
+    .header-stats { gap: 10px; flex-wrap: wrap; justify-content: center; }
     .stat-val { font-size: 20px; }
+    .grid { grid-template-columns: 1fr; }
+    .toolbar-main { gap: 8px; }
+    .search-wrap { max-width: 100%; }
+    .grid.list-view .card-img { width: 80px; }
+    .scroll-top { bottom: 16px; right: 16px; }
+    .theme-toggle { bottom: 16px; left: 16px; }
   }
 </style>
 </head>
@@ -424,68 +777,231 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <div class="stat-val" style="color:var(--unreleased)">__UNREL__</div>
       <div class="stat-lbl">Pas sortis</div>
     </div>
+    <div>
+      <div class="stat-val" style="color:var(--accent2)">__PLAYTIME__</div>
+      <div class="stat-lbl">Heures jouées</div>
+    </div>
   </div>
 </header>
 
 <div class="toolbar">
-  <div class="search-wrap">
-    <span class="icon">⌕</span>
-    <input type="text" id="search" placeholder="Rechercher un jeu...">
+  <div class="toolbar-main">
+    <div class="search-wrap">
+      <span class="icon">⌕</span>
+      <input type="text" id="search" placeholder="Rechercher un jeu...">
+    </div>
+    <select id="sortBy">
+      <option value="name">Trier : Nom A→Z</option>
+      <option value="name_desc">Trier : Nom Z→A</option>
+      <option value="playtime">Trier : Temps de jeu ↓</option>
+      <option value="release">Trier : Date de sortie ↓</option>
+      <option value="lastupdate">Trier : Dernière MàJ ↓</option>
+      <option value="metacritic">Trier : Metacritic ↓</option>
+    </select>
+    <button class="filter-toggle-btn" id="filtersToggle" title="Afficher / masquer les filtres">⚙ Filtres<span class="filter-badge" id="filterBadge"></span></button>
+    <button class="reset-btn" id="resetBtn" title="Réinitialiser tous les filtres">✕ Reset</button>
+    <button class="view-toggle" id="viewToggle" title="Basculer Grille / Liste">☰ Liste</button>
+    <span class="count-label" id="countLabel"></span>
+    <a class="nav-link" href="__NEWS_HREF__">🗞 News</a>
   </div>
-  <select id="sortBy">
-    <option value="name">Trier : Nom A→Z</option>
-    <option value="name_desc">Trier : Nom Z→A</option>
-    <option value="playtime">Trier : Temps de jeu ↓</option>
-    <option value="release">Trier : Date de sortie ↓</option>
-    <option value="lastupdate">Trier : Dernière MàJ ↓</option>
-  </select>
-  <div class="filter-btns" id="filterBtns">
-    <button class="filter-btn active" data-filter="all">Tous</button>
-    <button class="filter-btn" data-filter="earlyaccess">Early Access</button>
-    <button class="filter-btn" data-filter="released">Sortis</button>
-    <button class="filter-btn" data-filter="unreleased">À venir</button>
+  <div class="toolbar-filters" id="toolbarFilters">
+    <div class="filter-group">
+      <div class="filter-group-label">Statut</div>
+      <div class="filter-btns" id="filterBtns">
+        <button class="filter-btn active" data-filter="all">Tous</button>
+        <button class="filter-btn" data-filter="earlyaccess">Early Access</button>
+        <button class="filter-btn" data-filter="released">Sortis</button>
+        <button class="filter-btn" data-filter="unreleased">À venir</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">Source</div>
+      <div class="filter-btns" id="sourceBtns">
+        <button class="source-btn active" data-source="all">🎮 Tout</button>
+        <button class="source-btn" data-source="owned">Possédés</button>
+        <button class="source-btn" data-source="wishlist">🎁 Wishlist</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">Type news</div>
+      <div class="filter-btns" id="tagBtns">
+        <button class="tag-btn active" data-tag="all">Tous types</button>
+        <button class="tag-btn" data-tag="patchnotes">📋 Patch notes</button>
+        <button class="tag-btn" data-tag="other">📰 News</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">Temps de jeu</div>
+      <div class="filter-btns" id="playtimeBtns">
+        <button class="filter-btn active" data-pt="all">Tous</button>
+        <button class="filter-btn" data-pt="0">Jamais joué</button>
+        <button class="filter-btn" data-pt="60">< 1h</button>
+        <button class="filter-btn" data-pt="600">1-10h</button>
+        <button class="filter-btn" data-pt="601">> 10h</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">Metacritic</div>
+      <div class="filter-btns" id="mcBtns">
+        <button class="filter-btn active" data-mc="all">Tous</button>
+        <button class="filter-btn" data-mc="none">Sans score</button>
+        <button class="filter-btn" data-mc="bad">< 50</button>
+        <button class="filter-btn" data-mc="mid">50–75</button>
+        <button class="filter-btn" data-mc="good">> 75</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">Màj récente</div>
+      <div class="filter-btns" id="recentBtns">
+        <button class="filter-btn active" data-recent="all">Tous</button>
+        <button class="filter-btn" data-recent="1">1 jour</button>
+        <button class="filter-btn" data-recent="2">2 jours</button>
+        <button class="filter-btn" data-recent="5">5 jours</button>
+      </div>
+    </div>
   </div>
-  <div class="filter-btns" id="sourceBtns">
-    <button class="source-btn active" data-source="all">🎮 Tout</button>
-    <button class="source-btn" data-source="owned">Possédés</button>
-    <button class="source-btn" data-source="wishlist">🎁 Wishlist</button>
-  </div>
-  <div class="filter-btns" id="tagBtns">
-    <button class="tag-btn active" data-tag="all">Tous types</button>
-    <button class="tag-btn" data-tag="patchnotes">📋 Patch notes</button>
-    <button class="tag-btn" data-tag="other">📰 News</button>
-  </div>
-  <span class="count-label" id="countLabel"></span>
-  <a class="nav-link" href="__NEWS_HREF__">🗞 News</a>
 </div>
 
+<div class="list-header" id="listHeader">
+  <div class="list-header-img"></div>
+  <div class="list-header-title">Jeu</div>
+  <div class="list-header-detail">Développeur / Score</div>
+  <div class="list-header-genres">Genres</div>
+  <div class="list-header-meta">Temps de jeu · Date</div>
+</div>
 <div class="grid" id="grid">
 __CARDS__
 </div>
 
 <footer>SteamPulse · Données via Steam Web API &amp; Store API · Non affilié à Valve</footer>
 
+<button class="scroll-top" id="scrollTop" title="Retour en haut">↑</button>
+<button class="theme-toggle" id="themeToggle" title="Changer de thème">🌙</button>
+
 <script>
 const allCards = Array.from(document.querySelectorAll('.card'));
-
+__SHARED_JS__
 function getFilter()    { return document.querySelector('#filterBtns .filter-btn.active').dataset.filter; }
 function getSrcFilter() { return document.querySelector('#sourceBtns .source-btn.active').dataset.source; }
 function getTagFilter() { return document.querySelector('#tagBtns .tag-btn.active').dataset.tag; }
+function getPtFilter()  { return document.querySelector('#playtimeBtns .filter-btn.active').dataset.pt; }
+function getMcFilter()  { return document.querySelector('#mcBtns .filter-btn.active').dataset.mc; }
+function getRecentFilter() { return document.querySelector('#recentBtns .filter-btn.active').dataset.recent; }
 function getSearch()    { return document.getElementById('search').value.toLowerCase().trim(); }
 function getSort()      { return document.getElementById('sortBy').value; }
+
+function checkMcFilter(mc, card) {
+  if (mc === 'all') return true;
+  const s = parseInt(card.dataset.metacritic) || 0;
+  if (mc === 'none') return s <= 0;
+  if (mc === 'bad')  return s > 0 && s < 50;
+  if (mc === 'mid')  return s >= 50 && s <= 75;
+  if (mc === 'good') return s > 75;
+  return true;
+}
+
+function isDefaultState() {
+  return getFilter() === 'all' && getSrcFilter() === 'all' && getTagFilter() === 'all'
+    && getPtFilter() === 'all' && getMcFilter() === 'all' && getRecentFilter() === 'all'
+    && !getSearch() && getSort() === 'name';
+}
+
+function updateFilterBadge() {
+  let n = 0;
+  if (getFilter() !== 'all')       n++;
+  if (getSrcFilter() !== 'all')    n++;
+  if (getTagFilter() !== 'all')    n++;
+  if (getPtFilter() !== 'all')     n++;
+  if (getMcFilter() !== 'all')     n++;
+  if (getRecentFilter() !== 'all') n++;
+  const badge = document.getElementById('filterBadge');
+  badge.textContent = n;
+  badge.classList.toggle('show', n > 0);
+  document.getElementById('filtersToggle').classList.toggle('has-active', n > 0);
+}
+
+function saveStateToHash() {
+  const s = {};
+  if (getFilter() !== 'all')    s.status = getFilter();
+  if (getSrcFilter() !== 'all') s.source = getSrcFilter();
+  if (getTagFilter() !== 'all') s.tag = getTagFilter();
+  if (getPtFilter() !== 'all')  s.pt = getPtFilter();
+  if (getMcFilter() !== 'all')    s.mc = getMcFilter();
+  if (getRecentFilter() !== 'all') s.recent = getRecentFilter();
+  if (getSearch())                 s.q = getSearch();
+  if (getSort() !== 'name')     s.sort = getSort();
+  const grid = document.getElementById('grid');
+  if (grid.classList.contains('list-view')) s.view = 'list';
+  const h = new URLSearchParams(s).toString();
+  history.replaceState(null, '', h ? '#' + h : location.pathname);
+  // Persist view mode for page refresh
+  try {
+    const shared = grid.classList.contains('list-view') ? {view: 'list'} : {};
+    localStorage.setItem('sp-shared', JSON.stringify(shared));
+  } catch(e) {}
+  // Update nav link to carry compatible filters to news page
+  const navLink = document.querySelector('.nav-link[href^="steam_news"]');
+  if (navLink) {
+    const nf = {};
+    if (getFilter() !== 'all')       nf.status = getFilter();
+    if (getSrcFilter() !== 'all')    nf.source = getSrcFilter();
+    if (getTagFilter() !== 'all')    nf.tag = getTagFilter();
+    if (getRecentFilter() !== 'all') nf.recent = getRecentFilter();
+    const nh = new URLSearchParams(nf).toString();
+    navLink.href = 'steam_news.html' + (nh ? '#' + nh : '');
+  }
+}
+
+function loadStateFromHash() {
+  // Restore cross-page shared state (view mode) from localStorage if no hash
+  try {
+    const shared = JSON.parse(localStorage.getItem('sp-shared') || '{}');
+    if (!location.hash && shared.view === 'list') {
+      document.getElementById('grid').classList.add('list-view');
+      document.getElementById('viewToggle').textContent = '⊞ Grille';
+      document.getElementById('listHeader').classList.add('visible');
+    }
+  } catch(e) {}
+  const h = location.hash.slice(1);
+  if (!h) return;
+  const p = new URLSearchParams(h);
+  if (p.get('status')) { activateBtn('#filterBtns .filter-btn', 'filter', p.get('status')); }
+  if (p.get('source')) { activateBtn('#sourceBtns .source-btn', 'source', p.get('source')); }
+  if (p.get('tag'))    { activateBtn('#tagBtns .tag-btn', 'tag', p.get('tag')); }
+  if (p.get('pt'))     { activateBtn('#playtimeBtns .filter-btn', 'pt', p.get('pt')); }
+  if (p.get('mc'))     { activateBtn('#mcBtns .filter-btn', 'mc', p.get('mc')); }
+  if (p.get('recent')) { activateBtn('#recentBtns .filter-btn', 'recent', p.get('recent')); }
+  if (p.get('q'))      { document.getElementById('search').value = p.get('q'); }
+  if (p.get('sort'))   { document.getElementById('sortBy').value = p.get('sort'); }
+  if (p.get('view') === 'list') {
+    document.getElementById('grid').classList.add('list-view');
+    document.getElementById('viewToggle').textContent = '⊞ Grille';
+    document.getElementById('listHeader').classList.add('visible');
+  }
+  // Auto-open filter panel if any filter is active
+  if (!isDefaultState()) {
+    document.getElementById('toolbarFilters').classList.add('open');
+  }
+}
 
 function updateGrid() {
   const filter    = getFilter();
   const srcFilter = getSrcFilter();
   const tagFilter = getTagFilter();
+  const ptFilter  = getPtFilter();
   const search    = getSearch();
   const sort      = getSort();
 
+  const mcFilter     = getMcFilter();
+  const recentFilter  = getRecentFilter();
   let visible = allCards.filter(c => {
-    const badgeOk  = filter === 'all' || c.dataset.status === filter;
-    const srcOk    = srcFilter === 'all' || c.dataset.source === srcFilter;
-    const searchOk = !search || c.dataset.name.includes(search);
-    return badgeOk && srcOk && searchOk;
+    const badgeOk   = filter === 'all' || c.dataset.status === filter;
+    const srcOk     = srcFilter === 'all' || c.dataset.source === srcFilter;
+    const searchOk  = !search || c.dataset.name.includes(search);
+    const ptOk      = checkPtFilter(ptFilter, c);
+    const mcOk      = checkMcFilter(mcFilter, c);
+    const recentOk  = checkRecentFilter(recentFilter, c);
+    return badgeOk && srcOk && searchOk && ptOk && mcOk && recentOk;
   });
 
   visible.sort((a, b) => {
@@ -493,6 +1009,7 @@ function updateGrid() {
     if (sort === 'name_desc')  return b.dataset.name.localeCompare(a.dataset.name);
     if (sort === 'playtime')   return parseInt(b.dataset.playtime) - parseInt(a.dataset.playtime);
     if (sort === 'release')    return parseInt(b.dataset.releaseTs) - parseInt(a.dataset.releaseTs);
+    if (sort === 'metacritic') return parseInt(b.dataset.metacritic || 0) - parseInt(a.dataset.metacritic || 0);
     if (sort === 'lastupdate') {
       const tsA = tagFilter === 'patchnotes' ? parseInt(a.dataset.lastPatchTs) || 0
                 : tagFilter === 'other'      ? parseInt(a.dataset.lastOtherTs) || 0
@@ -506,11 +1023,18 @@ function updateGrid() {
   });
 
   const grid = document.getElementById('grid');
-  // Hide all, then append sorted visible
   allCards.forEach(c => c.style.display = 'none');
-  visible.forEach(c => { c.style.display = ''; grid.appendChild(c); });
+  const frag = document.createDocumentFragment();
+  visible.forEach(c => {
+    c.style.display = '';
+    c.classList.remove('fade-in');
+    frag.appendChild(c);
+  });
+  grid.appendChild(frag);
+  requestAnimationFrame(() => {
+    visible.forEach(c => c.classList.add('fade-in'));
+  });
 
-  // Update each card: filter news items by tag, refresh date & count display
   allCards.forEach(c => {
     c.querySelectorAll('.news-item').forEach(item => {
       item.style.display = (tagFilter === 'all' || item.dataset.newsTag === tagFilter) ? '' : 'none';
@@ -544,30 +1068,56 @@ function updateGrid() {
   }
 
   document.getElementById('countLabel').textContent = `${visible.length} jeu${visible.length > 1 ? 'x' : ''}`;
+  updateResetBtn();
+  saveStateToHash();
 }
 
-document.getElementById('search').addEventListener('input', updateGrid);
+// --- Event listeners ---
+let _searchTimer;
+document.getElementById('search').addEventListener('input', () => {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(updateGrid, 120);
+});
 document.getElementById('sortBy').addEventListener('change', updateGrid);
-document.querySelectorAll('#filterBtns .filter-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#filterBtns .filter-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    updateGrid();
+
+function setupFilterGroup(selector, callback) {
+  document.querySelectorAll(selector).forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.closest('.filter-btns').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      callback ? callback() : updateGrid();
+    });
   });
+}
+setupFilterGroup('#filterBtns .filter-btn');
+setupFilterGroup('#sourceBtns .source-btn');
+setupFilterGroup('#tagBtns .tag-btn');
+setupFilterGroup('#playtimeBtns .filter-btn');
+setupFilterGroup('#mcBtns .filter-btn');
+setupFilterGroup('#recentBtns .filter-btn');
+
+// Reset
+document.getElementById('resetBtn').addEventListener('click', () => {
+  document.getElementById('search').value = '';
+  document.getElementById('sortBy').value = 'name';
+  ['#filterBtns .filter-btn', '#sourceBtns .source-btn', '#tagBtns .tag-btn', '#playtimeBtns .filter-btn', '#mcBtns .filter-btn', '#recentBtns .filter-btn'].forEach(sel => {
+    document.querySelectorAll(sel).forEach(b => b.classList.remove('active'));
+    const first = document.querySelector(sel);
+    if (first) first.classList.add('active');
+  });
+  updateGrid();
 });
-document.querySelectorAll('#sourceBtns .source-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#sourceBtns .source-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    updateGrid();
-  });
-});
-document.querySelectorAll('#tagBtns .tag-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#tagBtns .tag-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    updateGrid();
-  });
+
+// View toggle
+document.getElementById('viewToggle').addEventListener('click', () => {
+  const grid = document.getElementById('grid');
+  const btn = document.getElementById('viewToggle');
+  const header = document.getElementById('listHeader');
+  grid.classList.toggle('list-view');
+  const isListView = grid.classList.contains('list-view');
+  btn.textContent = isListView ? '⊞ Grille' : '☰ Liste';
+  header.classList.toggle('visible', isListView);
+  saveStateToHash();
 });
 
 // Expand/collapse news
@@ -578,7 +1128,7 @@ document.querySelectorAll('.news-toggle').forEach(toggle => {
   });
 });
 
-// Open Steam store on card click (not on toggle)
+// Open Steam store on card click
 document.querySelectorAll('.card').forEach(card => {
   card.addEventListener('click', e => {
     if (e.target.closest('.news-toggle') || e.target.closest('.news-list')) return;
@@ -587,6 +1137,9 @@ document.querySelectorAll('.card').forEach(card => {
   });
 });
 
+// Load state from URL hash
+loadStateFromHash();
+saveStateToHash(); // initialise le lien nav avec l'état courant
 updateGrid();
 </script>
 </body>
@@ -616,17 +1169,42 @@ _NEWS_TEMPLATE = r"""<!DOCTYPE html>
   }
   .header-text h1 { font-family:'Rajdhani',sans-serif; font-size:28px; font-weight:700; letter-spacing:2px; color:#fff; text-transform:uppercase; }
   .header-text p { color:var(--muted); font-size:12px; margin-top:2px; font-family:'IBM Plex Mono',monospace; }
-  .nav-back {
-    margin-left:auto; padding:7px 16px; border-radius:6px;
-    border:1px solid var(--border); background:transparent;
-    color:var(--text); font-size:13px; text-decoration:none; transition:border-color .2s, color .2s;
+  .nav-link {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    text-decoration: none;
+    transition: all .2s;
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: .5px;
   }
-  .nav-back:hover { border-color:var(--accent); color:var(--accent); }
-  .toolbar {
-    padding:14px 40px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;
-    border-bottom:1px solid var(--border); background:var(--surface);
-    position:sticky; top:0; z-index:100;
+  .nav-link:hover { border-color: var(--accent); color: var(--accent); }
+  .toolbar { border-bottom:1px solid var(--border); background:var(--surface); position:sticky; top:0; z-index:100; }
+  .toolbar-main { padding:11px 40px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .toolbar-filters {
+    display:none; gap:16px 28px; flex-wrap:wrap;
+    padding:14px 40px 18px; border-top:1px solid var(--border);
+    background:rgba(0,0,0,.12);
   }
+  .toolbar-filters.open { display:flex; }
+  .filter-group { display:flex; flex-direction:column; gap:7px; }
+  .filter-group-label { font-size:10px; font-family:'IBM Plex Mono',monospace; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+  .filter-toggle-btn {
+    padding:6px 14px; border-radius:20px; border:1px solid var(--border);
+    background:transparent; color:var(--muted); font-size:12px; cursor:pointer;
+    transition:all .2s; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px;
+    display:inline-flex; align-items:center; gap:6px;
+  }
+  .filter-toggle-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .filter-toggle-btn.has-active { border-color:var(--accent); color:var(--accent); background:rgba(29,185,255,.1); }
+  .filter-badge {
+    display:none; align-items:center; justify-content:center;
+    min-width:16px; height:16px; border-radius:8px;
+    background:var(--accent); color:#000; font-size:10px; font-weight:700; padding:0 4px;
+  }
+  .filter-badge.show { display:inline-flex; }
   .search-wrap { position:relative; flex:1; min-width:200px; max-width:340px; }
   .search-wrap input {
     width:100%; background:var(--bg); border:1px solid var(--border);
@@ -681,7 +1259,44 @@ _NEWS_TEMPLATE = r"""<!DOCTYPE html>
   .empty { text-align:center; padding:80px 0; color:var(--muted); }
   .empty p { margin-top:10px; font-size:13px; }
   footer { text-align:center; padding:20px; color:var(--muted); font-size:11px; font-family:'IBM Plex Mono',monospace; border-top:1px solid var(--border); margin-top:10px; }
-  @media(max-width:600px) { header,.toolbar,.feed { padding-left:16px; padding-right:16px; } .feed-game { min-width:130px; max-width:160px; } }
+  .scroll-top {
+    position:fixed; bottom:28px; right:28px; z-index:200;
+    width:42px; height:42px; border-radius:50%;
+    background:var(--accent); color:#000; border:none;
+    font-size:20px; cursor:pointer;
+    opacity:0; pointer-events:none;
+    transition:opacity .3s, transform .3s;
+    transform:translateY(10px);
+    box-shadow:0 4px 16px rgba(0,0,0,.4);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .scroll-top.visible { opacity:1; pointer-events:auto; transform:translateY(0); }
+  .scroll-top:hover { transform:translateY(-2px); }
+  .theme-toggle {
+    position:fixed; bottom:28px; left:28px; z-index:200;
+    width:38px; height:38px; border-radius:50%;
+    background:var(--surface); border:1px solid var(--border);
+    color:var(--muted); font-size:16px; cursor:pointer;
+    transition:all .2s;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .theme-toggle:hover { border-color:var(--accent); color:var(--accent); }
+  .reset-btn {
+    padding:6px 12px; border-radius:20px; border:1px solid rgba(255,80,80,.3);
+    background:transparent; color:#ff6b6b; font-size:12px; cursor:pointer;
+    transition:all .2s; font-family:'IBM Plex Mono',monospace; display:none;
+  }
+  .reset-btn.show { display:inline-flex; align-items:center; gap:4px; }
+  .reset-btn:hover { background:rgba(255,80,80,.12); border-color:#ff6b6b; }
+  html.light {
+    --bg:#f0f2f5; --surface:#ffffff; --surface2:#e8ecf1; --border:#d0d7e0;
+    --accent:#0a7cc4; --accent2:#00a87d; --text:#2c3e50; --muted:#6c7a8a;
+    --ea:#d4850a; --released:#1a9960; --unreleased:#5b5fe0; --unknown:#6c7a8a;
+  }
+  html.light header { background:linear-gradient(180deg,#dfe6ee 0%,transparent 100%); }
+  html.light .feed-game-name, html.light .header-text h1 { color:#1a2530; }
+  html.light .feed-item { box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  @media(max-width:600px) { header,.toolbar-main,.toolbar-filters,.feed { padding-left:16px; padding-right:16px; } .feed-game { min-width:130px; max-width:160px; } .scroll-top { bottom:16px; right:16px; } .theme-toggle { bottom:16px; left:16px; } }
 </style>
 </head>
 <body>
@@ -699,26 +1314,77 @@ _NEWS_TEMPLATE = r"""<!DOCTYPE html>
     <h1>SteamPulse — News</h1>
     <p>Généré le __GENERATED_AT__ · SteamID __STEAM_ID__</p>
   </div>
-  <a class="nav-back" href="__LIB_HREF__">← Bibliothèque</a>
 </header>
 
 <div class="toolbar">
-  <div class="search-wrap">
-    <span class="icon">⌕</span>
-    <input type="text" id="search" placeholder="Rechercher un jeu...">
+  <div class="toolbar-main">
+    <div class="search-wrap">
+      <span class="icon">⌕</span>
+      <input type="text" id="search" placeholder="Rechercher un jeu...">
+    </div>
+    <button class="filter-toggle-btn" id="filtersToggle" title="Afficher / masquer les filtres">⚙ Filtres<span class="filter-badge" id="filterBadge"></span></button>
+    <button class="reset-btn" id="resetBtn" title="Réinitialiser tous les filtres">✕ Reset</button>
+    <span class="count-label" id="countLabel"></span>
+    <a class="nav-link" href="__LIB_HREF__">📚 Bibliothèque</a>
   </div>
-  <div class="filter-btns" id="statusBtns">
-    <button class="filter-btn active" data-filter="all">Tous</button>
-    <button class="filter-btn" data-filter="earlyaccess">Early Access</button>
-    <button class="filter-btn" data-filter="released">Sortis</button>
-    <button class="filter-btn" data-filter="unreleased">À venir</button>
+  <div class="toolbar-filters" id="toolbarFilters">
+    <div class="filter-group">
+      <div class="filter-group-label">Statut</div>
+      <div class="filter-btns" id="statusBtns">
+        <button class="filter-btn active" data-filter="all">Tous</button>
+        <button class="filter-btn" data-filter="earlyaccess">Early Access</button>
+        <button class="filter-btn" data-filter="released">Sortis</button>
+        <button class="filter-btn" data-filter="unreleased">À venir</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">Source</div>
+      <div class="filter-btns" id="sourceBtns">
+        <button class="source-btn active" data-source="all">🎮 Tout</button>
+        <button class="source-btn" data-source="owned">Possédés</button>
+        <button class="source-btn" data-source="wishlist">🎁 Wishlist</button>
+        <button class="source-btn" data-source="followed">👁 Suivis</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">Type news</div>
+      <div class="filter-btns" id="tagBtns">
+        <button class="tag-btn active" data-tag="all">Tous types</button>
+        <button class="tag-btn" data-tag="patchnotes">📋 Patch notes</button>
+        <button class="tag-btn" data-tag="other">📰 News</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">Temps de jeu</div>
+      <div class="filter-btns" id="playtimeBtns">
+        <button class="filter-btn active" data-pt="all">Tous</button>
+        <button class="filter-btn" data-pt="0">Jamais joué</button>
+        <button class="filter-btn" data-pt="60">&lt; 1h</button>
+        <button class="filter-btn" data-pt="600">1-10h</button>
+        <button class="filter-btn" data-pt="601">&gt; 10h</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">Metacritic</div>
+      <div class="filter-btns" id="mcBtns">
+        <button class="filter-btn active" data-mc="all">Tous</button>
+        <button class="filter-btn" data-mc="none">Non noté</button>
+        <button class="filter-btn" data-mc="poor">&lt; 60</button>
+        <button class="filter-btn" data-mc="mixed">60–74</button>
+        <button class="filter-btn" data-mc="good">75–89</button>
+        <button class="filter-btn" data-mc="great">≥ 90</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">Màj récente</div>
+      <div class="filter-btns" id="recentBtns">
+        <button class="filter-btn active" data-recent="all">Tous</button>
+        <button class="filter-btn" data-recent="1">1 jour</button>
+        <button class="filter-btn" data-recent="2">2 jours</button>
+        <button class="filter-btn" data-recent="5">5 jours</button>
+      </div>
+    </div>
   </div>
-  <div class="filter-btns" id="tagBtns">
-    <button class="tag-btn active" data-tag="all">Tous types</button>
-    <button class="tag-btn" data-tag="patchnotes">📋 Patch notes</button>
-    <button class="tag-btn" data-tag="other">📰 News</button>
-  </div>
-  <span class="count-label" id="countLabel"></span>
 </div>
 
 <div class="feed" id="feed">
@@ -727,18 +1393,109 @@ __ROWS__
 
 <footer>SteamPulse · Données via Steam Web API &amp; Store API · Non affilié à Valve</footer>
 
+<button class="scroll-top" id="scrollTop" title="Retour en haut">↑</button>
+<button class="theme-toggle" id="themeToggle" title="Changer de thème">🌙</button>
+
 <script>
 const allRows = Array.from(document.querySelectorAll('.feed-item'));
+__SHARED_JS__
+// --- Getters ---
+function getStatusFilter() { return document.querySelector('#statusBtns .filter-btn.active').dataset.filter; }
+function getSrcFilter()    { return document.querySelector('#sourceBtns .source-btn.active').dataset.source; }
+function getTagFilter()    { return document.querySelector('#tagBtns .tag-btn.active').dataset.tag; }
+function getPtFilter()     { return document.querySelector('#playtimeBtns .filter-btn.active').dataset.pt; }
+function getMcFilter()     { return document.querySelector('#mcBtns .filter-btn.active').dataset.mc; }
+function getRecentFilter() { return document.querySelector('#recentBtns .filter-btn.active').dataset.recent; }
+function getSearch()       { return document.getElementById('search').value.toLowerCase().trim(); }
+
+// --- Check functions ---
+function checkMcFilter(mc, row) {
+  if (mc === 'all') return true;
+  const score = parseInt(row.dataset.metacritic) || 0;
+  if (mc === 'none')  return score === 0;
+  if (mc === 'poor')  return score > 0 && score < 60;
+  if (mc === 'mixed') return score >= 60 && score < 75;
+  if (mc === 'good')  return score >= 75 && score < 90;
+  if (mc === 'great') return score >= 90;
+  return true;
+}
+function isDefaultState() {
+  return getStatusFilter() === 'all' && getSrcFilter() === 'all' && getTagFilter() === 'all'
+    && getPtFilter() === 'all' && getMcFilter() === 'all' && getRecentFilter() === 'all'
+    && !getSearch();
+}
+
+function updateFilterBadge() {
+  let n = 0;
+  if (getStatusFilter() !== 'all') n++;
+  if (getSrcFilter() !== 'all')    n++;
+  if (getTagFilter() !== 'all')    n++;
+  if (getPtFilter() !== 'all')     n++;
+  if (getMcFilter() !== 'all')     n++;
+  if (getRecentFilter() !== 'all') n++;
+  const badge = document.getElementById('filterBadge');
+  badge.textContent = n;
+  badge.classList.toggle('show', n > 0);
+  document.getElementById('filtersToggle').classList.toggle('has-active', n > 0);
+}
+
+function saveStateToHash() {
+  const s = {};
+  if (getStatusFilter() !== 'all') s.status = getStatusFilter();
+  if (getSrcFilter() !== 'all')    s.source = getSrcFilter();
+  if (getTagFilter() !== 'all')    s.tag = getTagFilter();
+  if (getPtFilter() !== 'all')     s.pt = getPtFilter();
+  if (getMcFilter() !== 'all')     s.mc = getMcFilter();
+  if (getRecentFilter() !== 'all') s.recent = getRecentFilter();
+  if (getSearch())                 s.q = getSearch();
+  const h = new URLSearchParams(s).toString();
+  history.replaceState(null, '', h ? '#' + h : location.pathname);
+  // Update back link to carry compatible filters to library page
+  const backLink = document.querySelector('.nav-link[href^="steam_library"]');
+  if (backLink) {
+    const nf = {};
+    if (getStatusFilter() !== 'all') nf.status = getStatusFilter();
+    if (getSrcFilter() !== 'all')    nf.source = getSrcFilter();
+    if (getTagFilter() !== 'all')    nf.tag = getTagFilter();
+    if (getRecentFilter() !== 'all') nf.recent = getRecentFilter();
+    const nh = new URLSearchParams(nf).toString();
+    backLink.href = 'steam_library.html' + (nh ? '#' + nh : '');
+  }
+}
+
+function loadStateFromHash() {
+  const h = location.hash.slice(1);
+  if (!h) return;
+  const p = new URLSearchParams(h);
+  if (p.get('status')) { activateBtn('#statusBtns .filter-btn', 'filter', p.get('status')); }
+  if (p.get('source')) { activateBtn('#sourceBtns .source-btn', 'source', p.get('source')); }
+  if (p.get('tag'))    { activateBtn('#tagBtns .tag-btn', 'tag', p.get('tag')); }
+  if (p.get('pt'))     { activateBtn('#playtimeBtns .filter-btn', 'pt', p.get('pt')); }
+  if (p.get('mc'))     { activateBtn('#mcBtns .filter-btn', 'mc', p.get('mc')); }
+  if (p.get('recent')) { activateBtn('#recentBtns .filter-btn', 'recent', p.get('recent')); }
+  if (p.get('q'))      { document.getElementById('search').value = p.get('q'); }
+  if (!isDefaultState()) {
+    document.getElementById('toolbarFilters').classList.add('open');
+  }
+}
 
 function updateFeed() {
-  const filter = document.querySelector('#statusBtns .filter-btn.active').dataset.filter;
-  const tagFilter = document.querySelector('#tagBtns .tag-btn.active').dataset.tag;
-  const search = document.getElementById('search').value.toLowerCase().trim();
+  const statusFilter = getStatusFilter();
+  const srcFilter    = getSrcFilter();
+  const tagFilter    = getTagFilter();
+  const ptFilter     = getPtFilter();
+  const mcFilter     = getMcFilter();
+  const recentFilter = getRecentFilter();
+  const search       = getSearch();
   let visible = allRows.filter(r => {
-    const statusOk = filter === 'all' || r.dataset.status === filter;
-    const tagOk = tagFilter === 'all' || r.dataset.tag === tagFilter;
+    const statusOk = statusFilter === 'all' || r.dataset.status === statusFilter;
+    const srcOk    = srcFilter === 'all' || r.dataset.source === srcFilter;
+    const tagOk    = tagFilter === 'all' || r.dataset.tag === tagFilter;
     const searchOk = !search || r.dataset.name.includes(search);
-    return statusOk && tagOk && searchOk;
+    const ptOk     = checkPtFilter(ptFilter, r);
+    const mcOk     = checkMcFilter(mcFilter, r);
+    const recentOk = checkRecentFilter(recentFilter, r);
+    return statusOk && srcOk && tagOk && searchOk && ptOk && mcOk && recentOk;
   });
   allRows.forEach(r => r.style.display = 'none');
   visible.forEach(r => r.style.display = '');
@@ -755,23 +1512,47 @@ function updateFeed() {
     empty.style.display = 'none';
   }
   document.getElementById('countLabel').textContent = `${visible.length} news`;
+  updateResetBtn();
+  saveStateToHash();
 }
 
-document.getElementById('search').addEventListener('input', updateFeed);
-document.querySelectorAll('.filter-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#statusBtns .filter-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    updateFeed();
-  });
+// --- Event listeners ---
+let _newsSearchTimer;
+document.getElementById('search').addEventListener('input', () => {
+  clearTimeout(_newsSearchTimer);
+  _newsSearchTimer = setTimeout(updateFeed, 120);
 });
-document.querySelectorAll('.tag-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#tagBtns .tag-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    updateFeed();
+
+function setupFilterGroup(selector, callback) {
+  document.querySelectorAll(selector).forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.closest('.filter-btns').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      callback ? callback() : updateFeed();
+    });
   });
+}
+setupFilterGroup('#statusBtns .filter-btn');
+setupFilterGroup('#sourceBtns .source-btn');
+setupFilterGroup('#tagBtns .tag-btn');
+setupFilterGroup('#playtimeBtns .filter-btn');
+setupFilterGroup('#mcBtns .filter-btn');
+setupFilterGroup('#recentBtns .filter-btn');
+
+// Reset
+document.getElementById('resetBtn').addEventListener('click', () => {
+  document.getElementById('search').value = '';
+  ['#statusBtns .filter-btn', '#sourceBtns .source-btn', '#tagBtns .tag-btn',
+   '#playtimeBtns .filter-btn', '#mcBtns .filter-btn', '#recentBtns .filter-btn'].forEach(sel => {
+    document.querySelectorAll(sel).forEach(b => b.classList.remove('active'));
+    const first = document.querySelector(sel);
+    if (first) first.classList.add('active');
+  });
+  updateFeed();
 });
+
+loadStateFromHash();
+saveStateToHash(); // initialise le lien nav avec l'état courant
 updateFeed();
 </script>
 </body>
@@ -956,23 +1737,29 @@ def make_card(record: GameRecord) -> str:
         pt_display = "👁 Suivi"
     else:
         pt_display = f"🕹 {pt_fmt}"
+    metacritic_score = details.metacritic_score if details else 0
     return (
         f'<div class="card" data-appid="{appid}" data-status="{status.badge}" '
         f'data-source="{source_tag}" data-name="{name.lower()}" '
         f'data-playtime="{game.playtime_forever}" '
+        f'data-metacritic="{metacritic_score}" '
         f'data-release="{rel_date}" data-release-ts="{release_ts}" '
         f'data-last-update="{last_update_ts}" '
         f'data-last-patch-ts="{last_patch_ts}" data-last-other-ts="{last_other_ts}">\n'
+        f'  <span class="card-ext-hint">↗ Steam</span>\n'
         f'  <img class="card-img" src="{html.escape(img_url)}" alt="" loading="lazy"'
         f"    onerror=\"this.style.display='none';this.nextElementSibling.style.display='flex'\">\n"
         f'  <div class="card-img-placeholder" style="display:none">{placeholder}</div>\n'
         f'  <div class="card-body">\n'
+        f'    <div class="col-title">\n'
         f'    <div class="card-top">\n'
         f'      <div class="card-title">{name}</div>\n'
         f'      <span class="{html.escape(badge_cls)}">{html.escape(status.label)}</span>\n'
         f"    </div>\n"
-        f"    {detail_row}"
-        f"    {genres_html}"
+        f"    </div>\n"
+        f'    <div class="col-detail">{detail_row}</div>\n'
+        f'    <div class="col-genres">{genres_html}</div>\n'
+        f'    <div class="col-meta">\n'
         f'    <div class="card-meta">\n'
         f"      <span>📅 {rel_date}</span>\n"
         f'      <span class="news-date-display"'
@@ -982,6 +1769,7 @@ def make_card(record: GameRecord) -> str:
         f'\U0001f4f0 {html.escape(last_all_date) or "—"}</span>\n'
         f"      <span>{pt_display}</span>\n"
         f'      <span style="color:#3a5a99">#{appid}</span>\n'
+        f"    </div>\n"
         f"    </div>\n"
         f'    <div class="news-section">\n'
         f'      <div class="news-toggle">\n'
@@ -1008,15 +1796,19 @@ def generate_html(
     ea = sum(1 for r in records if r.status.badge == "earlyaccess")
     released = sum(1 for r in records if r.status.badge == "released")
     unrel = sum(1 for r in records if r.status.badge == "unreleased")
+    total_playtime_min = sum(r.game.playtime_forever for r in records)
+    total_playtime_h = total_playtime_min // 60
     now_str = datetime.now().strftime("%d/%m/%Y \u00e0 %H:%M")
 
     return (
-        _HTML_TEMPLATE.replace("__GENERATED_AT__", now_str)
+        _HTML_TEMPLATE.replace("__SHARED_JS__", _SHARED_JS)
+        .replace("__GENERATED_AT__", now_str)
         .replace("__STEAM_ID__", html.escape(steam_id))
         .replace("__TOTAL__", str(total))
         .replace("__EA__", str(ea))
         .replace("__REL__", str(released))
         .replace("__UNREL__", str(unrel))
+        .replace("__PLAYTIME__", f"{total_playtime_h:,}h".replace(",", "\u202f"))
         .replace("__CARDS__", cards_html)
         .replace("__NEWS_HREF__", html.escape(news_href))
     )
@@ -1058,8 +1850,22 @@ def make_news_row(record: GameRecord, item: NewsItem) -> str:
         else ""
     )
 
+    source_tag = html.escape(game.source)
+    playtime = game.playtime_forever
+    metacritic_score = details.metacritic_score if details else 0
+    last_patch_ts = 0
+    for _n in record.news:
+        _primary = _n.tags[0].lower() if _n.tags else ""
+        if _primary == "patchnotes":
+            _ts = int(_n.date.timestamp())
+            if _ts > last_patch_ts:
+                last_patch_ts = _ts
+
     return (
-        f'<div class="feed-item" data-status="{status.badge}" data-name="{name.lower()}" data-tag="{tag_data}">\n'
+        f'<div class="feed-item" data-status="{status.badge}" data-name="{name.lower()}" '
+        f'data-tag="{tag_data}" data-source="{source_tag}" '
+        f'data-playtime="{playtime}" data-metacritic="{metacritic_score}" '
+        f'data-last-patch-ts="{last_patch_ts}">\n'
         f'  <img class="feed-thumb" src="{html.escape(img_url)}" alt="" loading="lazy">\n'
         f'  <div class="feed-game">\n'
         f'    <div class="feed-game-name">{name}</div>\n'
@@ -1087,7 +1893,8 @@ def generate_news_html(
     now_str = datetime.now().strftime("%d/%m/%Y \u00e0 %H:%M")
 
     return (
-        _NEWS_TEMPLATE.replace("__GENERATED_AT__", now_str)
+        _NEWS_TEMPLATE.replace("__SHARED_JS__", _SHARED_JS)
+        .replace("__GENERATED_AT__", now_str)
         .replace("__STEAM_ID__", html.escape(steam_id))
         .replace("__ROWS__", rows_html)
         .replace("__LIB_HREF__", html.escape(library_href))

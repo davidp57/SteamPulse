@@ -109,6 +109,33 @@ def test_get_cached_appids_empty_before_details(
     assert db.get_cached_appids() == set()
 
 
+def test_get_cached_appids_after_failed_fetch(
+    db: Database, sample_game: OwnedGame
+) -> None:
+    """A game whose API call returned None should still be skipped after mark_fetched."""
+    db.upsert_game(sample_game)
+    db.mark_fetched({sample_game.appid}, details=True)
+    assert sample_game.appid in db.get_cached_appids()
+
+
+def test_get_stale_news_appids_respects_news_fetched_at(
+    db: Database, sample_game: OwnedGame
+) -> None:
+    """A game with 0 news but a recent news_fetched_at should NOT be considered stale."""
+    db.upsert_game(sample_game)
+    db.mark_fetched({sample_game.appid}, news=True)
+    stale = db.get_stale_news_appids(max_age_seconds=3600)
+    assert sample_game.appid not in stale
+
+
+def test_mark_fetched_details_only(db: Database, sample_game: OwnedGame) -> None:
+    db.upsert_game(sample_game)
+    db.mark_fetched({sample_game.appid}, details=True)
+    # details_fetched_at set but news_fetched_at still NULL → still stale for news
+    stale = db.get_stale_news_appids(max_age_seconds=3600)
+    assert sample_game.appid in stale
+
+
 def test_infer_status_released(sample_details: AppDetails) -> None:
     status = infer_status(sample_details)
     assert isinstance(status, GameStatus)
