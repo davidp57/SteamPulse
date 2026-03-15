@@ -16,9 +16,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 
 - **Toolbar UX redesign** — Two-layer toolbar: compact sticky main row (`Search · Sort · ⚙ Filtres · Reset · View · Count · Nav`) + collapsible filter panel with 6 labeled groups (Statut, Source, Type news, Temps de jeu, Metacritic, Màj récente). Filter badge on toggle button shows count of active filters. Panel auto-opens on page load when URL hash contains active filters.
-- **"Màj récente" filter** — New filter group in the panel (Tous / 1 jour / 2 jours / 5 jours). Shows only games that received a patchnote in the selected time window, using `data-last-patch-ts`. Persisted in URL hash (`recent=` key).
+- **"Màj récente" filter** — New filter group in the panel (Tous / 2 jours / 5 jours / 15 jours / 30 jours). Shows only games that received a patchnote in the selected time window, using `data-last-patch-ts`. Persisted in URL hash (`recent=` key).
 - **News page toolbar** — Same two-layer collapsible structure applied to news page (Statut + Type news groups).
+- **Multilingual support (i18n)** — All UI strings (HTML pages + CLI output) are now translatable. Ships with English (`en`) and French (`fr`) translations. The active language is selected automatically from the system locale and can be overridden with `--lang <code>`.
+- **`--lang` option** on both `steampulse` and `steam-render` — force the output language independently of the system locale (e.g. `--lang fr`).
 - **17 new renderer tests** — coverage for `_parse_release_ts`, `make_news_row`, `generate_news_html`, `write_html`, `write_news_html`, and news timestamp data-attributes (`data-last-patch-ts`, `data-last-other-ts`).
+
+### Changed
+
+- **`_apply_html_t`** now scans templates dynamically with a regex instead of maintaining a hardcoded key list — new i18n keys are picked up automatically.
+- **`make_card` / `make_news_row`** default translator now auto-detects the system locale instead of always falling back to English.
 
 ---
 
