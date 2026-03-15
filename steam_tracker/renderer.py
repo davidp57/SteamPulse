@@ -1589,23 +1589,8 @@ def _build_i18n_js(t: Translator) -> str:
 
 def _apply_html_t(s: str, t: Translator) -> str:
     """Replace all ``__T_key__`` placeholders in *s* with translated values."""
-    keys = [
-        "html_lang", "generated_at", "search_placeholder",
-        "btn_filters", "btn_reset", "btn_list_view", "btn_grid_view",
-        "title_btn_filters", "title_btn_reset", "title_view_toggle",
-        "title_scroll_top", "title_theme",
-        "filter_status", "filter_source", "filter_news_type",
-        "filter_playtime", "filter_metacritic", "filter_recent",
-        "lbl_all", "lbl_released", "lbl_upcoming", "lbl_owned",
-        "lbl_followed", "lbl_all_types", "lbl_never_played", "lbl_no_score",
-        "lbl_2_days", "lbl_5_days", "lbl_15_days", "lbl_30_days", "footer",
-        "stat_total", "stat_released", "stat_unreleased", "stat_hours",
-        "sort_name_asc", "sort_name_desc", "sort_playtime",
-        "sort_release", "sort_lastupdate", "sort_metacritic",
-        "link_news", "col_game", "col_dev_score", "col_playtime_date",
-        "link_library",
-    ]
-    for key in keys:
+    import re
+    for key in re.findall(r"__T_(\w+)__", s):
         s = s.replace(f"__T_{key}__", t(key))
     return s
 
@@ -1663,7 +1648,10 @@ def _price_html(details: object, t: Translator | None = None) -> str:
     from .models import AppDetails  # local import to avoid circular
     if not isinstance(details, AppDetails):
         return ""
-    price_free_lbl = t("price_free") if t else "Free"
+    if t is None:
+        from .i18n import get_translator  # noqa: PLC0415
+        t = get_translator()
+    price_free_lbl = t("price_free")
     if details.is_free:
         return f'<span class="price-free">{price_free_lbl}</span>'
     if details.price_final <= 0:
@@ -1699,7 +1687,7 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
     """Return the HTML string for a single game card."""
     if t is None:
         from .i18n import get_translator  # noqa: PLC0415
-        t = get_translator("en")
+        t = get_translator()
     game = record.game
     status = record.status
     news_list = record.news
@@ -1893,7 +1881,7 @@ def make_news_row(record: GameRecord, item: NewsItem, t: Translator | None = Non
     """Return an HTML feed-item row for a single news article."""
     if t is None:
         from .i18n import get_translator  # noqa: PLC0415
-        t = get_translator("en")
+        t = get_translator()
     game = record.game
     status = record.status
     details = record.details

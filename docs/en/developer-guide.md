@@ -20,19 +20,18 @@
 ## 1. Project layout
 
 ```
-steampulse/
-├── steam_tracker/
-│   ├── __init__.py
-│   ├── models.py      # Pydantic v2 domain models
-│   ├── api.py         # Typed Steam API wrappers
-│   ├── db.py          # SQLite persistence layer
-│   ├── fetcher.py     # Multi-threaded fetcher + rate limiter
-│   ├── renderer.py    # Static HTML generator
-│   ├── cli.py         # steam-fetch / steam-render entry points
-│   └── i18n/
-│       ├── __init__.py  # Translator, get_translator(), detect_lang()
-│       ├── en.py        # English strings
-│       └── fr.py        # French strings
+steam_tracker/
+├── __init__.py
+├── models.py      # Pydantic v2 domain models
+├── api.py         # Typed Steam API wrappers
+├── db.py          # SQLite persistence layer
+├── fetcher.py     # Multi-threaded fetcher + rate limiter
+├── renderer.py    # Static HTML generator
+├── cli.py         # steam-fetch / steam-render entry points
+└── i18n/
+    ├── __init__.py  # Translator, get_translator(), detect_lang()
+    ├── en.py        # English strings
+    └── fr.py        # French strings
 ├── tests/
 │   ├── conftest.py
 │   ├── test_api.py

@@ -13,7 +13,7 @@ STRINGS: dict[str, str] = {
         "   {details} jeu(x) à récupérer · {news} news à rafraîchir ({cached} déjà à jour)"
     ),
     "cli_interrupted":       "\nArrêt.",
-    "cli_fetch_done":        "\n✅ Done — {count} entrée(s) mise(s) à jour dans {db}",
+    "cli_fetch_done":        "\n✅ Terminé — {count} entrée(s) mise(s) à jour dans {db}",
     "cli_rendering":         "🖥  Génération des pages HTML...",
     "cli_render_library":    "✅ {count} jeux · bibliothèque → {path}",
     "cli_render_news":       "   {count} news → {path}",

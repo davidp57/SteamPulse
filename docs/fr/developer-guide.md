@@ -20,19 +20,18 @@
 ## 1. Structure du projet
 
 ```
-steampulse/
-├── steam_tracker/
-│   ├── __init__.py
-│   ├── models.py      # Modèles Pydantic v2
-│   ├── api.py         # Wrappers HTTP typés vers l'API Steam
-│   ├── db.py          # Couche de persistance SQLite
-│   ├── fetcher.py     # Fetcher multi-threadé + RateLimiter
-│   ├── renderer.py    # Générateur HTML statique
-│   ├── cli.py         # Points d'entrée steam-fetch / steam-render
-│   └── i18n/
-│       ├── __init__.py  # Translator, get_translator(), detect_lang()
-│       ├── en.py        # Chaînes anglaises
-│       └── fr.py        # Chaînes françaises
+steam_tracker/
+├── __init__.py
+├── models.py      # Modèles Pydantic v2
+├── api.py         # Wrappers HTTP typés vers l'API Steam
+├── db.py          # Couche de persistance SQLite
+├── fetcher.py     # Fetcher multi-threadé + RateLimiter
+├── renderer.py    # Générateur HTML statique
+├── cli.py         # Points d'entrée steam-fetch / steam-render
+└── i18n/
+    ├── __init__.py  # Translator, get_translator(), detect_lang()
+    ├── en.py        # Chaînes anglaises
+    └── fr.py        # Chaînes françaises
 ├── tests/
 │   ├── conftest.py
 │   ├── test_api.py
