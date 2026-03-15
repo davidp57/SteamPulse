@@ -1,4 +1,4 @@
-"""CLI entry points: ``steam-fetch`` and ``steam-render``."""
+﻿"""CLI entry points: ``steam-fetch`` and ``steam-render``."""
 from __future__ import annotations
 
 import argparse
@@ -101,7 +101,8 @@ def cmd_fetch() -> None:
         if stale_news is not None
         else 0
     )
-    print(t("cli_pending", details=pending_details, news=pending_news, cached=len(skip) - pending_news))
+    print(t("cli_pending", details=pending_details, news=pending_news,
+            cached=len(skip) - pending_news))
 
     width = len(str(pending_details + pending_news)) if (pending_details + pending_news) else 1
 
@@ -242,7 +243,8 @@ def cmd_run() -> None:
         if stale_news is not None
         else 0
     )
-    print(t("cli_pending", details=pending_details, news=pending_news, cached=len(skip) - pending_news))
+    print(t("cli_pending", details=pending_details, news=pending_news,
+            cached=len(skip) - pending_news))
 
     width = len(str(pending_details + pending_news)) if (pending_details + pending_news) else 1
 

@@ -1569,7 +1569,7 @@ updateFeed();
 """
 
 
-def _build_i18n_js(t: "Translator") -> str:
+def _build_i18n_js(t: Translator) -> str:
     """Return a ``const I18N = {...};`` block for the HTML templates."""
     data = {
         "grid_view":      t("btn_grid_view"),
@@ -1587,7 +1587,7 @@ def _build_i18n_js(t: "Translator") -> str:
     return f"const I18N = {{{entries}}};"
 
 
-def _apply_html_t(s: str, t: "Translator") -> str:
+def _apply_html_t(s: str, t: Translator) -> str:
     """Replace all ``__T_key__`` placeholders in *s* with translated values."""
     keys = [
         "html_lang", "generated_at", "search_placeholder",
@@ -1659,7 +1659,7 @@ def _metacritic_html(score: int, url: str) -> str:
     return f'{link_open}<span class="metacritic-badge {cls}">MC {score}</span>{link_close}'
 
 
-def _price_html(details: object, t: "Translator | None" = None) -> str:
+def _price_html(details: object, t: Translator | None = None) -> str:
     from .models import AppDetails  # local import to avoid circular
     if not isinstance(details, AppDetails):
         return ""
@@ -1695,7 +1695,7 @@ def _platform_html(details: object) -> str:
     return f'<span class="platform-icons">{"".join(icons)}</span>' if icons else ""
 
 
-def make_card(record: GameRecord, t: "Translator | None" = None) -> str:
+def make_card(record: GameRecord, t: Translator | None = None) -> str:
     """Return the HTML string for a single game card."""
     if t is None:
         from .i18n import get_translator  # noqa: PLC0415
@@ -1889,7 +1889,7 @@ def write_html(
     output_path.write_text(generate_html(records, steam_id, news_href, lang), encoding="utf-8")
 
 
-def make_news_row(record: GameRecord, item: NewsItem, t: "Translator | None" = None) -> str:
+def make_news_row(record: GameRecord, item: NewsItem, t: Translator | None = None) -> str:
     """Return an HTML feed-item row for a single news article."""
     if t is None:
         from .i18n import get_translator  # noqa: PLC0415
