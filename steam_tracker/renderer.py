@@ -2,11 +2,16 @@
 from __future__ import annotations
 
 import html
+import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .models import GameRecord, NewsItem
+
+if TYPE_CHECKING:
+    from .i18n import Translator
 
 # ─── Shared JavaScript (injected into both HTML templates) ───────────────────
 _SHARED_JS = """\
@@ -87,7 +92,7 @@ document.addEventListener('keydown', e => {
 
 # ─── HTML Template ────────────────────────────────────────────────────────────
 _HTML_TEMPLATE = r"""<!DOCTYPE html>
-<html lang="fr">
+<html lang="__T_html_lang__">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -758,12 +763,12 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   </svg>
   <div class="header-text">
     <h1>SteamPulse</h1>
-    <p>Généré le __GENERATED_AT__ · SteamID __STEAM_ID__</p>
+    <p>__T_generated_at__ __GENERATED_AT__ · SteamID __STEAM_ID__</p>
   </div>
   <div class="header-stats">
     <div>
       <div class="stat-val">__TOTAL__</div>
-      <div class="stat-lbl">Jeux total</div>
+      <div class="stat-lbl">__T_stat_total__</div>
     </div>
     <div>
       <div class="stat-val" style="color:var(--ea)">__EA__</div>
@@ -771,15 +776,15 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     </div>
     <div>
       <div class="stat-val" style="color:var(--released)">__REL__</div>
-      <div class="stat-lbl">Sortis 1.0</div>
+      <div class="stat-lbl">__T_stat_released__</div>
     </div>
     <div>
       <div class="stat-val" style="color:var(--unreleased)">__UNREL__</div>
-      <div class="stat-lbl">Pas sortis</div>
+      <div class="stat-lbl">__T_stat_unreleased__</div>
     </div>
     <div>
       <div class="stat-val" style="color:var(--accent2)">__PLAYTIME__</div>
-      <div class="stat-lbl">Heures jouées</div>
+      <div class="stat-lbl">__T_stat_hours__</div>
     </div>
   </div>
 </header>
@@ -788,75 +793,76 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   <div class="toolbar-main">
     <div class="search-wrap">
       <span class="icon">⌕</span>
-      <input type="text" id="search" placeholder="Rechercher un jeu...">
+      <input type="text" id="search" placeholder="__T_search_placeholder__">
     </div>
     <select id="sortBy">
-      <option value="name">Trier : Nom A→Z</option>
-      <option value="name_desc">Trier : Nom Z→A</option>
-      <option value="playtime">Trier : Temps de jeu ↓</option>
-      <option value="release">Trier : Date de sortie ↓</option>
-      <option value="lastupdate">Trier : Dernière MàJ ↓</option>
-      <option value="metacritic">Trier : Metacritic ↓</option>
+      <option value="name">__T_sort_name_asc__</option>
+      <option value="name_desc">__T_sort_name_desc__</option>
+      <option value="playtime">__T_sort_playtime__</option>
+      <option value="release">__T_sort_release__</option>
+      <option value="lastupdate">__T_sort_lastupdate__</option>
+      <option value="metacritic">__T_sort_metacritic__</option>
     </select>
-    <button class="filter-toggle-btn" id="filtersToggle" title="Afficher / masquer les filtres">⚙ Filtres<span class="filter-badge" id="filterBadge"></span></button>
-    <button class="reset-btn" id="resetBtn" title="Réinitialiser tous les filtres">✕ Reset</button>
-    <button class="view-toggle" id="viewToggle" title="Basculer Grille / Liste">☰ Liste</button>
+    <button class="filter-toggle-btn" id="filtersToggle" title="__T_title_btn_filters__">⚙ __T_btn_filters__<span class="filter-badge" id="filterBadge"></span></button>
+    <button class="reset-btn" id="resetBtn" title="__T_title_btn_reset__">✕ __T_btn_reset__</button>
+    <button class="view-toggle" id="viewToggle" title="__T_title_view_toggle__">☰ __T_btn_list_view__</button>
     <span class="count-label" id="countLabel"></span>
-    <a class="nav-link" href="__NEWS_HREF__">🗞 News</a>
+    <a class="nav-link" href="__NEWS_HREF__">🗞 __T_link_news__</a>
   </div>
   <div class="toolbar-filters" id="toolbarFilters">
     <div class="filter-group">
-      <div class="filter-group-label">Statut</div>
+      <div class="filter-group-label">__T_filter_status__</div>
       <div class="filter-btns" id="filterBtns">
-        <button class="filter-btn active" data-filter="all">Tous</button>
+        <button class="filter-btn active" data-filter="all">__T_lbl_all__</button>
         <button class="filter-btn" data-filter="earlyaccess">Early Access</button>
-        <button class="filter-btn" data-filter="released">Sortis</button>
-        <button class="filter-btn" data-filter="unreleased">À venir</button>
+        <button class="filter-btn" data-filter="released">__T_lbl_released__</button>
+        <button class="filter-btn" data-filter="unreleased">__T_lbl_upcoming__</button>
       </div>
     </div>
     <div class="filter-group">
-      <div class="filter-group-label">Source</div>
+      <div class="filter-group-label">__T_filter_source__</div>
       <div class="filter-btns" id="sourceBtns">
-        <button class="source-btn active" data-source="all">🎮 Tout</button>
-        <button class="source-btn" data-source="owned">Possédés</button>
+        <button class="source-btn active" data-source="all">🎮 __T_lbl_all__</button>
+        <button class="source-btn" data-source="owned">__T_lbl_owned__</button>
         <button class="source-btn" data-source="wishlist">🎁 Wishlist</button>
       </div>
     </div>
     <div class="filter-group">
-      <div class="filter-group-label">Type news</div>
+      <div class="filter-group-label">__T_filter_news_type__</div>
       <div class="filter-btns" id="tagBtns">
-        <button class="tag-btn active" data-tag="all">Tous types</button>
+        <button class="tag-btn active" data-tag="all">__T_lbl_all_types__</button>
         <button class="tag-btn" data-tag="patchnotes">📋 Patch notes</button>
         <button class="tag-btn" data-tag="other">📰 News</button>
       </div>
     </div>
     <div class="filter-group">
-      <div class="filter-group-label">Temps de jeu</div>
+      <div class="filter-group-label">__T_filter_playtime__</div>
       <div class="filter-btns" id="playtimeBtns">
-        <button class="filter-btn active" data-pt="all">Tous</button>
-        <button class="filter-btn" data-pt="0">Jamais joué</button>
+        <button class="filter-btn active" data-pt="all">__T_lbl_all__</button>
+        <button class="filter-btn" data-pt="0">__T_lbl_never_played__</button>
         <button class="filter-btn" data-pt="60">< 1h</button>
         <button class="filter-btn" data-pt="600">1-10h</button>
         <button class="filter-btn" data-pt="601">> 10h</button>
       </div>
     </div>
     <div class="filter-group">
-      <div class="filter-group-label">Metacritic</div>
+      <div class="filter-group-label">__T_filter_metacritic__</div>
       <div class="filter-btns" id="mcBtns">
-        <button class="filter-btn active" data-mc="all">Tous</button>
-        <button class="filter-btn" data-mc="none">Sans score</button>
+        <button class="filter-btn active" data-mc="all">__T_lbl_all__</button>
+        <button class="filter-btn" data-mc="none">__T_lbl_no_score__</button>
         <button class="filter-btn" data-mc="bad">< 50</button>
         <button class="filter-btn" data-mc="mid">50–75</button>
         <button class="filter-btn" data-mc="good">> 75</button>
       </div>
     </div>
     <div class="filter-group">
-      <div class="filter-group-label">Màj récente</div>
+      <div class="filter-group-label">__T_filter_recent__</div>
       <div class="filter-btns" id="recentBtns">
-        <button class="filter-btn active" data-recent="all">Tous</button>
-        <button class="filter-btn" data-recent="1">1 jour</button>
-        <button class="filter-btn" data-recent="2">2 jours</button>
-        <button class="filter-btn" data-recent="5">5 jours</button>
+        <button class="filter-btn active" data-recent="all">__T_lbl_all__</button>
+        <button class="filter-btn" data-recent="2">__T_lbl_2_days__</button>
+        <button class="filter-btn" data-recent="5">__T_lbl_5_days__</button>
+        <button class="filter-btn" data-recent="15">__T_lbl_15_days__</button>
+        <button class="filter-btn" data-recent="30">__T_lbl_30_days__</button>
       </div>
     </div>
   </div>
@@ -864,21 +870,22 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <div class="list-header" id="listHeader">
   <div class="list-header-img"></div>
-  <div class="list-header-title">Jeu</div>
-  <div class="list-header-detail">Développeur / Score</div>
+  <div class="list-header-title">__T_col_game__</div>
+  <div class="list-header-detail">__T_col_dev_score__</div>
   <div class="list-header-genres">Genres</div>
-  <div class="list-header-meta">Temps de jeu · Date</div>
+  <div class="list-header-meta">__T_col_playtime_date__</div>
 </div>
 <div class="grid" id="grid">
 __CARDS__
 </div>
 
-<footer>SteamPulse · Données via Steam Web API &amp; Store API · Non affilié à Valve</footer>
+<footer>__T_footer__</footer>
 
-<button class="scroll-top" id="scrollTop" title="Retour en haut">↑</button>
-<button class="theme-toggle" id="themeToggle" title="Changer de thème">🌙</button>
+<button class="scroll-top" id="scrollTop" title="__T_title_scroll_top__">↑</button>
+<button class="theme-toggle" id="themeToggle" title="__T_title_theme__">🌙</button>
 
 <script>
+__I18N_JS__
 const allCards = Array.from(document.querySelectorAll('.card'));
 __SHARED_JS__
 function getFilter()    { return document.querySelector('#filterBtns .filter-btn.active').dataset.filter; }
@@ -958,7 +965,7 @@ function loadStateFromHash() {
     const shared = JSON.parse(localStorage.getItem('sp-shared') || '{}');
     if (!location.hash && shared.view === 'list') {
       document.getElementById('grid').classList.add('list-view');
-      document.getElementById('viewToggle').textContent = '⊞ Grille';
+      document.getElementById('viewToggle').textContent = '⊞ ' + I18N.grid_view;
       document.getElementById('listHeader').classList.add('visible');
     }
   } catch(e) {}
@@ -975,7 +982,7 @@ function loadStateFromHash() {
   if (p.get('sort'))   { document.getElementById('sortBy').value = p.get('sort'); }
   if (p.get('view') === 'list') {
     document.getElementById('grid').classList.add('list-view');
-    document.getElementById('viewToggle').textContent = '⊞ Grille';
+    document.getElementById('viewToggle').textContent = '⊞ ' + I18N.grid_view;
     document.getElementById('listHeader').classList.add('visible');
   }
   // Auto-open filter panel if any filter is active
@@ -1049,7 +1056,7 @@ function updateGrid() {
     const lbl = c.querySelector('.news-title');
     if (lbl) {
       const n = Array.from(c.querySelectorAll('.news-item')).filter(el => el.style.display !== 'none').length;
-      lbl.textContent = n > 0 ? `🗞 ${n} news / mise${n === 1 ? '' : 's'} à jour` : '🗞 Aucune news';
+      lbl.textContent = n > 0 ? '🗞 ' + (n === 1 ? I18N.news_1 : I18N.news_n.replace('{n}', n)) : '🗞 ' + I18N.news_0;
     }
   });
 
@@ -1059,7 +1066,7 @@ function updateGrid() {
       empty = document.createElement('div');
       empty.id = 'emptyMsg';
       empty.className = 'empty';
-      empty.innerHTML = '<div style="font-size:32px">🔍</div><p>Aucun jeu ne correspond à ta recherche.</p>';
+      empty.innerHTML = '<div style="font-size:32px">🔍</div><p>' + I18N.no_match_games + '</p>';
       grid.appendChild(empty);
     }
     empty.style.display = '';
@@ -1067,7 +1074,7 @@ function updateGrid() {
     empty.style.display = 'none';
   }
 
-  document.getElementById('countLabel').textContent = `${visible.length} jeu${visible.length > 1 ? 'x' : ''}`;
+  document.getElementById('countLabel').textContent = visible.length === 1 ? I18N.count_game_1 : I18N.count_game_n.replace('{n}', visible.length);
   updateResetBtn();
   saveStateToHash();
 }
@@ -1115,7 +1122,7 @@ document.getElementById('viewToggle').addEventListener('click', () => {
   const header = document.getElementById('listHeader');
   grid.classList.toggle('list-view');
   const isListView = grid.classList.contains('list-view');
-  btn.textContent = isListView ? '⊞ Grille' : '☰ Liste';
+  btn.textContent = isListView ? '⊞ ' + I18N.grid_view : '☰ ' + I18N.list_view;
   header.classList.toggle('visible', isListView);
   saveStateToHash();
 });
@@ -1147,7 +1154,7 @@ updateGrid();
 """
 
 _NEWS_TEMPLATE = r"""<!DOCTYPE html>
-<html lang="fr">
+<html lang="__T_html_lang__">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1312,7 +1319,7 @@ _NEWS_TEMPLATE = r"""<!DOCTYPE html>
   </svg>
   <div class="header-text">
     <h1>SteamPulse — News</h1>
-    <p>Généré le __GENERATED_AT__ · SteamID __STEAM_ID__</p>
+    <p>__T_generated_at__ __GENERATED_AT__ · SteamID __STEAM_ID__</p>
   </div>
 </header>
 
@@ -1322,53 +1329,53 @@ _NEWS_TEMPLATE = r"""<!DOCTYPE html>
       <span class="icon">⌕</span>
       <input type="text" id="search" placeholder="Rechercher un jeu...">
     </div>
-    <button class="filter-toggle-btn" id="filtersToggle" title="Afficher / masquer les filtres">⚙ Filtres<span class="filter-badge" id="filterBadge"></span></button>
-    <button class="reset-btn" id="resetBtn" title="Réinitialiser tous les filtres">✕ Reset</button>
+    <button class="filter-toggle-btn" id="filtersToggle" title="__T_title_btn_filters__">⚙ __T_btn_filters__<span class="filter-badge" id="filterBadge"></span></button>
+    <button class="reset-btn" id="resetBtn" title="__T_title_btn_reset__">✕ __T_btn_reset__</button>
     <span class="count-label" id="countLabel"></span>
-    <a class="nav-link" href="__LIB_HREF__">📚 Bibliothèque</a>
+    <a class="nav-link" href="__LIB_HREF__">📚 __T_link_library__</a>
   </div>
   <div class="toolbar-filters" id="toolbarFilters">
     <div class="filter-group">
-      <div class="filter-group-label">Statut</div>
+      <div class="filter-group-label">__T_filter_status__</div>
       <div class="filter-btns" id="statusBtns">
-        <button class="filter-btn active" data-filter="all">Tous</button>
+        <button class="filter-btn active" data-filter="all">__T_lbl_all__</button>
         <button class="filter-btn" data-filter="earlyaccess">Early Access</button>
-        <button class="filter-btn" data-filter="released">Sortis</button>
-        <button class="filter-btn" data-filter="unreleased">À venir</button>
+        <button class="filter-btn" data-filter="released">__T_lbl_released__</button>
+        <button class="filter-btn" data-filter="unreleased">__T_lbl_upcoming__</button>
       </div>
     </div>
     <div class="filter-group">
-      <div class="filter-group-label">Source</div>
+      <div class="filter-group-label">__T_filter_source__</div>
       <div class="filter-btns" id="sourceBtns">
-        <button class="source-btn active" data-source="all">🎮 Tout</button>
-        <button class="source-btn" data-source="owned">Possédés</button>
+        <button class="source-btn active" data-source="all">🎮 __T_lbl_all__</button>
+        <button class="source-btn" data-source="owned">__T_lbl_owned__</button>
         <button class="source-btn" data-source="wishlist">🎁 Wishlist</button>
-        <button class="source-btn" data-source="followed">👁 Suivis</button>
+        <button class="source-btn" data-source="followed">👁 __T_lbl_followed__</button>
       </div>
     </div>
     <div class="filter-group">
-      <div class="filter-group-label">Type news</div>
+      <div class="filter-group-label">__T_filter_news_type__</div>
       <div class="filter-btns" id="tagBtns">
-        <button class="tag-btn active" data-tag="all">Tous types</button>
+        <button class="tag-btn active" data-tag="all">__T_lbl_all_types__</button>
         <button class="tag-btn" data-tag="patchnotes">📋 Patch notes</button>
         <button class="tag-btn" data-tag="other">📰 News</button>
       </div>
     </div>
     <div class="filter-group">
-      <div class="filter-group-label">Temps de jeu</div>
+      <div class="filter-group-label">__T_filter_playtime__</div>
       <div class="filter-btns" id="playtimeBtns">
-        <button class="filter-btn active" data-pt="all">Tous</button>
-        <button class="filter-btn" data-pt="0">Jamais joué</button>
+        <button class="filter-btn active" data-pt="all">__T_lbl_all__</button>
+        <button class="filter-btn" data-pt="0">__T_lbl_never_played__</button>
         <button class="filter-btn" data-pt="60">&lt; 1h</button>
         <button class="filter-btn" data-pt="600">1-10h</button>
         <button class="filter-btn" data-pt="601">&gt; 10h</button>
       </div>
     </div>
     <div class="filter-group">
-      <div class="filter-group-label">Metacritic</div>
+      <div class="filter-group-label">__T_filter_metacritic__</div>
       <div class="filter-btns" id="mcBtns">
-        <button class="filter-btn active" data-mc="all">Tous</button>
-        <button class="filter-btn" data-mc="none">Non noté</button>
+        <button class="filter-btn active" data-mc="all">__T_lbl_all__</button>
+        <button class="filter-btn" data-mc="none">__T_lbl_no_score__</button>
         <button class="filter-btn" data-mc="poor">&lt; 60</button>
         <button class="filter-btn" data-mc="mixed">60–74</button>
         <button class="filter-btn" data-mc="good">75–89</button>
@@ -1376,12 +1383,13 @@ _NEWS_TEMPLATE = r"""<!DOCTYPE html>
       </div>
     </div>
     <div class="filter-group">
-      <div class="filter-group-label">Màj récente</div>
+      <div class="filter-group-label">__T_filter_recent__</div>
       <div class="filter-btns" id="recentBtns">
-        <button class="filter-btn active" data-recent="all">Tous</button>
-        <button class="filter-btn" data-recent="1">1 jour</button>
-        <button class="filter-btn" data-recent="2">2 jours</button>
-        <button class="filter-btn" data-recent="5">5 jours</button>
+        <button class="filter-btn active" data-recent="all">__T_lbl_all__</button>
+        <button class="filter-btn" data-recent="2">__T_lbl_2_days__</button>
+        <button class="filter-btn" data-recent="5">__T_lbl_5_days__</button>
+        <button class="filter-btn" data-recent="15">__T_lbl_15_days__</button>
+        <button class="filter-btn" data-recent="30">__T_lbl_30_days__</button>
       </div>
     </div>
   </div>
@@ -1391,12 +1399,13 @@ _NEWS_TEMPLATE = r"""<!DOCTYPE html>
 __ROWS__
 </div>
 
-<footer>SteamPulse · Données via Steam Web API &amp; Store API · Non affilié à Valve</footer>
+<footer>__T_footer__</footer>
 
-<button class="scroll-top" id="scrollTop" title="Retour en haut">↑</button>
-<button class="theme-toggle" id="themeToggle" title="Changer de thème">🌙</button>
+<button class="scroll-top" id="scrollTop" title="__T_title_scroll_top__">↑</button>
+<button class="theme-toggle" id="themeToggle" title="__T_title_theme__">🌙</button>
 
 <script>
+__I18N_JS__
 const allRows = Array.from(document.querySelectorAll('.feed-item'));
 __SHARED_JS__
 // --- Getters ---
@@ -1504,14 +1513,14 @@ function updateFeed() {
     if (!empty) {
       empty = document.createElement('div');
       empty.id = 'emptyMsg'; empty.className = 'empty';
-      empty.innerHTML = '<div style="font-size:32px">🔍</div><p>Aucune news ne correspond.</p>';
+      empty.innerHTML = '<div style="font-size:32px">🔍</div><p>' + I18N.no_match_news + '</p>';
       document.getElementById('feed').appendChild(empty);
     }
     empty.style.display = '';
   } else if (empty) {
     empty.style.display = 'none';
   }
-  document.getElementById('countLabel').textContent = `${visible.length} news`;
+  document.getElementById('countLabel').textContent = I18N.count_news.replace('{n}', visible.length);
   updateResetBtn();
   saveStateToHash();
 }
@@ -1560,7 +1569,48 @@ updateFeed();
 """
 
 
-# ─── Helpers ──────────────────────────────────────────────────────────────────
+def _build_i18n_js(t: "Translator") -> str:
+    """Return a ``const I18N = {...};`` block for the HTML templates."""
+    data = {
+        "grid_view":      t("btn_grid_view"),
+        "list_view":      t("btn_list_view"),
+        "news_0":         t("js_news_0"),
+        "news_1":         t("js_news_1"),
+        "news_n":         t("js_news_n"),
+        "no_match_games": t("js_no_match_games"),
+        "count_game_1":   t("js_count_game_1"),
+        "count_game_n":   t("js_count_game_n"),
+        "no_match_news":  t("js_no_match_news"),
+        "count_news":     t("js_count_news"),
+    }
+    entries = ", ".join(f"{k}: {json.dumps(v)}" for k, v in data.items())
+    return f"const I18N = {{{entries}}};"
+
+
+def _apply_html_t(s: str, t: "Translator") -> str:
+    """Replace all ``__T_key__`` placeholders in *s* with translated values."""
+    keys = [
+        "html_lang", "generated_at", "search_placeholder",
+        "btn_filters", "btn_reset", "btn_list_view", "btn_grid_view",
+        "title_btn_filters", "title_btn_reset", "title_view_toggle",
+        "title_scroll_top", "title_theme",
+        "filter_status", "filter_source", "filter_news_type",
+        "filter_playtime", "filter_metacritic", "filter_recent",
+        "lbl_all", "lbl_released", "lbl_upcoming", "lbl_owned",
+        "lbl_followed", "lbl_all_types", "lbl_never_played", "lbl_no_score",
+        "lbl_2_days", "lbl_5_days", "lbl_15_days", "lbl_30_days", "footer",
+        "stat_total", "stat_released", "stat_unreleased", "stat_hours",
+        "sort_name_asc", "sort_name_desc", "sort_playtime",
+        "sort_release", "sort_lastupdate", "sort_metacritic",
+        "link_news", "col_game", "col_dev_score", "col_playtime_date",
+        "link_library",
+    ]
+    for key in keys:
+        s = s.replace(f"__T_{key}__", t(key))
+    return s
+
+
+
 
 def format_playtime(minutes: int) -> str:
     if minutes < 60:
@@ -1609,12 +1659,13 @@ def _metacritic_html(score: int, url: str) -> str:
     return f'{link_open}<span class="metacritic-badge {cls}">MC {score}</span>{link_close}'
 
 
-def _price_html(details: object) -> str:
+def _price_html(details: object, t: "Translator | None" = None) -> str:
     from .models import AppDetails  # local import to avoid circular
     if not isinstance(details, AppDetails):
         return ""
+    price_free_lbl = t("price_free") if t else "Free"
     if details.is_free:
-        return '<span class="price-free">Gratuit</span>'
+        return f'<span class="price-free">{price_free_lbl}</span>'
     if details.price_final <= 0:
         return ""
     currency = html.escape(details.price_currency)
@@ -1644,8 +1695,11 @@ def _platform_html(details: object) -> str:
     return f'<span class="platform-icons">{"".join(icons)}</span>' if icons else ""
 
 
-def make_card(record: GameRecord) -> str:
+def make_card(record: GameRecord, t: "Translator | None" = None) -> str:
     """Return the HTML string for a single game card."""
+    if t is None:
+        from .i18n import get_translator  # noqa: PLC0415
+        t = get_translator("en")
     game = record.game
     status = record.status
     news_list = record.news
@@ -1661,6 +1715,7 @@ def make_card(record: GameRecord) -> str:
     )
 
     badge_cls = f"badge badge-{status.badge}"
+    badge_label = t(f"badge_{status.badge}")
     pt_fmt = format_playtime(game.playtime_forever)
     rel_date = html.escape(status.release_date)
 
@@ -1685,7 +1740,7 @@ def make_card(record: GameRecord) -> str:
     mc = _metacritic_html(details.metacritic_score, details.metacritic_url) if details else ""
     if mc:
         detail_parts.append(mc)
-    price = _price_html(details) if details else ""
+    price = _price_html(details, t) if details else ""
     if price:
         detail_parts.append(price)
     detail_row = (
@@ -1697,8 +1752,7 @@ def make_card(record: GameRecord) -> str:
         _rows = []
         for n in news_list:
             _ntag = "patchnotes" if n.tags and n.tags[0].lower() == "patchnotes" else "other"
-            _rows.append(
-                f'<div class="news-item" data-news-tag="{_ntag}">'
+            _rows.append(                f'<div class="news-item" data-news-tag="{_ntag}">'
                 f'  <span class="news-date">{html.escape(n.date.strftime("%d/%m/%Y"))}</span>'
                 f'  <span class="news-item-title">'
                 f'    <a href="{html.escape(n.url)}" target="_blank" rel="noopener">'
@@ -1708,10 +1762,15 @@ def make_card(record: GameRecord) -> str:
             )
         news_html = "\n".join(_rows)
     else:
-        news_html = '<p class="no-news">Aucune news disponible</p>'
+        news_html = f'<p class="no-news">{html.escape(t("card_no_news_html"))}</p>'
 
     nc = len(news_list)
-    toggle_lbl = f"{nc} news / mise{'' if nc == 1 else 's'} à jour" if nc else "Aucune news"
+    if nc == 0:
+        toggle_lbl = t("card_news_toggle_0")
+    elif nc == 1:
+        toggle_lbl = t("card_news_toggle_1")
+    else:
+        toggle_lbl = t("card_news_toggle_n", count=nc)
 
     release_ts = _parse_release_ts(status.release_date)
     last_update_ts = int(news_list[0].date.timestamp()) if news_list else 0
@@ -1732,9 +1791,9 @@ def make_card(record: GameRecord) -> str:
     placeholder = html.escape(game.name[:2].upper())
     source_tag = html.escape(game.source)
     if game.source == "wishlist":
-        pt_display = "🎁 Wishlist"
+        pt_display = t("source_wishlist")
     elif game.source == "followed":
-        pt_display = "👁 Suivi"
+        pt_display = t("source_followed")
     else:
         pt_display = f"🕹 {pt_fmt}"
     metacritic_score = details.metacritic_score if details else 0
@@ -1754,7 +1813,7 @@ def make_card(record: GameRecord) -> str:
         f'    <div class="col-title">\n'
         f'    <div class="card-top">\n'
         f'      <div class="card-title">{name}</div>\n'
-        f'      <span class="{html.escape(badge_cls)}">{html.escape(status.label)}</span>\n'
+        f'      <span class="{html.escape(badge_cls)}">{html.escape(badge_label)}</span>\n'
         f"    </div>\n"
         f"    </div>\n"
         f'    <div class="col-detail">{detail_row}</div>\n'
@@ -1789,19 +1848,23 @@ def generate_html(
     records: list[GameRecord],
     steam_id: str,
     news_href: str = "steam_news.html",
+    lang: str | None = None,
 ) -> str:
     """Render the full HTML page from a list of game records."""
-    cards_html = "\n".join(make_card(r) for r in records)
+    from .i18n import get_translator  # noqa: PLC0415
+    t = get_translator(lang)
+    cards_html = "\n".join(make_card(r, t) for r in records)
     total = len(records)
     ea = sum(1 for r in records if r.status.badge == "earlyaccess")
     released = sum(1 for r in records if r.status.badge == "released")
     unrel = sum(1 for r in records if r.status.badge == "unreleased")
     total_playtime_min = sum(r.game.playtime_forever for r in records)
     total_playtime_h = total_playtime_min // 60
-    now_str = datetime.now().strftime("%d/%m/%Y \u00e0 %H:%M")
+    now_str = datetime.now().strftime("%d/%m/%Y à %H:%M")
 
-    return (
+    return _apply_html_t(
         _HTML_TEMPLATE.replace("__SHARED_JS__", _SHARED_JS)
+        .replace("__I18N_JS__", _build_i18n_js(t))
         .replace("__GENERATED_AT__", now_str)
         .replace("__STEAM_ID__", html.escape(steam_id))
         .replace("__TOTAL__", str(total))
@@ -1810,7 +1873,8 @@ def generate_html(
         .replace("__UNREL__", str(unrel))
         .replace("__PLAYTIME__", f"{total_playtime_h:,}h".replace(",", "\u202f"))
         .replace("__CARDS__", cards_html)
-        .replace("__NEWS_HREF__", html.escape(news_href))
+        .replace("__NEWS_HREF__", html.escape(news_href)),
+        t,
     )
 
 
@@ -1819,13 +1883,17 @@ def write_html(
     steam_id: str,
     output_path: Path,
     news_href: str = "steam_news.html",
+    lang: str | None = None,
 ) -> None:
     """Write the rendered HTML page to *output_path*."""
-    output_path.write_text(generate_html(records, steam_id, news_href), encoding="utf-8")
+    output_path.write_text(generate_html(records, steam_id, news_href, lang), encoding="utf-8")
 
 
-def make_news_row(record: GameRecord, item: NewsItem) -> str:
+def make_news_row(record: GameRecord, item: NewsItem, t: "Translator | None" = None) -> str:
     """Return an HTML feed-item row for a single news article."""
+    if t is None:
+        from .i18n import get_translator  # noqa: PLC0415
+        t = get_translator("en")
     game = record.game
     status = record.status
     details = record.details
@@ -1838,6 +1906,7 @@ def make_news_row(record: GameRecord, item: NewsItem) -> str:
         else f"https://cdn.akamai.steamstatic.com/steam/apps/{appid}/header.jpg"
     )
     badge_cls = f"badge badge-{status.badge}"
+    badge_label = t(f"badge_{status.badge}")
     date_str = html.escape(item.date.strftime("%d/%m/%Y"))
     title = html.escape(item.title)
     url = html.escape(item.url)
@@ -1869,7 +1938,7 @@ def make_news_row(record: GameRecord, item: NewsItem) -> str:
         f'  <img class="feed-thumb" src="{html.escape(img_url)}" alt="" loading="lazy">\n'
         f'  <div class="feed-game">\n'
         f'    <div class="feed-game-name">{name}</div>\n'
-        f'    <div class="feed-game-badge"><span class="{html.escape(badge_cls)}">{html.escape(status.label)}</span></div>\n'
+        f'    <div class="feed-game-badge"><span class="{html.escape(badge_cls)}">{html.escape(badge_label)}</span></div>\n'
         f'  </div>\n'
         f'  <div class="feed-date">{date_str}</div>\n'
         f'  <div class="feed-title"><a href="{url}" target="_blank" rel="noopener">{title}</a>{tag_html}</div>\n'
@@ -1881,23 +1950,28 @@ def generate_news_html(
     records: list[GameRecord],
     steam_id: str,
     library_href: str = "steam_library.html",
+    lang: str | None = None,
 ) -> str:
     """Render the dedicated news feed page from a list of game records."""
+    from .i18n import get_translator  # noqa: PLC0415
+    t = get_translator(lang)
     items: list[tuple[int, GameRecord, NewsItem]] = []
     for record in records:
         for item in record.news:
             items.append((int(item.date.timestamp()), record, item))
-    items.sort(key=lambda t: t[0], reverse=True)
+    items.sort(key=lambda x: x[0], reverse=True)
 
-    rows_html = "\n".join(make_news_row(rec, it) for _, rec, it in items)
-    now_str = datetime.now().strftime("%d/%m/%Y \u00e0 %H:%M")
+    rows_html = "\n".join(make_news_row(rec, it, t) for _, rec, it in items)
+    now_str = datetime.now().strftime("%d/%m/%Y à %H:%M")
 
-    return (
+    return _apply_html_t(
         _NEWS_TEMPLATE.replace("__SHARED_JS__", _SHARED_JS)
+        .replace("__I18N_JS__", _build_i18n_js(t))
         .replace("__GENERATED_AT__", now_str)
         .replace("__STEAM_ID__", html.escape(steam_id))
         .replace("__ROWS__", rows_html)
-        .replace("__LIB_HREF__", html.escape(library_href))
+        .replace("__LIB_HREF__", html.escape(library_href)),
+        t,
     )
 
 
@@ -1906,8 +1980,9 @@ def write_news_html(
     steam_id: str,
     output_path: Path,
     library_href: str = "steam_library.html",
+    lang: str | None = None,
 ) -> None:
     """Write the rendered news feed page to *output_path*."""
     output_path.write_text(
-        generate_news_html(records, steam_id, library_href), encoding="utf-8"
+        generate_news_html(records, steam_id, library_href, lang), encoding="utf-8"
     )

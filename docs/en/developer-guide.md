@@ -11,8 +11,9 @@
 5. [Module reference](#5-module-reference)
 6. [Running tests](#6-running-tests)
 7. [Linting & type checking](#7-linting--type-checking)
-8. [Adding a data source](#8-adding-a-data-source)
-9. [Contributing](#9-contributing)
+8. [Adding a translation](#8-adding-a-translation)
+9. [Adding a data source](#9-adding-a-data-source)
+10. [Contributing](#10-contributing)
 
 ---
 
@@ -27,7 +28,11 @@ steampulse/
 │   ├── db.py          # SQLite persistence layer
 │   ├── fetcher.py     # Multi-threaded fetcher + rate limiter
 │   ├── renderer.py    # Static HTML generator
-│   └── cli.py         # steam-fetch / steam-render entry points
+│   ├── cli.py         # steam-fetch / steam-render entry points
+│   └── i18n/
+│       ├── __init__.py  # Translator, get_translator(), detect_lang()
+│       ├── en.py        # English strings
+│       └── fr.py        # French strings
 ├── tests/
 │   ├── conftest.py
 │   ├── test_api.py
@@ -250,9 +255,17 @@ SteamFetcher(
 
 ### `renderer.py`
 
-Two public functions: `write_html` and `write_news_html`. Both take a `list[GameRecord]`, a `steam_id` string for the header, an output `Path`, and an optional cross-link href.
+Two public functions: `write_html` and `write_news_html`. Both accept a `list[GameRecord]`, a `steam_id` string for the header, an output `Path`, an optional cross-link href, and an optional `lang` code.
 
-The HTML is built by string interpolation into `_HTML_TEMPLATE` and `_NEWS_TEMPLATE` raw strings. No external templating library is used.
+The HTML is built by string interpolation into `_HTML_TEMPLATE` and `_NEWS_TEMPLATE` raw strings. No external templating library is used. Visible labels use `__T_key__` placeholders replaced at render time via `_apply_html_t()`; JavaScript strings are injected as a `const I18N = {...}` block via `_build_i18n_js()`.
+
+### `i18n/__init__.py`
+
+| Symbol | Description |
+|---|---|
+| `detect_lang()` | Reads `LANGUAGE` / `LC_ALL` / `LC_MESSAGES` / `LANG` env vars then `locale.getdefaultlocale()`, returns a 2-letter code, defaults to `"en"` |
+| `Translator` | Callable class; `t("key")` returns the translated string, `t("key", param=val)` performs `str.format` substitution; falls back to English if the key is missing |
+| `get_translator(lang)` | Returns a `Translator` for the given lang code (or auto-detected); unknown codes fall back to `"en"` |
 
 ---
 
@@ -302,7 +315,20 @@ Notable settings:
 
 ---
 
-## 8. Adding a data source
+## 8. Adding a translation
+
+1. Create `steam_tracker/i18n/<code>.py` (e.g. `de.py` for German) with a single `STRINGS: dict[str, str]` that mirrors the keys in `en.py`. You only need to provide the keys you want to translate — missing keys fall back to English automatically.
+
+2. Register the module in `steam_tracker/i18n/__init__.py`:
+   ```python
+   _SUPPORTED = {"en": en, "fr": fr, "de": de}   # add your import and entry
+   ```
+
+3. Users can then pass `--lang de` or set a German system locale.
+
+---
+
+## 9. Adding a data source
 
 To add a new game source (e.g. Epic Games, GOG):
 
@@ -320,7 +346,7 @@ To add a new game source (e.g. Epic Games, GOG):
 
 ---
 
-## 9. Contributing
+## 10. Contributing
 
 ```bash
 # 1. Create a branch
