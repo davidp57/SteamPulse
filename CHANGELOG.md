@@ -9,23 +9,40 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
 ### Added
 
-- **Epic Games Store source plugin** (`steam_tracker/sources/epic.py`) — New `EpicSource` plugin discovers games from an Epic Games account via OAuth2 authorization code or persistent device credentials. Each discovered game is resolved to a Steam AppID for enrichment via the existing pipeline.
-- **Steam AppID resolver system** (`steam_tracker/resolver.py`) — Chain-of-responsibility pattern with `SteamStoreResolver` (fuzzy name matching via Steam Store Search API) and `IGDBResolver` (IGDB game search + external_games lookup via Twitch OAuth). First successful result wins.
-- **`appid_mappings` table** in the database — Caches resolved external-game-to-Steam-AppID mappings. Manual mappings (`manual=True`) are protected from automatic overwrite.
-- **`external_id` field** on `OwnedGame` model — Identifies games from non-Steam sources (e.g. `"epic:<catalogItemId>"`). Games with a non-empty `external_id` are persisted to the database but excluded from the Steam enrichment pipeline.
-- **Epic Games API module** (`steam_tracker/epic_api.py`) — OAuth2 token exchange (authorization code + device auth flows) and paginated library retrieval via Epic's undocumented API.
-- **Epic i18n keys** — New CLI messages for Epic authentication and library fetching in both English and French.
-- **17 new tests** in `tests/test_epic.py` covering EpicSource protocol conformance, CLI arguments, authentication flows, library discovery, and resolver integration.
-- **14 new tests** in `tests/test_resolver.py` covering SteamStoreResolver, IGDBResolver, fuzzy matching, and the resolver chain.
+- **`GameSource` plugin architecture** (`steam_tracker/sources/`) — `GameSource` runtime-checkable Protocol; `get_all_sources()` registry; `SteamSource` plugin (owned library, wishlist, followed games) extracted from `cli.py`. New source plugins can be added without touching the CLI.
+- **Epic Games Store source plugin** (`steam_tracker/sources/epic.py`) — `EpicSource` discovers games from an Epic Games account via OAuth2 authorization code (first login) or persisted device credentials (headless / subsequent runs).
+- **Steam AppID resolver system** (`steam_tracker/resolver.py`) — Chain-of-responsibility pattern: `SteamStoreResolver` (fuzzy name matching via Steam Store Search API) and `IGDBResolver` (IGDB + Twitch OAuth). First successful result wins.
+- **`SYNTHETIC_APPID_BASE`** constant in `steam_tracker/models.py` — Sentinel value (`2_000_000_000`) used to tell real Steam AppIDs from hash-based placeholders assigned to unresolved Epic games.
+- **`appid_mappings` table** in the database — Caches resolved external→Steam AppID mappings. Manual entries (`manual=True`) are protected from automatic overwrite.
+- **`external_id` field** on `OwnedGame` — Identifies games from non-Steam sources (e.g. `"epic:<catalogItemId>"`).
+- **Epic Games API module** (`steam_tracker/epic_api.py`) — OAuth2 token exchange (authorization code + device auth flows) and paginated library retrieval via Epic’s undocumented API.
+- **Epic display in HTML dashboards** — Source filter buttons “👁 Followed” and “🎮 Epic” on both library and news pages. Epic cards show a “🎮 Epic” store hint. Playtime label adapts to source (Wishlist / Followed / Epic).
+- **New CLI flags**: `--epic-auth-code`, `--epic-device-id`, `--epic-account-id`, `--epic-device-secret`, `--twitch-client-id`, `--twitch-client-secret`.
+- **UX: per-game progress during Epic AppID resolution** — Inline `[N/total] Game Title` indicator updated in place via `\r`, followed by a resolved/unresolved summary.
+- **Epic i18n keys** (`cli_epic_*`) — Authentication, library count, resolution progress and summary in English and French.
+- **33 tests** in `tests/test_sources.py` (18 SteamSource + 15 EpicSource).
+- **17 tests** in `tests/test_epic.py` covering EpicSource protocol conformance, CLI arguments, auth flows, library discovery, and resolver integration.
+- **14 tests** in `tests/test_resolver.py` covering SteamStoreResolver, IGDBResolver, fuzzy matching, and resolver chain.
+- **9 tests** in `tests/test_cli.py` covering `_build_enrichment_queue` including boundary values and deduplication.
 - **9 new tests** in `tests/test_db.py` covering `appid_mappings` CRUD, manual mapping protection, `external_id` persistence, and Epic source priority.
+- **Bilingual documentation** — `docs/en/user-guide.md` and `docs/fr/user-guide.md` updated with Epic prerequisites section, all new CLI flags, source filter docs, and FAQ entry.
 
 ### Changed
 
-- **`db.py`** — Source priority now treats `"epic"` at the same level as `"owned"` (both above `"wishlist"` and `"followed"`). The `upsert_game` method persists the new `external_id` column.
-- **`cli.py`** — Both `cmd_fetch` and `cmd_run` now filter out games with non-empty `external_id` before passing them to the Steam enrichment fetcher.
-- **`sources/__init__.py`** — `get_all_sources()` now returns both `SteamSource` and `EpicSource`.
+- **`cli.py`** — Enrichment filter extracted into `_build_enrichment_queue()` (pure, testable helper). Games with a synthetic appid (`≥ SYNTHETIC_APPID_BASE`) are excluded from the Steam Store enrichment pass; resolved Epic games (real Steam AppID) are correctly included.
+- **`db.py`** — Source priority treats `"epic"` at the same level as `"owned"`. `upsert_game` persists the new `external_id` column.
+- **`sources/__init__.py`** — `get_all_sources()` returns `[SteamSource(), EpicSource()]`.
+- **`README.md`** — Added “Multi-store” feature line (EN + FR); test count updated to 168.
+
+### Fixed
+
+- Resolved Epic games (with a real Steam AppID) are now correctly enriched via the Steam Store API; previously the `external_id` presence check incorrectly excluded them.
+- Epic game display names now use `sandboxName` (human-readable title, e.g. “Gone Home”) instead of the internal `appName` codename (e.g. “Flier”).
+- Epic OAuth login URL in documentation had a truncated `clientId` (missing trailing `a`).
 
 ---
 

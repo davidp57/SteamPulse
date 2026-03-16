@@ -145,6 +145,8 @@ steampulse/
 
 ### Commands
 
+> **Version policy**: Never change the version number in `pyproject.toml` or anywhere else unless explicitly asked by the user.
+
 ```bash
 # Install (dev)
 pip install -e ".[dev]"
