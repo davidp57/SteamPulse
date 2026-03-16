@@ -5,7 +5,7 @@ import argparse
 
 import responses as resp_mock
 
-from steam_tracker.models import OwnedGame
+from steam_tracker.models import SYNTHETIC_APPID_BASE, OwnedGame
 from steam_tracker.sources import GameSource, get_all_sources
 from steam_tracker.sources.epic import EpicSource
 from steam_tracker.sources.steam import SteamSource
@@ -476,7 +476,7 @@ def test_epic_discover_games_unresolved_gets_hash_appid() -> None:
 
     games = EpicSource().discover_games(_epic_args(epic_auth_code="code1"))
     assert len(games) == 1
-    assert games[0].appid >= 2_000_000_000
+    assert games[0].appid >= SYNTHETIC_APPID_BASE
     assert games[0].external_id == "epic:unknownCat"
 
 

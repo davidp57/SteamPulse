@@ -13,19 +13,18 @@ import logging
 
 from ..epic_api import epic_auth_with_code, epic_auth_with_device, epic_get_library
 from ..i18n import get_translator
-from ..models import OwnedGame
+from ..models import SYNTHETIC_APPID_BASE, OwnedGame
 from ..resolver import SteamStoreResolver, resolve_steam_appid
 
 log = logging.getLogger(__name__)
 
-_HASH_APPID_BASE = 2_000_000_000
 _HASH_APPID_RANGE = 100_000_000
 
 
 def _hash_appid(catalog_item_id: str) -> int:
     """Generate a deterministic appid in the reserved range for unresolved games."""
     digest = hashlib.sha256(catalog_item_id.encode()).hexdigest()
-    return _HASH_APPID_BASE + int(digest[:8], 16) % _HASH_APPID_RANGE
+    return SYNTHETIC_APPID_BASE + int(digest[:8], 16) % _HASH_APPID_RANGE
 
 
 class EpicSource:

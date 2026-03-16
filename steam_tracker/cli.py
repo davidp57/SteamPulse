@@ -8,7 +8,7 @@ from pathlib import Path
 from .db import Database
 from .fetcher import SteamFetcher
 from .i18n import get_translator
-from .models import OwnedGame
+from .models import SYNTHETIC_APPID_BASE, OwnedGame
 from .renderer import write_html, write_news_html
 from .sources import get_all_sources
 
@@ -63,12 +63,14 @@ def cmd_fetch() -> None:
     for game in all_discovered:
         db.upsert_game(game)
 
-    # Build unique list for fetcher (first occurrence wins; sources return owned first)
-    # Games with external_id are from non-Steam sources and cannot be enriched via Steam API.
+    # Build unique list for fetcher (first occurrence wins; sources return owned first).
+    # Only games with a real Steam AppID can be enriched via the Steam Store API.
+    # Unresolved Epic games carry a synthetic appid >= SYNTHETIC_APPID_BASE and are
+    # intentionally excluded — calling the Steam Store API for them would always fail.
     games: list[OwnedGame] = []
     seen: set[int] = set()
     for game in all_discovered:
-        if game.appid not in seen and not game.external_id:
+        if game.appid not in seen and game.appid < SYNTHETIC_APPID_BASE:
             games.append(game)
             seen.add(game.appid)
 
@@ -154,12 +156,14 @@ def cmd_run() -> None:
     for game in all_discovered:
         db.upsert_game(game)
 
-    # Build unique list for fetcher (first occurrence wins; sources return owned first)
-    # Games with external_id are from non-Steam sources and cannot be enriched via Steam API.
+    # Build unique list for fetcher (first occurrence wins; sources return owned first).
+    # Only games with a real Steam AppID can be enriched via the Steam Store API.
+    # Unresolved Epic games carry a synthetic appid >= SYNTHETIC_APPID_BASE and are
+    # intentionally excluded — calling the Steam Store API for them would always fail.
     games: list[OwnedGame] = []
     seen: set[int] = set()
     for game in all_discovered:
-        if game.appid not in seen and not game.external_id:
+        if game.appid not in seen and game.appid < SYNTHETIC_APPID_BASE:
             games.append(game)
             seen.add(game.appid)
 
