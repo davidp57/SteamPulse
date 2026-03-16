@@ -133,11 +133,10 @@ class EpicSource:
         width = len(str(total))
         for idx, item in enumerate(library_items, 1):
             catalog_id = str(item.get("catalogItemId", ""))
-            # `appName` is an internal codename (e.g. "Petrel"); prefer the
-            # human-readable title from metadata when available.
+            # `appName` is an internal codename (e.g. "Flier" for Gone Home).
+            # `sandboxName` is the human-readable display title.
             internal_name = str(item.get("appName", ""))
-            metadata = item.get("metadata") or {}
-            name = str(metadata.get("title", "") or internal_name)
+            name = str(item.get("sandboxName", "") or internal_name)
             if not catalog_id or not name:
                 continue
             log.debug("Epic item: internal=%r  title=%r", internal_name, name)
