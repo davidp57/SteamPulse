@@ -96,6 +96,35 @@ def cmd_fetch() -> None:
     )
     print(t("cli_pending", details=pending_details, news=pending_news,
             cached=len(skip) - pending_news))
+
+    width = len(str(pending_details + pending_news)) if (pending_details + pending_news) else 1
+
+    def on_progress(done: int, total: int, name: str) -> None:
+        print(f"\r[{done:>{width}}/{total}] {name[:52]:<52}", end="", flush=True)
+
+    fetcher = SteamFetcher(max_workers=args.workers, on_progress=on_progress)
+    try:
+        results = fetcher.fetch_all(games, skip_appids=skip, refresh_news_appids=stale_news)
+    except KeyboardInterrupt:
+        print(t("cli_interrupted"))
+        return
+
+    failed_details: set[int] = set()
+    news_fetched: set[int] = set()
+    for appid, (details, news) in results.items():
+        if details:
+            db.upsert_app_details(details)
+        elif appid not in skip:
+            failed_details.add(appid)
+        db.upsert_news(appid, news)
+        news_fetched.add(appid)
+    db.mark_fetched(failed_details, details=True)
+    db.mark_fetched(news_fetched, news=True)
+
+    print(t("cli_fetch_done", count=len(results), db=args.db))
+
+
+def cmd_render() -> None:
     """Generate the static HTML page from the local database."""
     parser = argparse.ArgumentParser(
         description="Render Steam library HTML from a local DB",
