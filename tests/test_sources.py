@@ -1,4 +1,4 @@
-"""Tests for steam_tracker.sources (GameSource protocol + SteamSource plugin)."""
+"""Tests for steam_tracker.sources (GameSource protocol + SteamSource + EpicSource plugin)."""
 from __future__ import annotations
 
 import argparse
@@ -7,6 +7,7 @@ import responses as resp_mock
 
 from steam_tracker.models import OwnedGame
 from steam_tracker.sources import GameSource, get_all_sources
+from steam_tracker.sources.epic import EpicSource
 from steam_tracker.sources.steam import SteamSource
 
 _STEAM_API = "https://api.steampowered.com"
@@ -246,7 +247,7 @@ def test_discover_games_followed_not_fetched_by_default() -> None:
         json=_wishlist_response([]),
     )
     SteamSource().discover_games(_make_args(followed=False))
-    called_urls = [c.request.url for c in resp_mock.calls]
+    called_urls = [c.request.url for c in resp_mock.calls if c.request.url]
     assert not any("GetFollowedGames" in url for url in called_urls)
 
 
@@ -321,3 +322,176 @@ def test_discover_games_returns_all_entries_including_cross_source_duplicates() 
     wishlist_entries = [g for g in games if g.appid == 420 and g.source == "wishlist"]
     assert owned_entries, "owned entry must be present"
     assert wishlist_entries, "wishlist entry must also be present for DB priority logic"
+
+
+# ---------------------------------------------------------------------------
+# EpicSource — protocol conformance & registry
+# ---------------------------------------------------------------------------
+
+
+def test_epic_source_name() -> None:
+    assert EpicSource().name == "epic"
+
+
+def test_epic_source_is_runtime_checkable() -> None:
+    assert isinstance(EpicSource(), GameSource)
+
+
+def test_get_all_sources_contains_epic_source() -> None:
+    sources = get_all_sources()
+    assert any(isinstance(s, EpicSource) for s in sources)
+
+
+# ---------------------------------------------------------------------------
+# EpicSource — CLI argument registration
+# ---------------------------------------------------------------------------
+
+
+def test_epic_source_registers_auth_code_argument() -> None:
+    parser = argparse.ArgumentParser()
+    EpicSource().add_arguments(parser)
+    dests = {a.dest for a in parser._actions}
+    assert "epic_auth_code" in dests
+
+
+def test_epic_source_registers_device_auth_arguments() -> None:
+    parser = argparse.ArgumentParser()
+    EpicSource().add_arguments(parser)
+    dests = {a.dest for a in parser._actions}
+    assert "epic_device_id" in dests
+    assert "epic_account_id" in dests
+    assert "epic_device_secret" in dests
+
+
+def test_epic_source_registers_twitch_arguments() -> None:
+    parser = argparse.ArgumentParser()
+    EpicSource().add_arguments(parser)
+    dests = {a.dest for a in parser._actions}
+    assert "twitch_client_id" in dests
+    assert "twitch_client_secret" in dests
+
+
+# ---------------------------------------------------------------------------
+# EpicSource — is_enabled
+# ---------------------------------------------------------------------------
+
+
+def _epic_args(**kwargs: str | None) -> argparse.Namespace:
+    base: dict[str, str | None] = {
+        "epic_auth_code": None,
+        "epic_device_id": None,
+        "epic_account_id": None,
+        "epic_device_secret": None,
+        "twitch_client_id": None,
+        "twitch_client_secret": None,
+        "lang": None,
+    }
+    base.update(kwargs)
+    return argparse.Namespace(**base)
+
+
+def test_epic_source_enabled_with_auth_code() -> None:
+    args = _epic_args(epic_auth_code="someCode")
+    assert EpicSource().is_enabled(args) is True
+
+
+def test_epic_source_enabled_with_complete_device_credentials() -> None:
+    args = _epic_args(epic_device_id="did", epic_account_id="aid", epic_device_secret="sec")
+    assert EpicSource().is_enabled(args) is True
+
+
+def test_epic_source_disabled_with_no_credentials() -> None:
+    args = _epic_args()
+    assert EpicSource().is_enabled(args) is False
+
+
+def test_epic_source_disabled_with_incomplete_device_credentials() -> None:
+    args = _epic_args(epic_device_id="did", epic_account_id="aid")  # missing secret
+    assert EpicSource().is_enabled(args) is False
+
+
+# ---------------------------------------------------------------------------
+# EpicSource — discover_games (HTTP mocked)
+# ---------------------------------------------------------------------------
+
+_EPIC_TOKEN_URL = "https://account-public-service-prod03.ol.epicgames.com/account/api/oauth/token"
+_EPIC_LIBRARY_URL = "https://library-service.live.use1a.on.epicgames.com/library/api/public/items"
+_STEAM_STORE_SEARCH = "https://store.steampowered.com/api/storesearch/"
+
+
+def _token_response() -> dict:  # type: ignore[type-arg]
+    return {"access_token": "tok_abc", "account_id": "acc_123"}
+
+
+def _library_response(items: list[dict]) -> dict:  # type: ignore[type-arg]
+    return {"records": items, "nextCursor": None}
+
+
+@resp_mock.activate
+def test_epic_discover_games_returns_epic_source_label() -> None:
+    resp_mock.add(resp_mock.POST, _EPIC_TOKEN_URL, json=_token_response())
+    resp_mock.add(
+        resp_mock.GET,
+        _EPIC_LIBRARY_URL,
+        json=_library_response([{"catalogItemId": "cat1", "appName": "Fortnite"}]),
+    )
+    # Store search returns no match → hash-based appid
+    resp_mock.add(resp_mock.GET, _STEAM_STORE_SEARCH, json={"total": 0, "items": []})
+
+    games = EpicSource().discover_games(_epic_args(epic_auth_code="code1"))
+    assert len(games) == 1
+    assert games[0].source == "epic"
+    assert games[0].external_id.startswith("epic:")
+
+
+@resp_mock.activate
+def test_epic_discover_games_resolved_appid_used_directly() -> None:
+    resp_mock.add(resp_mock.POST, _EPIC_TOKEN_URL, json=_token_response())
+    resp_mock.add(
+        resp_mock.GET,
+        _EPIC_LIBRARY_URL,
+        json=_library_response([{"catalogItemId": "cat2", "appName": "Rocket League"}]),
+    )
+    # Steam Store Search returns an exact match
+    resp_mock.add(
+        resp_mock.GET,
+        _STEAM_STORE_SEARCH,
+        json={"total": 1, "items": [{"name": "Rocket League", "id": 252950}]},
+    )
+
+    games = EpicSource().discover_games(_epic_args(epic_auth_code="code1"))
+    assert len(games) == 1
+    assert games[0].appid == 252950
+
+
+@resp_mock.activate
+def test_epic_discover_games_unresolved_gets_hash_appid() -> None:
+    resp_mock.add(resp_mock.POST, _EPIC_TOKEN_URL, json=_token_response())
+    resp_mock.add(
+        resp_mock.GET,
+        _EPIC_LIBRARY_URL,
+        json=_library_response([{"catalogItemId": "unknownCat", "appName": "SomeExclusiveGame"}]),
+    )
+    resp_mock.add(resp_mock.GET, _STEAM_STORE_SEARCH, json={"total": 0, "items": []})
+
+    games = EpicSource().discover_games(_epic_args(epic_auth_code="code1"))
+    assert len(games) == 1
+    assert games[0].appid >= 2_000_000_000
+    assert games[0].external_id == "epic:unknownCat"
+
+
+@resp_mock.activate
+def test_epic_discover_games_auth_failure_returns_empty() -> None:
+    resp_mock.add(resp_mock.POST, _EPIC_TOKEN_URL, status=401, json={"error": "invalid_auth"})
+
+    games = EpicSource().discover_games(_epic_args(epic_auth_code="bad_code"))
+    assert games == []
+
+
+@resp_mock.activate
+def test_epic_discover_games_empty_library_returns_empty() -> None:
+    resp_mock.add(resp_mock.POST, _EPIC_TOKEN_URL, json=_token_response())
+    resp_mock.add(resp_mock.GET, _EPIC_LIBRARY_URL, json=_library_response([]))
+
+    games = EpicSource().discover_games(_epic_args(epic_auth_code="code1"))
+    assert games == []

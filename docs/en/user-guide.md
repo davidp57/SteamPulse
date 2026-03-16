@@ -6,12 +6,13 @@
 
 1. [Installation](#1-installation)
 2. [Steam prerequisites](#2-steam-prerequisites)
-3. [All-in-one — `steampulse.exe`](#3-all-in-one--steampulseexe)
-4. [All options](#4-all-options)
-5. [Navigating the interface](#5-navigating-the-interface)
-6. [Cache strategy & refresh](#6-cache-strategy--refresh)
-7. [Advanced usage — separate steps](#7-advanced-usage--separate-steps)
-8. [FAQ](#8-faq)
+3. [Epic Games prerequisites](#3-epic-games-prerequisites)
+4. [All-in-one — `steampulse.exe`](#4-all-in-one--steampulseexe)
+5. [All options](#5-all-options)
+6. [Navigating the interface](#6-navigating-the-interface)
+7. [Cache strategy & refresh](#7-cache-strategy--refresh)
+8. [Advanced usage — separate steps](#8-advanced-usage--separate-steps)
+9. [FAQ](#9-faq)
 
 ---
 
@@ -52,7 +53,43 @@ The SteamID64 is a 17-digit number starting with `765`.
 
 ---
 
-## 3. All-in-one — `steampulse.exe`
+## 3. Epic Games prerequisites
+
+Epic integration is **optional**. Skip this section if you only use Steam.
+
+SteamPulse can import your Epic Games library and attempt to resolve each game to a Steam AppID (to fetch store details and news). Games that cannot be resolved still appear in the dashboard, tagged as Epic, without Steam enrichment.
+
+### Authentication — first run (authorization code)
+
+1. Open a browser and go to:  
+   `https://www.epicgames.com/id/login?redirectUrl=https%3A%2F%2Fwww.epicgames.com%2Fid%2Fapi%2Fredirect%3FclientId%3D34a02cf8f4414e29b15921876da36f9%26responseType%3Dcode`
+2. Log in with your Epic account.
+3. You will be redirected to a JSON page — copy the value of `authorizationCode`.
+4. Pass it with `--epic-auth-code <CODE>`. This is a **one-time** code.
+
+### Authentication — subsequent runs (device credentials)
+
+For headless or automated runs, use device credentials (obtained on first auth by the Epic API):
+
+```
+steampulse.exe --key <API_KEY> --steamid <STEAMID64> \
+  --epic-device-id <DEVICE_ID> \
+  --epic-account-id <ACCOUNT_ID> \
+  --epic-device-secret <SECRET>
+```
+
+### Optional — IGDB resolver
+
+For better Steam AppID resolution accuracy, provide Twitch API credentials (used to query IGDB):
+
+1. Create an app at <https://dev.twitch.tv/console/apps>
+2. Pass `--twitch-client-id` and `--twitch-client-secret`
+
+Without IGDB, SteamPulse falls back to fuzzy matching against the Steam Store search API.
+
+---
+
+## 4. All-in-one — `steampulse.exe`
 
 ```
 steampulse.exe --key <API_KEY> --steamid <STEAMID64>
@@ -67,9 +104,11 @@ When done, open `steam_library.html` in a browser — **no server required**.
 
 ### What gets fetched
 
-For each game (owned, wishlist, or followed):
+For each Steam game (owned, wishlist, or followed):
 - **App details**: name, type, description, developers, publishers, genres, categories, platforms, price, Metacritic score, achievement count, release date
 - **News**: the 5 most recent official news items (title, date, URL, author, tags)
+
+For each **Epic** game: the game is resolved to a Steam AppID when possible — if found, the same enrichment applies. Unresolved games appear in the dashboard without store details or news.
 
 ### Sample output
 
@@ -90,7 +129,7 @@ For each game (owned, wishlist, or followed):
 
 ---
 
-## 4. All options
+## 5. All options
 
 | Option | Default | Description |
 |---|---|---|
@@ -107,11 +146,22 @@ For each game (owned, wishlist, or followed):
 | `--lang` | *(system)* | Force interface language (`en`, `fr`, …). Defaults to the system locale, falls back to `en`. |
 | `-v` / `--verbose` | off | Enable DEBUG logging |
 
+**Epic Games options:**
+
+| Option | Default | Description |
+|---|---|---|
+| `--epic-auth-code` | *(none)* | One-time Epic authorization code (first login) |
+| `--epic-device-id` | *(none)* | Epic device ID (persistent auth) |
+| `--epic-account-id` | *(none)* | Epic account ID (persistent auth) |
+| `--epic-device-secret` | *(none)* | Epic device secret (persistent auth) |
+| `--twitch-client-id` | *(none)* | Twitch/IGDB client ID (better AppID resolution) |
+| `--twitch-client-secret` | *(none)* | Twitch/IGDB client secret |
+
 > **Note on `--followed`**: the Steam Web API no longer returns followed games with a standard key. This flag is available but will generally return an empty list.
 
 ---
 
-## 5. Navigating the interface
+## 6. Navigating the interface
 
 ### Library page (`steam_library.html`)
 
@@ -128,7 +178,7 @@ For each game (owned, wishlist, or followed):
 | Group | Options |
 |---|---|
 | **Statut** | All · Early Access · Released · Upcoming |
-| **Source** | 🎮 All · Owned · 🎁 Wishlist |
+| **Source** | 🎮 All · Owned · 🎁 Wishlist · 👁 Followed · 🎮 Epic |
 | **Type news** | All types · 📋 Patch notes · 📰 News |
 | **Temps de jeu** | All · Never played · < 1 h · 1–10 h · > 10 h |
 | **Metacritic** | All · No score · < 50 · 50–75 · > 75 |
@@ -144,8 +194,8 @@ Each card shows:
 - Metacritic score with colour coding (green ≥ 75 · orange ≥ 50 · red < 50)
 - Platform icons (Windows / Mac / Linux)
 - Genres
-- 📅 Release date · 📰 Latest news date · 🕹 Playtime _(or 🎁 Wishlist / 👁 Followed)_
-- `#appid` — click to open the Steam store page
+- 📅 Release date · 📰 Latest news date · 🕹 Playtime _(or 🎁 Wishlist / 👁 Followed / 🎮 Epic)_
+- `#appid` — click to open the Steam store page (or hover the card to see the store hint)
 
 Clicking anywhere on a card opens the Steam store page in a new tab.
 
@@ -159,7 +209,7 @@ Clicking anywhere on a card opens the Steam store page in a new tab.
 
 ---
 
-## 6. Cache strategy & refresh
+## 7. Cache strategy & refresh
 
 | Scenario | Behaviour |
 |---|---|
@@ -172,7 +222,7 @@ Clicking anywhere on a card opens the Steam store page in a new tab.
 
 ---
 
-## 7. Advanced usage — separate steps
+## 8. Advanced usage — separate steps
 
 If you installed SteamPulse from source, two separate commands are also available to run fetch and render independently:
 
@@ -182,7 +232,7 @@ If you installed SteamPulse from source, two separate commands are also availabl
 steam-fetch --key <API_KEY> --steamid <STEAMID64>
 ```
 
-Same options as `steampulse.exe`, except `--output`. Saves data to the SQLite database without generating HTML.
+Same options as `steampulse.exe`, except `--output`. Epic options (`--epic-auth-code`, etc.) are also accepted. Saves data to the SQLite database without generating HTML.
 
 ### `steam-render` — render only
 
@@ -201,7 +251,10 @@ Reads the SQLite database and regenerates the HTML from existing data. Useful fo
 
 ---
 
-## 8. FAQ
+## 9. FAQ
+
+**I have games on Epic that don't appear with store details — why?**  
+SteamPulse tries to match each Epic game to a Steam AppID using fuzzy name matching (and IGDB if you provide Twitch credentials). If no match is found, the game still appears in the dashboard with the 🎮 Epic badge, but without Steam details or news.
 
 **My Steam profile is private — will it still work?**  
 The API key bypasses privacy restrictions for requests about your own account.
