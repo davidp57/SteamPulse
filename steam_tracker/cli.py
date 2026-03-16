@@ -41,8 +41,6 @@ def cmd_fetch() -> None:
     parser = argparse.ArgumentParser(
         description="Fetch Steam library — store details & news into a local DB",
     )
-    parser.add_argument("--key", required=True, help="Steam API key")
-    parser.add_argument("--steamid", required=True, help="SteamID64")
     parser.add_argument("--db", default="steam_library.db", help="SQLite DB path")
     parser.add_argument("--max", type=int, default=None, help="Limit to N games (testing)")
     parser.add_argument("--workers", type=int, default=4, help="Thread pool size")
@@ -57,14 +55,9 @@ def cmd_fetch() -> None:
         help="Re-fetch news for games cached more than N hours ago (default: 24)",
     )
     parser.add_argument("--verbose", "-v", action="store_true")
-    parser.add_argument(
-        "--no-wishlist", action="store_true", help="Ne pas récupérer la wishlist"
-    )
-    parser.add_argument(
-        "--followed", action="store_true",
-        help="Récupérer les jeux suivis (non disponible via clé Web API)"
-    )
     parser.add_argument("--lang", default=None, help="Language code (e.g. en, fr); default: system")
+    for source in get_all_sources():
+        source.add_arguments(parser)
     args = parser.parse_args()
 
     t = get_translator(args.lang)
@@ -103,6 +96,35 @@ def cmd_fetch() -> None:
     )
     print(t("cli_pending", details=pending_details, news=pending_news,
             cached=len(skip) - pending_news))
+
+    width = len(str(pending_details + pending_news)) if (pending_details + pending_news) else 1
+
+    def on_progress(done: int, total: int, name: str) -> None:
+        print(f"\r[{done:>{width}}/{total}] {name[:52]:<52}", end="", flush=True)
+
+    fetcher = SteamFetcher(max_workers=args.workers, on_progress=on_progress)
+    try:
+        results = fetcher.fetch_all(games, skip_appids=skip, refresh_news_appids=stale_news)
+    except KeyboardInterrupt:
+        print(t("cli_interrupted"))
+        return
+
+    failed_details: set[int] = set()
+    news_fetched: set[int] = set()
+    for appid, (details, news) in results.items():
+        if details:
+            db.upsert_app_details(details)
+        elif appid not in skip:
+            failed_details.add(appid)
+        db.upsert_news(appid, news)
+        news_fetched.add(appid)
+    db.mark_fetched(failed_details, details=True)
+    db.mark_fetched(news_fetched, news=True)
+
+    print(t("cli_fetch_done", count=len(results), db=args.db))
+
+
+def cmd_render() -> None:
     """Generate the static HTML page from the local database."""
     parser = argparse.ArgumentParser(
         description="Render Steam library HTML from a local DB",
