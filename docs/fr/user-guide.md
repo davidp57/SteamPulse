@@ -62,7 +62,7 @@ SteamPulse peut importer ta bibliothèque Epic Games et tenter de résoudre chaq
 ### Authentification — premier lancement (code d'autorisation)
 
 1. Ouvre un navigateur et va sur :  
-   `https://www.epicgames.com/id/login?redirectUrl=https%3A%2F%2Fwww.epicgames.com%2Fid%2Fapi%2Fredirect%3FclientId%3D34a02cf8f4414e29b15921876da36f9%26responseType%3Dcode`
+   `https://www.epicgames.com/id/login?redirectUrl=https%3A%2F%2Fwww.epicgames.com%2Fid%2Fapi%2Fredirect%3FclientId%3D34a02cf8f4414e29b15921876da36f9a%26responseType%3Dcode`
 2. Connecte-toi avec ton compte Epic.
 3. Tu seras redirigé vers une page JSON — copie la valeur de `authorizationCode`.
 4. Passe-la avec `--epic-auth-code <CODE>`. C'est un code **à usage unique**.
