@@ -223,8 +223,29 @@ def _build_toml(data: dict[str, Any]) -> str:
         lines.append(f"[{section_name}]")
         for toml_key, value in section_values:
             if isinstance(value, str):
-                lines.append(f'{toml_key} = "{value}"')
+                lines.append(f'{toml_key} = "{_toml_escape(value)}"')
             else:
                 lines.append(f"{toml_key} = {value}")
         lines.append("")
     return "\n".join(lines)
+
+
+def _toml_escape(value: str) -> str:
+    """Escape a string value for embedding in a TOML double-quoted string.
+
+    Handles backslashes, double quotes, and common control characters.
+
+    Args:
+        value: Raw string value.
+
+    Returns:
+        Escaped string safe for use inside TOML double quotes.
+    """
+    return (
+        value
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+    )

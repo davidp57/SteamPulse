@@ -5,7 +5,6 @@ Twitch/IGDB credentials, and optional settings, then writes a TOML config file.
 """
 from __future__ import annotations
 
-import traceback
 import webbrowser
 from pathlib import Path
 from typing import Any
@@ -149,9 +148,7 @@ def run_wizard(config_path: Path | None = None) -> None:
                 print("  \u2714 Epic credentials obtained successfully.")
             except Exception as exc:  # noqa: BLE001
                 print(f"  ✘ Epic authentication failed: {exc}")
-                print("  Full error details:")
-                for line in traceback.format_exc().splitlines():
-                    print(f"    {line}")
+
                 print("  Skipping Epic setup.")
         else:
             # Keep existing Epic credentials as-is
@@ -210,9 +207,11 @@ def run_wizard(config_path: Path | None = None) -> None:
     # ------------------------------------------------------------------
     # Summary + confirmation
     # ------------------------------------------------------------------
+    _sensitive = frozenset({"key"})
     print("Summary:")
     for k, v in data.items():
-        display = "***" if ("secret" in k or k == "key") else str(v)
+        masked = k in _sensitive or any(word in k for word in ("secret", "token"))
+        display = "***" if masked else str(v)
         print(f"  {k} = {display}")
     print()
 

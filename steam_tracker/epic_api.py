@@ -132,48 +132,6 @@ def epic_auth_with_device(
     return resp.json()  # type: ignore[no-any-return]
 
 
-def epic_create_device_auth(
-    access_token: str,
-    account_id: str,
-    session: requests.Session | None = None,
-) -> dict[str, Any]:
-    """Register a new set of persistent device credentials for an authenticated account.
-
-    Call this once after ``epic_auth_with_code`` to obtain ``device_id``, ``account_id``,
-    and ``secret`` credentials that allow headless re-authentication on future runs without
-    requiring the user to re-enter an auth code.
-
-    Args:
-        access_token: A valid Bearer access token from ``epic_auth_with_code``.
-        account_id: The Epic account ID returned by ``epic_auth_with_code``.
-        session: Optional requests session.
-
-    Returns:
-        Dict with at least ``device_id``, ``accountId``, and ``secret``.
-
-    Raises:
-        requests.HTTPError: If the request fails.
-    """
-    s = session or requests.Session()
-    resp = s.post(
-        f"{_EPIC_DEVICE_AUTH_BASE}/{account_id}/deviceAuth",
-        headers={"Authorization": f"Bearer {access_token}"},
-        timeout=15,
-    )
-    if not resp.ok:
-        raise requests.HTTPError(
-            f"{resp.status_code} {resp.reason} — body: {resp.text}",
-            response=resp,
-        )
-    data: dict[str, Any] = resp.json()
-    # The API returns camelCase keys; normalise to snake_case for consistency.
-    if "deviceId" in data and "device_id" not in data:
-        data["device_id"] = data["deviceId"]
-    if "accountId" in data and "account_id" not in data:
-        data["account_id"] = data["accountId"]
-    return data
-
-
 def epic_get_library(
     access_token: str,
     session: requests.Session | None = None,

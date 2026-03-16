@@ -97,6 +97,27 @@ def _maybe_run_wizard(
     return config
 
 
+def _require_steam_credentials(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    """Abort with a friendly error if --key or --steamid are missing.
+
+    Args:
+        args: Parsed argument namespace.
+        parser: Active ArgumentParser (used to emit the error).
+    """
+    if not getattr(args, "key", None):
+        parser.error(
+            "--key is required. Run 'steam-setup' to create a config file,"
+            " or pass --key directly."
+        )
+    if not getattr(args, "steamid", None):
+        parser.error(
+            "--steamid is required. Run 'steam-setup' to create a config file,"
+            " or pass --steamid directly."
+        )
+
+
 def _build_enrichment_queue(all_discovered: list[OwnedGame]) -> list[OwnedGame]:
     """Return the deduplicated list of games eligible for Steam Store enrichment.
 
@@ -153,15 +174,7 @@ def cmd_fetch() -> None:
     parser.set_defaults(**config)
     args = parser.parse_args()
 
-    if not getattr(args, "key", None):
-        parser.error(
-            "--key is required. Run 'steam-setup' to create a config file, or pass --key directly."
-        )
-    if not getattr(args, "steamid", None):
-        parser.error(
-            "--steamid is required. Run 'steam-setup' to create a config file,"
-            " or pass --steamid directly."
-        )
+    _require_steam_credentials(args, parser)
 
     t = get_translator(args.lang)
 
@@ -302,15 +315,7 @@ def cmd_run() -> None:
     parser.set_defaults(**config)
     args = parser.parse_args()
 
-    if not getattr(args, "key", None):
-        parser.error(
-            "--key is required. Run 'steam-setup' to create a config file, or pass --key directly."
-        )
-    if not getattr(args, "steamid", None):
-        parser.error(
-            "--steamid is required. Run 'steam-setup' to create a config file,"
-            " or pass --steamid directly."
-        )
+    _require_steam_credentials(args, parser)
 
     t = get_translator(args.lang)
 

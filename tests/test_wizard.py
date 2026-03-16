@@ -316,3 +316,35 @@ def test_wizard_prefills_twitch_credentials(tmp_path: Path) -> None:
     cfg = load_config(config_path)
     assert cfg["twitch_client_id"] == "OLDTID"
     assert cfg["twitch_client_secret"] == "OLDSEC"
+
+
+def test_wizard_summary_masks_key_secret_and_token(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Summary must print *** for key, twitch_client_secret, and epic_refresh_token."""
+    config_path = tmp_path / "config.toml"
+
+    def _fake_epic_auth(code: str) -> dict:  # type: ignore[type-arg]
+        return {"refresh_token": "RT_SECRET", "account_id": "ACC123"}
+
+    inputs = _inputs(
+        "MYKEY", "MYSTEAMID",
+        "y",  # enable Epic
+        "n",  # skip opening browser
+        "MYAUTHCODE",  # auth code
+        "n",  # skip twitch
+        "", "", "", "",  # settings defaults
+        "y",  # confirm
+    )
+    with (
+        patch("builtins.input", inputs),
+        patch("steam_tracker.wizard.epic_auth_with_code", side_effect=_fake_epic_auth),
+        patch("steam_tracker.wizard.webbrowser.open"),
+    ):
+        run_wizard(config_path=config_path)
+
+    captured = capsys.readouterr().out
+    assert "key = ***" in captured
+    assert "epic_refresh_token = ***" in captured
+    assert "RT_SECRET" not in captured
+    assert "MYKEY" not in captured

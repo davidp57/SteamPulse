@@ -18,7 +18,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Auto-wizard on first run** — If no config file exists and no `--key`/`--steamid` flags are present, the wizard starts automatically instead of failing with an error.
 - **CLI save-back** — Credentials passed directly on the command line are automatically persisted to the config file after a successful run, so they need not be repeated.
 - **`epic_auth_with_refresh()`** in `steam_tracker/epic_api.py` — Renews an Epic session from a saved refresh token (valid 30 days, automatically renewed on each use). Used by the wizard and `EpicSource` for all subsequent runs after first login.
-- **`epic_create_device_auth()`** in `steam_tracker/epic_api.py` — Registers persistent device credentials from a valid access token (available for advanced use; not used in the standard wizard flow).
 - **18 tests** in `tests/test_wizard.py` covering Steam-only flow, cancellation, custom settings, Twitch credentials, Epic refresh token flow, Epic auth failure resilience, browser launch, URL display, and pre-fill from existing config.
 - **26 tests** in `tests/test_config.py` covering `get_config_path`, `load_config`, `write_config`, and `save_cli_credentials` (including credential-vs-settings distinction and `_explicit_keys` logic).
 

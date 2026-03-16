@@ -50,7 +50,7 @@ La façon la plus simple de commencer est l'assistant de configuration interacti
 steam-setup
 ```
 
-Ou, si tu utilises l'exécutable standalone, lance-le simplement sans flags la première fois — l'assistant démarrera automatiquement quand aucun credential n'est trouvé :
+Ou, si tu utilises l'exécutable standalone, lance-le simplement sans flags la première fois — l'assistant démarrera automatiquement quand aucun identifiant n'est trouvé :
 
 ```
 steampulse.exe
