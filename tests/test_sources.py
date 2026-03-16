@@ -424,7 +424,7 @@ def _token_response() -> dict:  # type: ignore[type-arg]
 
 
 def _library_response(items: list[dict]) -> dict:  # type: ignore[type-arg]
-    return {"records": items, "nextCursor": None}
+    return {"records": items, "responseMetadata": {"nextCursor": None}}
 
 
 @resp_mock.activate

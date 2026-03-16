@@ -41,8 +41,6 @@ def cmd_fetch() -> None:
     parser = argparse.ArgumentParser(
         description="Fetch Steam library — store details & news into a local DB",
     )
-    parser.add_argument("--key", required=True, help="Steam API key")
-    parser.add_argument("--steamid", required=True, help="SteamID64")
     parser.add_argument("--db", default="steam_library.db", help="SQLite DB path")
     parser.add_argument("--max", type=int, default=None, help="Limit to N games (testing)")
     parser.add_argument("--workers", type=int, default=4, help="Thread pool size")
@@ -57,14 +55,9 @@ def cmd_fetch() -> None:
         help="Re-fetch news for games cached more than N hours ago (default: 24)",
     )
     parser.add_argument("--verbose", "-v", action="store_true")
-    parser.add_argument(
-        "--no-wishlist", action="store_true", help="Ne pas récupérer la wishlist"
-    )
-    parser.add_argument(
-        "--followed", action="store_true",
-        help="Récupérer les jeux suivis (non disponible via clé Web API)"
-    )
     parser.add_argument("--lang", default=None, help="Language code (e.g. en, fr); default: system")
+    for source in get_all_sources():
+        source.add_arguments(parser)
     args = parser.parse_args()
 
     t = get_translator(args.lang)
