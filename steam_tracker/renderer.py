@@ -825,6 +825,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         <button class="source-btn active" data-source="all">🎮 __T_lbl_all__</button>
         <button class="source-btn" data-source="owned">__T_lbl_owned__</button>
         <button class="source-btn" data-source="wishlist">🎁 Wishlist</button>
+        <button class="source-btn" data-source="followed">👁 __T_lbl_followed__</button>
+        <button class="source-btn" data-source="epic">🎮 Epic</button>
       </div>
     </div>
     <div class="filter-group">
@@ -1351,6 +1353,7 @@ _NEWS_TEMPLATE = r"""<!DOCTYPE html>
         <button class="source-btn" data-source="owned">__T_lbl_owned__</button>
         <button class="source-btn" data-source="wishlist">🎁 Wishlist</button>
         <button class="source-btn" data-source="followed">👁 __T_lbl_followed__</button>
+        <button class="source-btn" data-source="epic">🎮 Epic</button>
       </div>
     </div>
     <div class="filter-group">
@@ -1782,9 +1785,12 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         pt_display = t("source_wishlist")
     elif game.source == "followed":
         pt_display = t("source_followed")
+    elif game.source == "epic":
+        pt_display = t("source_epic")
     else:
         pt_display = f"🕹 {pt_fmt}"
     metacritic_score = details.metacritic_score if details else 0
+    store_hint = "🎮 Epic" if game.source == "epic" else "↗ Steam"
     return (
         f'<div class="card" data-appid="{appid}" data-status="{status.badge}" '
         f'data-source="{source_tag}" data-name="{name.lower()}" '
@@ -1793,7 +1799,7 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         f'data-release="{rel_date}" data-release-ts="{release_ts}" '
         f'data-last-update="{last_update_ts}" '
         f'data-last-patch-ts="{last_patch_ts}" data-last-other-ts="{last_other_ts}">\n'
-        f'  <span class="card-ext-hint">↗ Steam</span>\n'
+        f'  <span class="card-ext-hint">{store_hint}</span>\n'
         f'  <img class="card-img" src="{html.escape(img_url)}" alt="" loading="lazy"'
         f"    onerror=\"this.style.display='none';this.nextElementSibling.style.display='flex'\">\n"
         f'  <div class="card-img-placeholder" style="display:none">{placeholder}</div>\n'

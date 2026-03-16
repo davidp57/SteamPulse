@@ -35,7 +35,7 @@ def detect_lang() -> str:
         if val and val not in ("C", "POSIX"):
             return val[:2].lower()
     try:
-        code, _ = locale.getdefaultlocale()  # type: ignore[misc]
+        code, _ = locale.getdefaultlocale()
         if code:
             return code[:2].lower()
     except Exception:  # noqa: BLE001

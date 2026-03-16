@@ -18,6 +18,14 @@ STRINGS: dict[str, str] = {
     "cli_render_library":    "✅ {count} games · library → {path}",
     "cli_render_news":       "   {count} news → {path}",
 
+    # ── CLI – Epic –––––––––––––––––––––––––––––––––––––––––––––––––
+    "cli_epic_auth_error":    "   ⚠ Epic authentication failed ({error})",
+    "cli_epic_authenticated": "   ✅ Epic authenticated",
+    "cli_epic_library_count": "   ✅ {count} game(s) in Epic library",
+    "cli_epic_library_error": "   ⚠ Epic library unavailable ({error})",
+    "cli_epic_resolving":     "🎮 Resolving Epic games to Steam AppIDs...",
+    "cli_epic_resolved_done": "   ✅ {resolved}/{total} resolved to a Steam AppID ({unresolved} unresolved)",  # noqa: E501
+
     # ── HTML – common ─────────────────────────────────────────────────────────
     "html_lang":             "en",
     "generated_at":          "Generated on",
@@ -82,6 +90,7 @@ STRINGS: dict[str, str] = {
     "price_free":            "Free",
     "source_wishlist":       "🎁 Wishlist",
     "source_followed":       "👁 Followed",
+    "source_epic":           "🎮 Epic",
     "card_no_news_html":     "No news available",
     "card_news_toggle_0":    "No news",
     "card_news_toggle_1":    "1 update",

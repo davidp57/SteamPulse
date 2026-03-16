@@ -18,6 +18,14 @@ STRINGS: dict[str, str] = {
     "cli_render_library":    "✅ {count} jeux · bibliothèque → {path}",
     "cli_render_news":       "   {count} news → {path}",
 
+    # ── CLI – Epic ────────────────────────────────────────────────────────────
+    "cli_epic_auth_error":    "   ⚠ Authentification Epic échouée ({error})",
+    "cli_epic_authenticated": "   ✅ Epic authentifié",
+    "cli_epic_library_count": "   ✅ {count} jeu(x) dans la bibliothèque Epic",
+    "cli_epic_library_error": "   ⚠ Bibliothèque Epic inaccessible ({error})",
+    "cli_epic_resolving":     "🎮 Résolution des jeux Epic vers des AppIDs Steam...",
+    "cli_epic_resolved_done": "   ✅ {resolved}/{total} résolus vers un AppID Steam ({unresolved} non résolus)",  # noqa: E501
+
     # ── HTML – common ─────────────────────────────────────────────────────────
     "html_lang":             "fr",
     "generated_at":          "Généré le",
@@ -82,6 +90,7 @@ STRINGS: dict[str, str] = {
     "price_free":            "Gratuit",
     "source_wishlist":       "🎁 Wishlist",
     "source_followed":       "👁 Suivi",
+    "source_epic":           "🎮 Epic",
     "card_no_news_html":     "Aucune news disponible",
     "card_news_toggle_0":    "Aucune news",
     "card_news_toggle_1":    "1 mise à jour",
