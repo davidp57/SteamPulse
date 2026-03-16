@@ -126,15 +126,22 @@ class EpicSource:
         resolvers = [SteamStoreResolver()]
 
         # ── Resolve each game ──────────────────────────────────────────
+        print(t("cli_epic_resolving"))
         games: list[OwnedGame] = []
-        for item in library_items:
+        resolved_count = 0
+        total = len(library_items)
+        width = len(str(total))
+        for idx, item in enumerate(library_items, 1):
             catalog_id = str(item.get("catalogItemId", ""))
             name = str(item.get("appName", ""))
             if not catalog_id or not name:
                 continue
 
+            print(f"\r   [{idx:>{width}}/{total}] {name[:55]:<55}", end="", flush=True)
             steam_appid = resolve_steam_appid(name, resolvers)
             appid = steam_appid if steam_appid is not None else _hash_appid(catalog_id)
+            if steam_appid is not None:
+                resolved_count += 1
 
             games.append(
                 OwnedGame(
@@ -144,6 +151,10 @@ class EpicSource:
                     external_id=f"epic:{catalog_id}",
                 )
             )
+
+        print()  # newline after the \r progress line
+        print(t("cli_epic_resolved_done", resolved=resolved_count, total=len(games),
+                unresolved=len(games) - resolved_count))
 
         return games
 
