@@ -354,13 +354,12 @@ def test_epic_source_registers_auth_code_argument() -> None:
     assert "epic_auth_code" in dests
 
 
-def test_epic_source_registers_device_auth_arguments() -> None:
+def test_epic_source_registers_refresh_token_arguments() -> None:
     parser = argparse.ArgumentParser()
     EpicSource().add_arguments(parser)
     dests = {a.dest for a in parser._actions}
-    assert "epic_device_id" in dests
+    assert "epic_refresh_token" in dests
     assert "epic_account_id" in dests
-    assert "epic_device_secret" in dests
 
 
 def test_epic_source_registers_twitch_arguments() -> None:
@@ -379,9 +378,8 @@ def test_epic_source_registers_twitch_arguments() -> None:
 def _epic_args(**kwargs: str | None) -> argparse.Namespace:
     base: dict[str, str | None] = {
         "epic_auth_code": None,
-        "epic_device_id": None,
+        "epic_refresh_token": None,
         "epic_account_id": None,
-        "epic_device_secret": None,
         "twitch_client_id": None,
         "twitch_client_secret": None,
         "lang": None,
@@ -395,8 +393,8 @@ def test_epic_source_enabled_with_auth_code() -> None:
     assert EpicSource().is_enabled(args) is True
 
 
-def test_epic_source_enabled_with_complete_device_credentials() -> None:
-    args = _epic_args(epic_device_id="did", epic_account_id="aid", epic_device_secret="sec")
+def test_epic_source_enabled_with_refresh_token() -> None:
+    args = _epic_args(epic_refresh_token="rt", epic_account_id="aid")
     assert EpicSource().is_enabled(args) is True
 
 
@@ -405,8 +403,8 @@ def test_epic_source_disabled_with_no_credentials() -> None:
     assert EpicSource().is_enabled(args) is False
 
 
-def test_epic_source_disabled_with_incomplete_device_credentials() -> None:
-    args = _epic_args(epic_device_id="did", epic_account_id="aid")  # missing secret
+def test_epic_source_disabled_with_incomplete_credentials() -> None:
+    args = _epic_args(epic_refresh_token="rt")  # missing account_id
     assert EpicSource().is_enabled(args) is False
 
 

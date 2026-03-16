@@ -20,10 +20,17 @@ _EPIC_LIBRARY_URL = (
     "https://library-service.live.use1a.on.epicgames.com"
     "/library/api/public/items"
 )
-# The launcher client credentials used by Legendary / HeroicGamesLauncher.
+# EOS overlay / game client used by Legendary and HeroicGamesLauncher.
+# This client has the 'deviceAuths CREATE' permission and is used for all
+# Epic OAuth operations in SteamPulse.
 _EPIC_CLIENT_ID = "34a02cf8f4414e29b15921876da36f9a"
 _EPIC_CLIENT_SECRET = "daafbccc737745039dffe53d94fc76cf"
 _EPIC_BASIC_AUTH = requests.auth.HTTPBasicAuth(_EPIC_CLIENT_ID, _EPIC_CLIENT_SECRET)
+
+_EPIC_DEVICE_AUTH_BASE = (
+    "https://account-public-service-prod03.ol.epicgames.com"
+    "/account/api/public/account"
+)
 
 
 def epic_auth_with_code(
@@ -48,6 +55,39 @@ def epic_auth_with_code(
         data={
             "grant_type": "authorization_code",
             "code": auth_code,
+        },
+        auth=_EPIC_BASIC_AUTH,
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json()  # type: ignore[no-any-return]
+
+
+def epic_auth_with_refresh(
+    refresh_token: str,
+    session: requests.Session | None = None,
+) -> dict[str, Any]:
+    """Get a new access token using a stored refresh token.
+
+    Refresh tokens are valid for 30 days and are automatically renewed on
+    each successful call.
+
+    Args:
+        refresh_token: The refresh token from a previous OAuth response.
+        session: Optional requests session.
+
+    Returns:
+        Dict with at least ``access_token``, ``refresh_token``, and ``account_id``.
+
+    Raises:
+        requests.HTTPError: If the refresh fails (e.g. token expired).
+    """
+    s = session or requests.Session()
+    resp = s.post(
+        _EPIC_OAUTH_URL,
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
         },
         auth=_EPIC_BASIC_AUTH,
         timeout=15,

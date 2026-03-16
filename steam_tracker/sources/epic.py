@@ -11,7 +11,7 @@ import argparse
 import hashlib
 import logging
 
-from ..epic_api import epic_auth_with_code, epic_auth_with_device, epic_get_library
+from ..epic_api import epic_auth_with_code, epic_auth_with_refresh, epic_get_library
 from ..i18n import get_translator
 from ..models import SYNTHETIC_APPID_BASE, OwnedGame
 from ..resolver import SteamStoreResolver, resolve_steam_appid
@@ -49,19 +49,14 @@ class EpicSource:
             help="Epic Games one-time authorization code for first login",
         )
         parser.add_argument(
-            "--epic-device-id",
+            "--epic-refresh-token",
             default=None,
-            help="Epic Games device ID (for persistent auth)",
+            help="Epic Games refresh token (stored by steam-setup)",
         )
         parser.add_argument(
             "--epic-account-id",
             default=None,
-            help="Epic Games account ID (for persistent auth)",
-        )
-        parser.add_argument(
-            "--epic-device-secret",
-            default=None,
-            help="Epic Games device secret (for persistent auth)",
+            help="Epic Games account ID",
         )
         parser.add_argument(
             "--twitch-client-id",
@@ -85,11 +80,9 @@ class EpicSource:
         """
         if getattr(args, "epic_auth_code", None):
             return True
-        # Device auth requires all three fields
         return bool(
-            getattr(args, "epic_device_id", None)
+            getattr(args, "epic_refresh_token", None)
             and getattr(args, "epic_account_id", None)
-            and getattr(args, "epic_device_secret", None)
         )
 
     def discover_games(self, args: argparse.Namespace) -> list[OwnedGame]:
@@ -175,8 +168,6 @@ class EpicSource:
         if auth_code:
             return epic_auth_with_code(auth_code)
 
-        return epic_auth_with_device(
-            device_id=str(getattr(args, "epic_device_id", "")),
-            account_id=str(getattr(args, "epic_account_id", "")),
-            secret=str(getattr(args, "epic_device_secret", "")),
+        return epic_auth_with_refresh(
+            refresh_token=str(getattr(args, "epic_refresh_token", "")),
         )

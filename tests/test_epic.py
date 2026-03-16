@@ -23,9 +23,8 @@ _EPIC_DEVICE_AUTH = (
 def _make_args(
     *,
     epic_auth_code: str | None = None,
-    epic_device_id: str | None = None,
+    epic_refresh_token: str | None = None,
     epic_account_id: str | None = None,
-    epic_device_secret: str | None = None,
     twitch_client_id: str | None = None,
     twitch_client_secret: str | None = None,
     lang: str | None = None,
@@ -34,9 +33,8 @@ def _make_args(
 ) -> argparse.Namespace:
     return argparse.Namespace(
         epic_auth_code=epic_auth_code,
-        epic_device_id=epic_device_id,
+        epic_refresh_token=epic_refresh_token,
         epic_account_id=epic_account_id,
-        epic_device_secret=epic_device_secret,
         twitch_client_id=twitch_client_id,
         twitch_client_secret=twitch_client_secret,
         lang=lang,
@@ -116,13 +114,12 @@ def test_is_enabled_true_with_auth_code() -> None:
     assert EpicSource().is_enabled(args) is True
 
 
-def test_is_enabled_true_with_device_auth() -> None:
+def test_is_enabled_true_with_refresh_token() -> None:
     from steam_tracker.sources.epic import EpicSource
 
     args = _make_args(
-        epic_device_id="dev1",
+        epic_refresh_token="rt1",
         epic_account_id="acc1",
-        epic_device_secret="sec1",
     )
     assert EpicSource().is_enabled(args) is True
 

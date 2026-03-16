@@ -42,8 +42,18 @@ class SteamSource:
         Args:
             parser: The argument parser to extend.
         """
-        parser.add_argument("--key", required=True, help="Steam Web API key")
-        parser.add_argument("--steamid", required=True, help="SteamID64")
+        parser.add_argument(
+            "--key",
+            required=False,
+            default=None,
+            help="Steam Web API key (or set via config file)",
+        )
+        parser.add_argument(
+            "--steamid",
+            required=False,
+            default=None,
+            help="SteamID64 (or set via config file)",
+        )
         parser.add_argument(
             "--no-wishlist",
             action="store_true",

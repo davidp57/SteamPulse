@@ -5,14 +5,16 @@
 ## Table of contents
 
 1. [Installation](#1-installation)
-2. [Steam prerequisites](#2-steam-prerequisites)
-3. [Epic Games prerequisites](#3-epic-games-prerequisites)
-4. [All-in-one — `steampulse.exe`](#4-all-in-one--steampulseexe)
-5. [All options](#5-all-options)
-6. [Navigating the interface](#6-navigating-the-interface)
-7. [Cache strategy & refresh](#7-cache-strategy--refresh)
-8. [Advanced usage — separate steps](#8-advanced-usage--separate-steps)
-9. [FAQ](#9-faq)
+2. [Quick start — Setup Wizard](#2-quick-start--setup-wizard)
+3. [Config file](#3-config-file)
+4. [Steam prerequisites](#4-steam-prerequisites)
+5. [Epic Games prerequisites](#5-epic-games-prerequisites)
+6. [All-in-one — `steampulse.exe`](#6-all-in-one--steampulseexe)
+7. [All options](#7-all-options)
+8. [Navigating the interface](#8-navigating-the-interface)
+9. [Cache strategy & refresh](#9-cache-strategy--refresh)
+10. [Advanced usage — separate steps](#10-advanced-usage--separate-steps)
+11. [FAQ](#11-faq)
 
 ---
 
@@ -36,7 +38,90 @@ In this case, replace `steampulse.exe` with `steampulse` in all examples below.
 
 ---
 
-## 2. Steam prerequisites
+## 2. Quick start — Setup Wizard
+
+The easiest way to get started is the interactive setup wizard. It guides you step by step through all credentials and settings, then writes a config file so you never have to pass flags on the command line again.
+
+### Run the wizard
+
+```
+steam-setup
+```
+
+Or, if you're using the standalone executable, just run it without any flags the first time — the wizard starts automatically when no credentials are found:
+
+```
+steampulse.exe
+```
+
+You can also force the wizard at any time with `--setup`:
+
+```
+steampulse.exe --setup
+```
+
+### What the wizard covers
+
+1. **Steam** — API key and SteamID64
+2. **Epic Games** (optional) — full OAuth2 flow: the wizard displays the auth URL, optionally opens your browser, prompts for the authorization code, and automatically exchanges it for a persistent refresh token. No manual JSON navigation required.
+3. **Twitch/IGDB** (optional) — client ID and secret for better Epic→Steam AppID resolution
+4. **Settings** (optional) — database path, worker threads, news age, language
+
+At the end, the wizard shows a summary and asks for confirmation before writing the file.
+
+### Config file location
+
+| Platform | Path |
+|---|---|
+| Windows | `%APPDATA%\steampulse\config.toml` |
+| Linux / macOS | `$XDG_CONFIG_HOME/steampulse/config.toml` (default: `~/.config/steampulse/config.toml`) |
+
+A message is printed whenever the config is loaded or written:
+```
+  ✔ Config loaded from C:\Users\you\AppData\Roaming\steampulse\config.toml
+```
+
+---
+
+## 3. Config file
+
+SteamPulse automatically loads `config.toml` on every run. CLI flags always take precedence over config values, and new credentials passed on the command line are saved back to the config automatically.
+
+### File format
+
+```toml
+[steam]
+key      = "YOUR_STEAM_API_KEY"
+steamid  = "76561198000000000"
+
+[epic]
+refresh_token = "..."
+account_id    = "..."
+
+[twitch]
+client_id     = "..."
+client_secret = "..."
+
+[settings]
+db        = "steam_library.db"
+workers   = 4
+news_age  = 24
+lang      = "en"
+```
+
+All sections and keys are optional — any not present fall back to CLI defaults.
+
+### Custom config path
+
+You can point to a different config file with `--config`:
+
+```
+steampulse.exe --config /path/to/myconfig.toml
+```
+
+---
+
+## 4. Steam prerequisites
 
 ### Steam API key
 
@@ -53,7 +138,7 @@ The SteamID64 is a 17-digit number starting with `765`.
 
 ---
 
-## 3. Epic Games prerequisites
+## 5. Epic Games prerequisites
 
 Epic integration is **optional**. Skip this section if you only use Steam.
 
@@ -67,15 +152,16 @@ SteamPulse can import your Epic Games library and attempt to resolve each game t
 3. You will be redirected to a JSON page — copy the value of `authorizationCode`.
 4. Pass it with `--epic-auth-code <CODE>`. This is a **one-time** code.
 
-### Authentication — subsequent runs (device credentials)
+### Authentication — subsequent runs (refresh token)
 
-For headless or automated runs, use device credentials (obtained on first auth by the Epic API):
+After the first login, the wizard (or the `--epic-auth-code` flow) automatically saves a **refresh token** to the config file. On subsequent runs, SteamPulse reuses it transparently. The token is valid for 30 days and is renewed automatically on each use, so it effectively never expires with regular use.
+
+You can also pass it explicitly on the command line:
 
 ```
 steampulse.exe --key <API_KEY> --steamid <STEAMID64> \
-  --epic-device-id <DEVICE_ID> \
-  --epic-account-id <ACCOUNT_ID> \
-  --epic-device-secret <SECRET>
+  --epic-refresh-token <TOKEN> \
+  --epic-account-id <ACCOUNT_ID>
 ```
 
 ### Optional — IGDB resolver
@@ -89,7 +175,7 @@ Without IGDB, SteamPulse falls back to fuzzy matching against the Steam Store se
 
 ---
 
-## 4. All-in-one — `steampulse.exe`
+## 6. All-in-one — `steampulse.exe`
 
 ```
 steampulse.exe --key <API_KEY> --steamid <STEAMID64>
@@ -129,12 +215,12 @@ For each **Epic** game: the game is resolved to a Steam AppID when possible — 
 
 ---
 
-## 5. All options
+## 7. All options
 
 | Option | Default | Description |
 |---|---|---|
-| `--key` | *(required)* | Steam Web API key |
-| `--steamid` | *(required)* | Profile SteamID64 |
+| `--key` | *(config or required)* | Steam Web API key |
+| `--steamid` | *(config or required)* | Profile SteamID64 |
 | `--db` | `steam_library.db` | Path to the SQLite database |
 | `--output` | `steam_library.html` | Library page output path |
 | `--workers` | `4` | Number of parallel fetch threads |
@@ -144,6 +230,8 @@ For each **Epic** game: the game is resolved to a Steam AppID when possible — 
 | `--no-wishlist` | off | Skip wishlist fetch |
 | `--followed` | off | Fetch followed games (opt-in, see note) |
 | `--lang` | *(system)* | Force interface language (`en`, `fr`, …). Defaults to the system locale, falls back to `en`. |
+| `--config` | *(platform default)* | Path to a custom config TOML file |
+| `--setup` | off | Run the interactive setup wizard and exit |
 | `-v` / `--verbose` | off | Enable DEBUG logging |
 
 **Epic Games options:**
@@ -151,9 +239,8 @@ For each **Epic** game: the game is resolved to a Steam AppID when possible — 
 | Option | Default | Description |
 |---|---|---|
 | `--epic-auth-code` | *(none)* | One-time Epic authorization code (first login) |
-| `--epic-device-id` | *(none)* | Epic device ID (persistent auth) |
-| `--epic-account-id` | *(none)* | Epic account ID (persistent auth) |
-| `--epic-device-secret` | *(none)* | Epic device secret (persistent auth) |
+| `--epic-refresh-token` | *(none)* | Epic refresh token (persistent auth, saved automatically after first login) |
+| `--epic-account-id` | *(none)* | Epic account ID (required alongside `--epic-refresh-token`) |
 | `--twitch-client-id` | *(none)* | Twitch/IGDB client ID (better AppID resolution) |
 | `--twitch-client-secret` | *(none)* | Twitch/IGDB client secret |
 
@@ -161,7 +248,7 @@ For each **Epic** game: the game is resolved to a Steam AppID when possible — 
 
 ---
 
-## 6. Navigating the interface
+## 8. Navigating the interface
 
 ### Library page (`steam_library.html`)
 
@@ -209,7 +296,7 @@ Clicking anywhere on a card opens the Steam store page in a new tab.
 
 ---
 
-## 7. Cache strategy & refresh
+## 9. Cache strategy & refresh
 
 | Scenario | Behaviour |
 |---|---|
@@ -222,7 +309,7 @@ Clicking anywhere on a card opens the Steam store page in a new tab.
 
 ---
 
-## 8. Advanced usage — separate steps
+## 10. Advanced usage — separate steps
 
 If you installed SteamPulse from source, two separate commands are also available to run fetch and render independently:
 
@@ -251,7 +338,7 @@ Reads the SQLite database and regenerates the HTML from existing data. Useful fo
 
 ---
 
-## 9. FAQ
+## 11. FAQ
 
 **I have games on Epic that don't appear with store details — why?**  
 SteamPulse tries to match each Epic game to a Steam AppID using fuzzy name matching (and IGDB if you provide Twitch credentials). If no match is found, the game still appears in the dashboard with the 🎮 Epic badge, but without Steam details or news.
