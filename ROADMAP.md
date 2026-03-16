@@ -1,0 +1,60 @@
+# SteamPulse — Roadmap
+
+## ✅ Done
+
+### v1.0.0 — Core
+- `steampulse` CLI (fetch + render in one step)
+- Standalone Windows EXE via PyInstaller
+- GitHub Actions CI/CD (lint + types + tests + release)
+
+### v1.0.1 — Packaging fix
+- Correct `pyproject.toml` wheel package declaration
+
+### v1.1.0 — UI & i18n
+- Two-layer collapsible toolbar (library + news pages)
+- "Màj récente" filter (last-patch-ts window: 2/5/15/30 days)
+- Multilingual support (EN / FR) — `--lang` flag
+- URL hash persistence for all filters
+
+### v1.2.0 — Multi-store (Epic Games) — *in `develop`, not yet released*
+- **`GameSource` plugin architecture** — `sources/` package, runtime-checkable Protocol, `get_all_sources()` registry; new stores can be added without touching `cli.py`
+- **Epic Games Store source** (`EpicSource`) — OAuth2 auth (authorization code on first login, device credentials for subsequent headless runs)
+- **Steam AppID resolver chain** (`resolver.py`) — `SteamStoreResolver` (Steam Store Search + fuzzy matching) → `IGDBResolver` (Twitch OAuth + IGDB); first hit wins; results cached in `appid_mappings` DB table
+- **`appid_mappings` table** — caches external→Steam AppID resolutions; `manual=True` entries are protected from automatic overwrite
+- **`external_id` field on `OwnedGame`** — identifies non-Steam games (e.g. `"epic:<catalogItemId>"`)
+- **Epic display in HTML dashboards** — "🎮 Epic" filter button, store badge on cards, context-aware playtime label
+- **New CLI flags**: `--epic-auth-code`, `--epic-device-id`, `--epic-account-id`, `--epic-device-secret`, `--twitch-client-id`, `--twitch-client-secret`
+- **UX**: per-game progress indicator during Epic AppID resolution + resolved/unresolved summary
+- 168 tests total
+
+---
+
+## 🔵 Planned / Not yet started
+
+### Config file (TOML)
+- Use stdlib `tomllib` (Python 3.11+) — no extra dependency
+- Config file location: `~/.config/steampulse/config.toml` (XDG) or `%APPDATA%\steampulse\config.toml` on Windows
+- Store persistent credentials: Steam API key, SteamID64, Epic device auth, Twitch client ID/secret
+- CLI flags override config values (flags take precedence)
+- Removes need to pass `--key`, `--steamid`, `--epic-device-id`, etc. on every run
+- Migration: if config file exists and flag is omitted, read from config
+
+### Manual AppID mappings CLI
+- Interface to add/edit manual `appid_mappings` entries (e.g. `steam-fetch --add-mapping epic:Flier 1234567`)
+- Useful for games that fail automatic resolution (e.g. Epic exclusives with no Steam page)
+- `manual=True` entries already protected in DB — just needs a CLI surface
+
+### Additional store plugins
+- **GOG** — GOG Galaxy API or `gogdl` approach
+- **Xbox Game Pass** — Xbox / Microsoft Store API
+- **Amazon Prime Gaming** — library discovery
+- Plugin architecture is already in place; adding a store = new `sources/<store>.py` file
+
+---
+
+## 💡 Ideas (not committed)
+
+- Web UI / local HTTP server mode (vs. static HTML files)
+- Automatic re-fetch on a schedule (daemon / cron mode)
+- Game price history tracking (store prices as time series)
+- Export to CSV / JSON
