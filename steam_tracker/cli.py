@@ -13,6 +13,29 @@ from .renderer import write_html, write_news_html
 from .sources import get_all_sources
 
 
+def _build_enrichment_queue(all_discovered: list[OwnedGame]) -> list[OwnedGame]:
+    """Return the deduplicated list of games eligible for Steam Store enrichment.
+
+    Only games with a real Steam AppID (< SYNTHETIC_APPID_BASE) are included.
+    Unresolved Epic games carry a hash-based synthetic appid and would always
+    receive a 404 from the Steam Store API, so they are excluded.
+    The first occurrence of each appid wins (sources yield owned games first).
+
+    Args:
+        all_discovered: All games returned by every enabled source.
+
+    Returns:
+        Deduplicated list ready to pass to :class:`SteamFetcher`.
+    """
+    games: list[OwnedGame] = []
+    seen: set[int] = set()
+    for game in all_discovered:
+        if game.appid not in seen and game.appid < SYNTHETIC_APPID_BASE:
+            games.append(game)
+            seen.add(game.appid)
+    return games
+
+
 def cmd_fetch() -> None:
     """Fetch Steam library data and persist it to a local SQLite database."""
     parser = argparse.ArgumentParser(
@@ -63,16 +86,7 @@ def cmd_fetch() -> None:
     for game in all_discovered:
         db.upsert_game(game)
 
-    # Build unique list for fetcher (first occurrence wins; sources return owned first).
-    # Only games with a real Steam AppID can be enriched via the Steam Store API.
-    # Unresolved Epic games carry a synthetic appid >= SYNTHETIC_APPID_BASE and are
-    # intentionally excluded — calling the Steam Store API for them would always fail.
-    games: list[OwnedGame] = []
-    seen: set[int] = set()
-    for game in all_discovered:
-        if game.appid not in seen and game.appid < SYNTHETIC_APPID_BASE:
-            games.append(game)
-            seen.add(game.appid)
+    games = _build_enrichment_queue(all_discovered)
 
     if args.max:
         games = games[: args.max]
@@ -156,16 +170,7 @@ def cmd_run() -> None:
     for game in all_discovered:
         db.upsert_game(game)
 
-    # Build unique list for fetcher (first occurrence wins; sources return owned first).
-    # Only games with a real Steam AppID can be enriched via the Steam Store API.
-    # Unresolved Epic games carry a synthetic appid >= SYNTHETIC_APPID_BASE and are
-    # intentionally excluded — calling the Steam Store API for them would always fail.
-    games: list[OwnedGame] = []
-    seen: set[int] = set()
-    for game in all_discovered:
-        if game.appid not in seen and game.appid < SYNTHETIC_APPID_BASE:
-            games.append(game)
-            seen.add(game.appid)
+    games = _build_enrichment_queue(all_discovered)
 
     if args.max:
         games = games[: args.max]
