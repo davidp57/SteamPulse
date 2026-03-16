@@ -325,6 +325,18 @@ The HTML is built by string interpolation into `_HTML_TEMPLATE` and `_NEWS_TEMPL
 | `epic_auth_with_device(device_id, account_id, secret)` | Authenticate using persistent device credentials |
 | `epic_get_library(access_token)` | Fetch the user's Epic library with pagination |
 
+### `i18n/__init__.py`
+
+| Symbol | Description |
+|---|---|
+| `detect_lang()` | Reads `LANGUAGE` / `LC_ALL` / `LC_MESSAGES` / `LANG` env vars then `locale.getdefaultlocale()`, returns a 2-letter code, default `"en"` |
+| `Translator` | Callable class; `t("key")` returns the translated string, `t("key", param=val)` performs `str.format` substitution; falls back to English for missing keys |
+| `get_translator(lang)` | Returns a `Translator` for the given lang code (or auto-detected); unknown codes fall back to `"en"` |
+
+---
+
+## 6. Running tests
+
 ```bash
 # Run all tests with coverage
 pytest
