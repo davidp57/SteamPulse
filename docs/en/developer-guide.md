@@ -298,9 +298,9 @@ The HTML is built by string interpolation into `_HTML_TEMPLATE` and `_NEWS_TEMPL
 
 ### `sources/epic.py — EpicSource`
 
-`EpicSource` implements `GameSource` for the Epic Games Store.  It registers `--epic-auth-code`, `--epic-device-id`, `--epic-account-id`, `--epic-device-secret`, `--twitch-client-id`, and `--twitch-client-secret` as CLI arguments.
+`EpicSource` implements `GameSource` for the Epic Games Store.  It registers `--epic-auth-code`, `--epic-refresh-token`, `--epic-account-id`, `--twitch-client-id`, and `--twitch-client-secret` as CLI arguments.
 
-`is_enabled(args)` returns `True` if an auth code or complete device credentials are provided.
+`is_enabled(args)` returns `True` if an auth code, or a refresh token together with an account ID, is provided.
 
 `discover_games(args)` authenticates with Epic, fetches the library, and for each game:
 - Resolves the Steam AppID via `resolve_steam_appid()` (Steam Store Search fallback)
@@ -321,8 +321,9 @@ The HTML is built by string interpolation into `_HTML_TEMPLATE` and `_NEWS_TEMPL
 
 | Function | Description |
 |---|---|
-| `epic_auth_with_code(auth_code)` | Exchange an Epic authorization code for an access token |
-| `epic_auth_with_device(device_id, account_id, secret)` | Authenticate using persistent device credentials |
+| `epic_auth_with_code(auth_code)` | Exchange an Epic authorization code for an access + refresh token |
+| `epic_auth_with_refresh(refresh_token)` | Renew the session using a saved refresh token (valid 30 days, auto-renewed on each use) |
+| `epic_auth_with_device(device_id, account_id, secret)` | Authenticate using persistent device credentials (kept for advanced use) |
 | `epic_get_library(access_token)` | Fetch the user's Epic library with pagination |
 
 ### `i18n/__init__.py`

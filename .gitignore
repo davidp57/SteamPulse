@@ -34,7 +34,7 @@ htmlcov/
 .idea/
 
 # Project artefacts
-steam_library.db
+steam_library*.db*
 steam_library.html
 steam_news.html
 steam_cache.json
