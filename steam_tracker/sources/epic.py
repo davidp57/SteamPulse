@@ -133,9 +133,14 @@ class EpicSource:
         width = len(str(total))
         for idx, item in enumerate(library_items, 1):
             catalog_id = str(item.get("catalogItemId", ""))
-            name = str(item.get("appName", ""))
+            # `appName` is an internal codename (e.g. "Petrel"); prefer the
+            # human-readable title from metadata when available.
+            internal_name = str(item.get("appName", ""))
+            metadata = item.get("metadata") or {}
+            name = str(metadata.get("title", "") or internal_name)
             if not catalog_id or not name:
                 continue
+            log.debug("Epic item: internal=%r  title=%r", internal_name, name)
 
             print(f"\r   [{idx:>{width}}/{total}] {name[:55]:<55}", end="", flush=True)
             steam_appid = resolve_steam_appid(name, resolvers)
