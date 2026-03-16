@@ -9,6 +9,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Plugin architecture for game discovery** — Game discovery is now handled by pluggable `GameSource` implementations. The new `steam_tracker/sources/` package exposes the `GameSource` Protocol and a `get_all_sources()` registry.
+- **`SteamSource` plugin** (`steam_tracker/sources/steam.py`) — Extracts Steam-specific discovery logic (owned library, wishlist, followed games) from the CLI into a self-contained plugin that registers its own CLI arguments.
+- **18 new tests** in `tests/test_sources.py` covering the `GameSource` protocol, `SteamSource` behaviour, CLI argument registration, and the source registry.
+
+### Changed
+
+- **`cli.py`** — `cmd_fetch` and `cmd_run` no longer contain hardcoded Steam discovery logic. They iterate over `get_all_sources()`, delegate argument registration to each source, then collect and deduplicate results before passing them to the fetcher.
+- **`i18n/__init__.py`** — Removed a now-unused `type: ignore[misc]` on `locale.getdefaultlocale()` (mypy no longer flags it on Python 3.13).
+
 ---
 
 ## [1.1.0] — 2026-03-15

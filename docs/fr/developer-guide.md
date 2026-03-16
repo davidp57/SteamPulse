@@ -11,9 +11,10 @@
 5. [Référence des modules](#5-référence-des-modules)
 6. [Lancer les tests](#6-lancer-les-tests)
 7. [Lint et vérification de types](#7-lint-et-vérification-de-types)
-8. [Ajouter une traduction](#8-ajouter-une-traduction)
-9. [Ajouter une source de données](#9-ajouter-une-source-de-données)
-10. [Contribuer](#10-contribuer)
+8. [CI/CD](#8-cicd)
+9. [Ajouter une traduction](#9-ajouter-une-traduction)
+10. [Ajouter un plugin source](#10-ajouter-un-plugin-source)
+11. [Contribuer](#11-contribuer)
 
 ---
 
@@ -23,27 +24,31 @@
 steam_tracker/
 ├── __init__.py
 ├── models.py      # Modèles Pydantic v2
-├── api.py         # Wrappers HTTP typés vers l'API Steam
+├── api.py         # Wrappers HTTP typés vers l'API Steam (enrichissement uniquement : details + news)
 ├── db.py          # Couche de persistance SQLite
 ├── fetcher.py     # Fetcher multi-threadé + RateLimiter
 ├── renderer.py    # Générateur HTML statique
-├── cli.py         # Points d'entrée steam-fetch / steam-render
+├── cli.py         # Points d'entrée steam-fetch / steam-render / steampulse
+├── sources/
+│   ├── __init__.py  # Protocole GameSource + registre get_all_sources()
+│   └── steam.py     # SteamSource : bibliothèque possédée, wishlist, jeux suivis
 └── i18n/
     ├── __init__.py  # Translator, get_translator(), detect_lang()
     ├── en.py        # Chaînes anglaises
     └── fr.py        # Chaînes françaises
-├── tests/
-│   ├── conftest.py
-│   ├── test_api.py
-│   ├── test_db.py
-│   ├── test_fetcher.py
-│   └── test_renderer.py
-├── docs/
-│   ├── en/            # Documentation anglaise
-│   └── fr/            # Documentation française
-├── pyproject.toml
-├── README.md
-└── CHANGELOG.md
+tests/
+├── conftest.py
+├── test_api.py
+├── test_db.py
+├── test_fetcher.py
+├── test_renderer.py
+└── test_sources.py
+docs/
+├── en/            # Documentation anglaise
+└── fr/            # Documentation française
+pyproject.toml
+README.md
+CHANGELOG.md
 ```
 
 ---
@@ -59,7 +64,7 @@ Wishlist API ───┘
 
 **Flux de données :**
 
-1. `cli.py:cmd_fetch` appelle `api.py` pour récupérer les jeux possédés, la wishlist et les jeux suivis
+1. `cli.py:cmd_fetch` itère sur `get_all_sources()` et appelle `discover_games(args)` sur chaque plugin actif pour récupérer la liste des jeux
 2. Chaque `OwnedGame` est upsertée dans la table `games` immédiatement
 3. `fetcher.py:SteamFetcher.fetch_all()` dispatche des requêtes concurrentes pour les app details et les news
    - Les jeux dont les app details sont en cache sont ignorés (`skip_appids`)
@@ -258,6 +263,19 @@ Deux fonctions publiques : `write_html` et `write_news_html`. Elles acceptent un
 
 Le HTML est construit par interpolation de chaînes dans les raw strings `_HTML_TEMPLATE` et `_NEWS_TEMPLATE`. Aucune bibliothèque de templating externe n'est utilisée. Les libellés visibles utilisent des placeholders `__T_key__` remplacés au moment du rendu via `_apply_html_t()` ; les chaînes JavaScript sont injectées sous forme d'un bloc `const I18N = {...}` via `_build_i18n_js()`.
 
+### `sources/__init__.py — GameSource`
+
+| Symbole | Description |
+|---|---|
+| `GameSource` | Protocole `runtime_checkable` — toute classe avec `name`, `add_arguments()`, `is_enabled()`, `discover_games()` le satisfait |
+| `get_all_sources()` | Retourne une nouvelle liste de toutes les instances `GameSource` enregistrées |
+
+### `sources/steam.py — SteamSource`
+
+`SteamSource` implémente `GameSource` pour Steam. Il enregistre `--key`, `--steamid`, `--no-wishlist` et `--followed` comme arguments CLI et délègue aux trois fonctions de découverte de `api.py`.
+
+`discover_games(args)` retourne **tous** les jeux de chaque sous-source (possédés, puis wishlist, puis suivis) — potentiellement avec le même `appid` sous différents labels `source`. Le CLI les upsert tous en base (qui applique la priorité `owned > wishlist > followed`) puis construit une liste dédupliquée pour le fetcher.
+
 ### `i18n/__init__.py`
 
 | Symbole | Description |
@@ -314,7 +332,64 @@ Points notables :
 
 ---
 
-## 8. Ajouter une traduction
+## 8. CI/CD
+
+Deux workflows GitHub Actions se trouvent dans `.github/workflows/`.
+
+### `ci.yml` — Quality gate
+
+Déclenché sur chaque **push** ou **pull request** ciblant `main` ou `master`.
+
+| Propriété | Valeur |
+|---|---|
+| Runner | `windows-latest` |
+| Matrice Python | 3.11 · 3.12 · 3.13 |
+| Commande d'installation | `pip install -e ".[dev]"` |
+
+**Étapes (dans l'ordre) :**
+
+1. `ruff check steam_tracker` — lint, zéro avertissement requis
+2. `mypy steam_tracker` — vérification de types stricte, zéro erreur requise
+3. `pytest -q --tb=short` — suite de tests complète
+
+Les trois étapes doivent passer sur les trois versions de Python pour que le workflow réussisse. Ce workflow **ne publie aucun artefact**.
+
+### `build.yml` — Release de l'EXE Windows
+
+Déclenché sur :
+- un **push de tag** correspondant à `v*.*.*` (ex. `v1.2.0`) → build complet + GitHub Release
+- un **déclenchement manuel** (`workflow_dispatch`) → build + upload d'artefact uniquement (pas de release)
+
+| Propriété | Valeur |
+|---|---|
+| Runner | `windows-latest` |
+| Python | 3.11 (fixe) |
+| Commande d'installation | `pip install -e ".[build]"` |
+| Permissions | `contents: write` (nécessaire pour publier une GitHub Release) |
+
+**Étapes (dans l'ordre) :**
+
+1. **Build** — exécute `pyinstaller steampulse.spec` depuis le répertoire `build/` ; produit `dist/steampulse.exe`.
+2. **Smoke test** — exécute `dist\steampulse.exe --help` pour vérifier que l'exécutable démarre correctement.
+3. **Version** — lit la version du package via `importlib.metadata` et l'expose en tant qu'output `VERSION`.
+4. **Archive** — compresse `steampulse.exe` dans `steampulse-v<VERSION>-windows-x64.zip`.
+5. **Upload artefact** — téléverse toujours le zip comme artefact de workflow (téléchargeable depuis la page du run Actions).
+6. **Notes de release** — extrait la section de la version courante dans `CHANGELOG.md` via une regex PowerShell ; replie sur un lien vers le changelog si la section est introuvable.
+7. **Publication de release** *(tag uniquement)* — crée ou met à jour la GitHub Release pour le tag via `softprops/action-gh-release@v2`, en attachant le zip et les notes de release extraites.
+
+### Déclencher une release
+
+```bash
+# Tagger le commit et pousser — build.yml se déclenche automatiquement
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+Mettez à jour `CHANGELOG.md` avec une section `## [1.2.0]` **avant** de pousser le tag pour que les notes de release soient correctement extraites.
+
+---
+
+## 9. Ajouter une traduction
 
 1. Créer `steam_tracker/i18n/<code>.py` (ex. `de.py` pour l'allemand) avec un unique `STRINGS: dict[str, str]` qui reprend les clés de `en.py`. Seules les clés à traduire sont nécessaires — les clés manquantes replient automatiquement sur l'anglais.
 
@@ -327,25 +402,43 @@ Points notables :
 
 ---
 
-## 9. Ajouter une source de données
+## 10. Ajouter un plugin source
 
-Pour ajouter une nouvelle source de jeux (ex. Epic Games, GOG) :
+Pour ajouter un nouveau plugin source (ex. GOG, Epic Games) :
 
-1. **`models.py`** — ajouter la nouvelle valeur dans le commentaire/docstring du champ `source` (le champ est une `str` simple, pas un enum).
+1. **Créer `steam_tracker/sources/<nom>.py`** avec une classe satisfaisant le protocole `GameSource` :
 
-2. **`api.py`** — écrire une nouvelle fonction `get_<source>_games(...)` retournant `list[OwnedGame]` avec `source="<source>"`.
+   ```python
+   class GogSource:
+       name = "gog"
 
-3. **`db.py`** — mettre à jour l'expression `CASE WHEN` de priorité des sources dans `upsert_game` si la nouvelle source nécessite une priorité spécifique.
+       def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+           parser.add_argument("--gog-token", help="Token OAuth GOG")
 
-4. **`cli.py`** — ajouter un flag `--<source>` / `--no-<source>` dans `cmd_fetch`, appeler la nouvelle fonction API, upsert les résultats, et ajouter les nouveaux jeux à la liste `games`.
+       def is_enabled(self, args: argparse.Namespace) -> bool:
+           return bool(getattr(args, "gog_token", None))
 
-5. **`renderer.py`** — ajouter optionnellement un bouton de filtre dans `_HTML_TEMPLATE` (div `#sourceBtns`) et un label d'affichage dans `make_card()`.
+       def discover_games(self, args: argparse.Namespace) -> list[OwnedGame]:
+           # récupérer depuis l'API GOG, mapper vers OwnedGame avec source="gog"
+           ...
+   ```
 
-6. **Tests** — ajouter des tests unitaires dans `tests/test_api.py` et des tests d'intégration dans `tests/test_db.py`.
+2. **Enregistrer la source** dans `steam_tracker/sources/__init__.py` :
+
+   ```python
+   def get_all_sources() -> list[GameSource]:
+       from .steam import SteamSource
+       from .gog import GogSource  # ajouter ceci
+       return [SteamSource(), GogSource()]  # ajouter l'instance
+   ```
+
+3. **Correspondance avec les AppIDs Steam** — Le pipeline d'enrichissement (details, news) fonctionne via les AppIDs Steam. Il faut résoudre l'AppID Steam du jeu à partir de son nom ou d'une base externe (ex. SteamGridDB, IGDB) et le définir sur `OwnedGame.appid`. Sans AppID, le jeu apparaîtra dans la bibliothèque sans détails Store ni news.
+
+4. **Ajouter des tests** dans `tests/test_sources.py` — couvrir `add_arguments`, `is_enabled` et `discover_games` avec des appels HTTP mockés.
 
 ---
 
-## 10. Contribuer
+## 11. Contribuer
 
 ```bash
 # 1. Créer une branche
