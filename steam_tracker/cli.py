@@ -64,10 +64,11 @@ def cmd_fetch() -> None:
         db.upsert_game(game)
 
     # Build unique list for fetcher (first occurrence wins; sources return owned first)
+    # Games with external_id are from non-Steam sources and cannot be enriched via Steam API.
     games: list[OwnedGame] = []
     seen: set[int] = set()
     for game in all_discovered:
-        if game.appid not in seen:
+        if game.appid not in seen and not game.external_id:
             games.append(game)
             seen.add(game.appid)
 
@@ -154,10 +155,11 @@ def cmd_run() -> None:
         db.upsert_game(game)
 
     # Build unique list for fetcher (first occurrence wins; sources return owned first)
+    # Games with external_id are from non-Steam sources and cannot be enriched via Steam API.
     games: list[OwnedGame] = []
     seen: set[int] = set()
     for game in all_discovered:
-        if game.appid not in seen:
+        if game.appid not in seen and not game.external_id:
             games.append(game)
             seen.add(game.appid)
 

@@ -65,8 +65,11 @@ Core features: smart cache (re-fetch only new games), multilingual UI (EN/FR), s
   - `fetcher.py` — orchestration & concurrency: `SteamFetcher` + `RateLimiter`
   - `renderer.py` — output generation: HTML string templates with embedded CSS/JS
   - `cli.py` — thin entry point: `argparse`, iterates over sources, wires all layers
+  - `epic_api.py` — I/O boundary: OAuth2 + library API calls to Epic Games Store
+  - `resolver.py` — `AppIdResolver` Protocol + `SteamStoreResolver` + `IGDBResolver` + `resolve_steam_appid()` chain
   - `sources/` — game discovery plugins: `GameSource` Protocol + `get_all_sources()` registry
     - `sources/steam.py` — `SteamSource`: owned library, wishlist, followed games
+    - `sources/epic.py` — `EpicSource`: Epic Games Store library via OAuth2
   - `i18n/` — key-based localization: `get_translator(lang)` → callable `Translator`
 
 - **No web framework, no async, no ORM** — purely synchronous Python with stdlib + minimal deps.
@@ -75,6 +78,8 @@ Core features: smart cache (re-fetch only new games), multilingual UI (EN/FR), s
   - `sqlite3` directly (no SQLAlchemy). WAL mode enabled, `PRAGMA foreign_keys = ON`.
   - Prices stored as **integer centimes** (never floats).
   - Schema changes via **additive `ALTER TABLE`** only — columns listed in `_MIGRATIONS`; never drop or recreate tables.
+  - `games` table includes `external_id TEXT` for cross-store linking (e.g. `"epic:<catalogItemId>"`).
+  - `appid_mappings` table caches external→Steam AppID resolution results; manual mappings are protected from automatic overwrites.
 
 - **i18n**:
   - User-facing strings (CLI output and HTML template markers) all go through `get_translator(lang)`.
@@ -98,6 +103,8 @@ steampulse/
 ├── steam_tracker/                 # Main Python package
 │   ├── __init__.py
 │   ├── api.py                    # Steam Web API & Store API wrappers (enrichment only)
+│   ├── epic_api.py               # Epic Games OAuth2 + library API wrappers
+│   ├── resolver.py               # AppIdResolver Protocol + Steam/IGDB resolvers
 │   ├── cli.py                    # CLI entry points (cmd_fetch, cmd_render, cmd_run)
 │   ├── db.py                     # SQLite persistence (Database class)
 │   ├── fetcher.py                # Multi-threaded fetcher (SteamFetcher + RateLimiter)
@@ -105,7 +112,8 @@ steampulse/
 │   ├── renderer.py               # HTML generation (embedded CSS/JS string templates)
 │   ├── sources/
 │   │   ├── __init__.py           # GameSource Protocol + get_all_sources() registry
-│   │   └── steam.py              # SteamSource: owned, wishlist, followed
+│   │   ├── steam.py              # SteamSource: owned, wishlist, followed
+│   │   └── epic.py               # EpicSource: Epic Games Store library
 │   └── i18n/
 │       ├── __init__.py           # get_translator(), Translator, detect_lang()
 │       ├── en.py                 # STRINGS: dict[str, str]
@@ -114,8 +122,10 @@ steampulse/
 │   ├── conftest.py               # Shared fixtures (db, sample_game, sample_details, …)
 │   ├── test_api.py
 │   ├── test_db.py
+│   ├── test_epic.py
 │   ├── test_fetcher.py
 │   ├── test_renderer.py
+│   ├── test_resolver.py
 │   └── test_sources.py           # GameSource protocol + SteamSource tests
 ├── build/
 │   ├── steampulse.spec           # PyInstaller spec (single-file EXE)

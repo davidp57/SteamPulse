@@ -18,6 +18,12 @@ STRINGS: dict[str, str] = {
     "cli_render_library":    "✅ {count} jeux · bibliothèque → {path}",
     "cli_render_news":       "   {count} news → {path}",
 
+    # ── CLI – Epic ────────────────────────────────────────────────────────────
+    "cli_epic_auth_error":    "   ⚠ Authentification Epic échouée ({error})",
+    "cli_epic_authenticated": "   ✅ Epic authentifié",
+    "cli_epic_library_count": "   ✅ {count} jeu(x) dans la bibliothèque Epic",
+    "cli_epic_library_error": "   ⚠ Bibliothèque Epic inaccessible ({error})",
+
     # ── HTML – common ─────────────────────────────────────────────────────────
     "html_lang":             "fr",
     "generated_at":          "Généré le",

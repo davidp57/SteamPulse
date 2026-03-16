@@ -14,7 +14,8 @@ class OwnedGame(BaseModel):
     rtime_last_played: int = 0        # unix timestamp of last play session
     img_icon_url: str = ""
     img_logo_url: str = ""
-    source: str = "owned"             # "owned" | "wishlist" | "followed"
+    source: str = "owned"             # "owned" | "wishlist" | "followed" | "epic"
+    external_id: str = ""             # e.g. "epic:<catalogItemId>" for non-Steam games
 
 
 class AppDetails(BaseModel):

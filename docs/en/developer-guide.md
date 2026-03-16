@@ -25,13 +25,16 @@ steam_tracker/
 ├── __init__.py
 ├── models.py      # Pydantic v2 domain models
 ├── api.py         # Typed Steam API wrappers (enrichment only: details + news)
+├── epic_api.py    # Epic Games OAuth2 + library API wrappers
+├── resolver.py    # Steam AppID resolver chain (IGDB, Steam Store Search)
 ├── db.py          # SQLite persistence layer
 ├── fetcher.py     # Multi-threaded fetcher + rate limiter
 ├── renderer.py    # Static HTML generator
 ├── cli.py         # steam-fetch / steam-render / steampulse entry points
 ├── sources/
 │   ├── __init__.py  # GameSource Protocol + get_all_sources() registry
-│   └── steam.py     # SteamSource: owned library, wishlist, followed games
+│   ├── steam.py     # SteamSource: owned library, wishlist, followed games
+│   └── epic.py      # EpicSource: Epic Games Store library
 └── i18n/
     ├── __init__.py  # Translator, get_translator(), detect_lang()
     ├── en.py        # English strings
@@ -40,8 +43,10 @@ tests/
 ├── conftest.py
 ├── test_api.py
 ├── test_db.py
+├── test_epic.py
 ├── test_fetcher.py
 ├── test_renderer.py
+├── test_resolver.py
 └── test_sources.py
 docs/
 ├── en/            # English documentation
@@ -91,7 +96,8 @@ Represents a game entry from any source.
 | `rtime_last_played` | `int` | Unix timestamp of last session |
 | `img_icon_url` | `str` | Icon URL fragment |
 | `img_logo_url` | `str` | Logo URL fragment |
-| `source` | `str` | `"owned"` \| `"wishlist"` \| `"followed"` |
+| `source` | `str` | `"owned"` \| `"wishlist"` \| `"followed"` \| `"epic"` |
+| `external_id` | `str` | External identifier (e.g. `"epic:<catalogItemId>"`) — empty for native Steam games |
 
 ### `AppDetails`
 
@@ -165,7 +171,7 @@ class GameStatus:
 
 ## 4. Database schema
 
-Three tables; foreign keys enforced; WAL journal mode.
+Three main tables plus an AppID mapping cache; foreign keys enforced; WAL journal mode.
 
 ```sql
 -- One row per Steam appid tracked
@@ -178,7 +184,8 @@ CREATE TABLE games (
     img_icon_url      TEXT    NOT NULL DEFAULT '',
     img_logo_url      TEXT    NOT NULL DEFAULT '',
     last_seen_at      TEXT    NOT NULL,
-    source            TEXT    NOT NULL DEFAULT 'owned'
+    source            TEXT    NOT NULL DEFAULT 'owned',
+    external_id       TEXT    NOT NULL DEFAULT ''
 );
 
 -- One row per appid (app metadata from the Store API)
@@ -204,6 +211,17 @@ CREATE TABLE news (
     fetched_at TEXT    NOT NULL,
     UNIQUE (appid, url)
 );
+
+-- Map external store game IDs to Steam AppIDs
+CREATE TABLE appid_mappings (
+    external_source TEXT NOT NULL,   -- "epic", "gog", ...
+    external_id     TEXT NOT NULL,   -- store-specific catalog ID
+    external_name   TEXT NOT NULL,   -- game name on the external store
+    steam_appid     INTEGER,         -- NULL if unresolved
+    resolved_at     TEXT NOT NULL,
+    manual          INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (external_source, external_id)
+);
 ```
 
 ### Additive migrations
@@ -212,7 +230,7 @@ New columns are added via `_MIGRATIONS` in `db.py` — a list of `(table, column
 
 ### Source priority in upserts
 
-When the same game appears in multiple sources, `upsert_game` uses a SQL `CASE WHEN` expression to enforce the priority: **owned > wishlist > followed**. Playtime and timestamps are only updated for `source = 'owned'` games.
+When the same game appears in multiple sources, `upsert_game` uses a SQL `CASE WHEN` expression to enforce the priority: **owned = epic > wishlist > followed**. Playtime and timestamps are only updated for `source = 'owned'` games.
 
 ---
 
@@ -240,6 +258,8 @@ HTTP 403/404 on news/details endpoints → logged at DEBUG (not a warning — St
 | `get_cached_appids()` | Set of appids already in app_details |
 | `get_stale_news_appids(max_age_s)` | Set of appids with no news or news older than `max_age_s` seconds |
 | `get_all_game_records()` | Full denormalised list for the renderer |
+| `get_appid_mapping(source, external_id)` | Cached Steam AppID for an external game, or `None` |
+| `upsert_appid_mapping(source, external_id, name, steam_appid, manual)` | Insert/update an AppID mapping; manual mappings protected from auto-overwrite |
 
 ### `fetcher.py — SteamFetcher`
 
@@ -275,6 +295,35 @@ The HTML is built by string interpolation into `_HTML_TEMPLATE` and `_NEWS_TEMPL
 `SteamSource` implements `GameSource` for Steam.  It registers `--key`, `--steamid`, `--no-wishlist`, and `--followed` as CLI arguments and delegates to the three `api.py` discovery functions.
 
 `discover_games(args)` returns **all** games across sub-sources (owned, then wishlist, then followed) — possibly with the same `appid` under different `source` labels.  The CLI upserts all of them to the database (which enforces `owned > wishlist > followed` priority) and builds a deduplicated list for the fetcher.
+
+### `sources/epic.py — EpicSource`
+
+`EpicSource` implements `GameSource` for the Epic Games Store.  It registers `--epic-auth-code`, `--epic-device-id`, `--epic-account-id`, `--epic-device-secret`, `--twitch-client-id`, and `--twitch-client-secret` as CLI arguments.
+
+`is_enabled(args)` returns `True` if an auth code or complete device credentials are provided.
+
+`discover_games(args)` authenticates with Epic, fetches the library, and for each game:
+- Resolves the Steam AppID via `resolve_steam_appid()` (Steam Store Search fallback)
+- If resolved: sets `appid = steam_appid` for full enrichment
+- If unresolved: generates a deterministic hash-based appid (≥ 2,000,000,000)
+- All games get `source="epic"` and `external_id="epic:<catalogItemId>"`
+
+### `resolver.py`
+
+| Symbol | Description |
+|---|---|
+| `AppIdResolver` | Protocol — any class with `resolve(name, session) → int \| None` satisfies it |
+| `SteamStoreResolver` | Resolves via Steam Store Search API with fuzzy name matching (SequenceMatcher ≥ 0.8) |
+| `IGDBResolver(twitch_client_id, twitch_client_secret)` | Resolves via IGDB: Twitch OAuth → game search → external_games lookup (category=Steam) |
+| `resolve_steam_appid(name, resolvers, session)` | Iterates resolvers in order; first successful result wins |
+
+### `epic_api.py`
+
+| Function | Description |
+|---|---|
+| `epic_auth_with_code(auth_code)` | Exchange an Epic authorization code for an access token |
+| `epic_auth_with_device(device_id, account_id, secret)` | Authenticate using persistent device credentials |
+| `epic_get_library(access_token)` | Fetch the user's Epic library with pagination |
 
 ```bash
 # Run all tests with coverage
@@ -420,7 +469,7 @@ To add a new game source plugin (e.g. GOG, Epic Games):
        return [SteamSource(), GogSource()]  # add instance
    ```
 
-3. **Map to Steam AppIDs** — The enrichment pipeline (details, news) works via Steam AppIDs.  You need to resolve the game's Steam AppID from its name or an external database (e.g. SteamGridDB, IGDB) and set it on the returned `OwnedGame.appid`.  If no AppID is found, the game will appear in the library without store details or news.
+3. **Map to Steam AppIDs** — The enrichment pipeline (details, news) works via Steam AppIDs.  Use the resolver system in `steam_tracker/resolver.py` (`SteamStoreResolver` for zero-config fuzzy matching, `IGDBResolver` if Twitch/IGDB credentials are available) via `resolve_steam_appid(name, resolvers)`.  Resolved AppIDs can be cached in the `appid_mappings` table.  If no AppID is found, set a deterministic hash-based appid (≥ 2,000,000,000) and a non-empty `external_id` — the CLI will exclude these games from the Steam enrichment pipeline.
 
 4. **Add tests** in `tests/test_sources.py` — cover `add_arguments`, `is_enabled`, and `discover_games` with mocked HTTP calls.
 

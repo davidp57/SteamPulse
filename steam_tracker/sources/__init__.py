@@ -94,6 +94,7 @@ def get_all_sources() -> list[GameSource]:
         :class:`GameSource`.  Modifying the returned list does not affect the
         internal registry.
     """
-    from .steam import SteamSource  # local import avoids circular dependency
+    from .epic import EpicSource  # local imports avoid circular dependency
+    from .steam import SteamSource
 
-    return [SteamSource()]
+    return [SteamSource(), EpicSource()]
