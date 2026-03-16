@@ -88,6 +88,7 @@ STRINGS: dict[str, str] = {
     "price_free":            "Gratuit",
     "source_wishlist":       "🎁 Wishlist",
     "source_followed":       "👁 Suivi",
+    "source_epic":           "🎮 Epic",
     "card_no_news_html":     "Aucune news disponible",
     "card_news_toggle_0":    "Aucune news",
     "card_news_toggle_1":    "1 mise à jour",

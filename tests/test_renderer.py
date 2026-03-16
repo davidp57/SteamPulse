@@ -355,3 +355,60 @@ def test_write_news_html_creates_file(sample_record: GameRecord, tmp_path: Path)
     assert out.exists()
     assert "Half-Life 2" in out.read_text(encoding="utf-8")
 
+
+# ── Epic source display ───────────────────────────────────────────────────────
+
+def _epic_record() -> GameRecord:
+    """An Epic-only game with a hash-based appid (no Steam enrichment)."""
+    return GameRecord(
+        game=OwnedGame(
+            appid=2_047_593_821,
+            name="Fortnite",
+            source="epic",
+            external_id="epic:abc123CatalogId",
+        ),
+        status=GameStatus(label="—", badge="unknown", release_date="—"),
+    )
+
+
+def test_make_card_epic_has_data_source_epic() -> None:
+    card = make_card(_epic_record())
+    assert 'data-source="epic"' in card
+
+
+def test_make_card_epic_hint_is_epic_not_steam() -> None:
+    card = make_card(_epic_record())
+    assert "🎮 Epic" in card
+    assert "↗ Steam" not in card
+
+
+def test_make_card_epic_playtime_shows_epic_label() -> None:
+    card = make_card(_epic_record())
+    # Should show the Epic source label, not the "🕹 Xh" playtime format
+    assert "🎮 Epic" in card
+    assert "🕹" not in card
+
+
+def test_make_card_steam_owned_hint_is_steam() -> None:
+    record = GameRecord(
+        game=OwnedGame(appid=420, name="HL2", playtime_forever=120),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+    )
+    card = make_card(record)
+    assert "↗ Steam" in card
+
+
+def test_generate_html_has_epic_source_filter_button() -> None:
+    page = generate_html([_epic_record()], "0")
+    assert 'class="source-btn" data-source="epic"' in page
+
+
+def test_generate_html_has_followed_source_filter_button() -> None:
+    page = generate_html([_epic_record()], "0")
+    assert 'class="source-btn" data-source="followed"' in page
+
+
+def test_generate_news_html_has_epic_source_filter_button() -> None:
+    page = generate_news_html([_epic_record()], "0")
+    assert 'class="source-btn" data-source="epic"' in page
+
