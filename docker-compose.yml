@@ -17,10 +17,7 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - steampulse_data:/data
+      - ./data:/data
       - ./config.toml:/config/config.toml:ro
     environment:
       INTERVAL_HOURS: "4"    # regenerate dashboards every N hours
-
-volumes:
-  steampulse_data:

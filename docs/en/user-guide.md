@@ -420,7 +420,11 @@ Place it in the same folder as your `config.toml`:
 ```
 your-folder/
 ├── docker-compose.yml   ← downloaded from the release
-└── config.toml          ← copied from %APPDATA%\steampulse\
+├── config.toml          ← copied from %APPDATA%\steampulse\
+└── data/                ← created automatically by Docker
+    ├── steam_library.db
+    ├── steam_library.html
+    └── steam_news.html
 ```
 
 Then start the container:
@@ -439,8 +443,9 @@ Navigate to `http://localhost:8080` (or `http://<server-ip>:8080` from another
 device).
 
 The container regenerates the dashboards every `INTERVAL_HOURS` hours. Your
-SQLite database is stored in the `steampulse_data` Docker volume and survives
-container restarts and image updates.
+SQLite database and HTML pages are in the `./data/` folder next to
+`docker-compose.yml` — directly accessible from the NAS. This folder
+survives container restarts and image updates.
 
 ---
 
@@ -461,7 +466,7 @@ docker compose exec steampulse steampulse \
 docker compose pull && docker compose up -d
 
 # Wipe all data and start from scratch  ⚠ deletes the database
-docker compose down -v && docker compose up -d
+rm -rf ./data && docker compose up -d
 ```
 
 ---
