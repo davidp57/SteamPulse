@@ -32,6 +32,7 @@ build = [
 steampulse   = "steam_tracker.cli:cmd_run"
 steam-fetch  = "steam_tracker.cli:cmd_fetch"
 steam-render = "steam_tracker.cli:cmd_render"
+steam-setup  = "steam_tracker.wizard:run_wizard"
 
 [tool.ruff]
 line-length   = 100

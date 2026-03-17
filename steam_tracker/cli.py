@@ -1,24 +1,155 @@
-﻿"""CLI entry points: ``steam-fetch`` and ``steam-render``."""
+﻿"""CLI entry points: ``steam-fetch``, ``steam-render``, and ``steampulse``."""
 from __future__ import annotations
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 
-from .api import get_followed_games, get_owned_games, get_wishlist
+from .config import get_config_path, load_config, save_cli_credentials
 from .db import Database
 from .fetcher import SteamFetcher
 from .i18n import get_translator
+from .models import SYNTHETIC_APPID_BASE, OwnedGame
 from .renderer import write_html, write_news_html
+from .sources import get_all_sources
+
+# ---------------------------------------------------------------------------
+# Config / wizard helpers
+# ---------------------------------------------------------------------------
+
+# CLI settings flags that are eligible for auto-save to config
+_SETTINGS_FLAG_TO_DEST: dict[str, str] = {
+    "--db": "db",
+    "--workers": "workers",
+    "--news-age": "news_age",
+    "--lang": "lang",
+}
+
+
+def _has_steam_credentials_in_argv() -> bool:
+    """Return True if ``--key`` or ``--steamid`` are present anywhere in sys.argv."""
+    return any(
+        a == "--key"
+        or a.startswith("--key=")
+        or a == "--steamid"
+        or a.startswith("--steamid=")
+        for a in sys.argv[1:]
+    )
+
+
+def _get_explicit_cli_keys() -> set[str]:
+    """Return the argparse dest names for settings flags present in sys.argv."""
+    explicit: set[str] = set()
+    for arg in sys.argv[1:]:
+        flag = arg.split("=")[0]
+        if flag in _SETTINGS_FLAG_TO_DEST:
+            explicit.add(_SETTINGS_FLAG_TO_DEST[flag])
+    return explicit
+
+
+def _pre_parse_config() -> tuple[Path | None, bool]:
+    """Extract --config path and --setup flag from sys.argv without consuming args.
+
+    Also normalises the bare subcommand form ``steampulse setup`` to the flag
+    form ``steampulse --setup`` so that the main argparse parser does not choke
+    on an unrecognised positional argument.
+
+    Returns:
+        Tuple of (config_path, setup_requested).
+    """
+    # Accept 'steampulse setup' as an alias for 'steampulse --setup'
+    if len(sys.argv) > 1 and sys.argv[1] == "setup":
+        sys.argv[1] = "--setup"
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--config", default=None)
+    pre.add_argument("--setup", action="store_true")
+    pre_args, _ = pre.parse_known_args()
+    config_path = Path(pre_args.config) if pre_args.config else None
+    return config_path, pre_args.setup
+
+
+def _maybe_run_wizard(
+    config: dict[str, object], config_path: Path | None, setup_requested: bool
+) -> dict[str, object]:
+    """Run the setup wizard when needed, then reload the config.
+
+    Triggers the wizard when:
+    - ``--setup`` was explicitly requested, OR
+    - The config is empty AND no Steam credentials appear in sys.argv.
+
+    Args:
+        config: Previously loaded config dict (may be empty).
+        config_path: Explicit config file path (or None for platform default).
+        setup_requested: Whether ``--setup`` was explicitly passed.
+
+    Returns:
+        Updated config dict (reloaded after the wizard writes the file).
+    """
+    if setup_requested or (not config and not _has_steam_credentials_in_argv()):
+        from .wizard import run_wizard
+
+        run_wizard(config_path=config_path or get_config_path())
+        if setup_requested:
+            # Explicit --setup / 'setup': wizard only, do not proceed to fetch.
+            sys.exit(0)
+        return load_config(config_path)
+    return config
+
+
+def _require_steam_credentials(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    """Abort with a friendly error if --key or --steamid are missing.
+
+    Args:
+        args: Parsed argument namespace.
+        parser: Active ArgumentParser (used to emit the error).
+    """
+    if not getattr(args, "key", None):
+        parser.error(
+            "--key is required. Run 'steam-setup' to create a config file,"
+            " or pass --key directly."
+        )
+    if not getattr(args, "steamid", None):
+        parser.error(
+            "--steamid is required. Run 'steam-setup' to create a config file,"
+            " or pass --steamid directly."
+        )
+
+
+def _build_enrichment_queue(all_discovered: list[OwnedGame]) -> list[OwnedGame]:
+    """Return the deduplicated list of games eligible for Steam Store enrichment.
+
+    Only games with a real Steam AppID (< SYNTHETIC_APPID_BASE) are included.
+    Unresolved Epic games carry a hash-based synthetic appid and would always
+    receive a 404 from the Steam Store API, so they are excluded.
+    The first occurrence of each appid wins (sources yield owned games first).
+
+    Args:
+        all_discovered: All games returned by every enabled source.
+
+    Returns:
+        Deduplicated list ready to pass to :class:`SteamFetcher`.
+    """
+    games: list[OwnedGame] = []
+    seen: set[int] = set()
+    for game in all_discovered:
+        if game.appid not in seen and game.appid < SYNTHETIC_APPID_BASE:
+            games.append(game)
+            seen.add(game.appid)
+    return games
 
 
 def cmd_fetch() -> None:
     """Fetch Steam library data and persist it to a local SQLite database."""
+    config_path, setup_requested = _pre_parse_config()
+    config = load_config(config_path)
+    config = _maybe_run_wizard(config, config_path, setup_requested)
+
     parser = argparse.ArgumentParser(
         description="Fetch Steam library — store details & news into a local DB",
     )
-    parser.add_argument("--key", required=True, help="Steam API key")
-    parser.add_argument("--steamid", required=True, help="SteamID64")
     parser.add_argument("--db", default="steam_library.db", help="SQLite DB path")
     parser.add_argument("--max", type=int, default=None, help="Limit to N games (testing)")
     parser.add_argument("--workers", type=int, default=4, help="Thread pool size")
@@ -33,15 +164,17 @@ def cmd_fetch() -> None:
         help="Re-fetch news for games cached more than N hours ago (default: 24)",
     )
     parser.add_argument("--verbose", "-v", action="store_true")
-    parser.add_argument(
-        "--no-wishlist", action="store_true", help="Ne pas récupérer la wishlist"
-    )
-    parser.add_argument(
-        "--followed", action="store_true",
-        help="Récupérer les jeux suivis (non disponible via clé Web API)"
-    )
     parser.add_argument("--lang", default=None, help="Language code (e.g. en, fr); default: system")
+    parser.add_argument("--config", default=None, help="Path to config TOML file")
+    parser.add_argument(
+        "--setup", action="store_true", help="Run the interactive setup wizard and exit"
+    )
+    for source in get_all_sources():
+        source.add_arguments(parser)
+    parser.set_defaults(**config)
     args = parser.parse_args()
+
+    _require_steam_credentials(args, parser)
 
     t = get_translator(args.lang)
 
@@ -52,44 +185,20 @@ def cmd_fetch() -> None:
 
     db = Database(Path(args.db))
 
-    # ── Jeux possédés ─────────────────────────────────────────────────────────────────────
-    print(t("cli_fetching_library"))
-    owned = get_owned_games(args.key, args.steamid)
-    if args.max:
-        owned = owned[: args.max]
-    print(t("cli_owned_count", count=len(owned)))
-    for game in owned:
+    # ── Game discovery (all sources) ───────────────────────────────────────
+    all_discovered: list[OwnedGame] = []
+    for source in get_all_sources():
+        if source.is_enabled(args):
+            all_discovered.extend(source.discover_games(args, db=db))
+
+    # Upsert everything to DB (DB enforces source priority: owned = epic > wishlist > followed)
+    for game in all_discovered:
         db.upsert_game(game)
-    games = list(owned)
-    seen: set[int] = {g.appid for g in games}
 
-    # ── Wishlist ─────────────────────────────────────────────────────────────────────
-    if not args.no_wishlist:
-        print(t("cli_fetching_wishlist"))
-        try:
-            wishlist = get_wishlist(args.key, args.steamid)
-            new_wl = [g for g in wishlist if g.appid not in seen]
-            for g in wishlist:
-                db.upsert_game(g)
-            games += new_wl
-            seen.update(g.appid for g in new_wl)
-            print(t("cli_wishlist_count", total=len(wishlist), new=len(new_wl)))
-        except Exception as exc:  # noqa: BLE001
-            print(t("cli_wishlist_error", error=exc))
+    games = _build_enrichment_queue(all_discovered)
 
-    # ── Jeux suivis ────────────────────────────────────────────────────────────────────
-    if args.followed:
-        print(t("cli_fetching_followed"))
-        try:
-            followed = get_followed_games(args.key, args.steamid)
-            new_fol = [g for g in followed if g.appid not in seen]
-            for g in followed:
-                db.upsert_game(g)
-            games += new_fol
-            seen.update(g.appid for g in new_fol)
-            print(t("cli_followed_count", total=len(followed), new=len(new_fol)))
-        except Exception as exc:  # noqa: BLE001
-            print(t("cli_followed_error", error=exc))
+    if args.max:
+        games = games[: args.max]
 
     skip = set() if args.refresh else db.get_cached_appids()
     stale_news: set[int] | None = (
@@ -129,20 +238,37 @@ def cmd_fetch() -> None:
     db.mark_fetched(news_fetched, news=True)
 
     print(t("cli_fetch_done", count=len(results), db=args.db))
+    save_cli_credentials(
+        vars(args), existing=config, path=config_path, _explicit_keys=_get_explicit_cli_keys()
+    )
 
 
 def cmd_render() -> None:
     """Generate the static HTML page from the local database."""
+    config_path, _ = _pre_parse_config()
+    config = load_config(config_path)
+
     parser = argparse.ArgumentParser(
         description="Render Steam library HTML from a local DB",
     )
     parser.add_argument("--db", default="steam_library.db", help="SQLite DB path")
     parser.add_argument(
-        "--steamid", required=True, help="SteamID64 displayed in the page header"
+        "--steamid",
+        required=False,
+        default=None,
+        help="SteamID64 displayed in the page header (or set via config file)",
     )
     parser.add_argument("--output", default="steam_library.html", help="HTML output path")
     parser.add_argument("--lang", default=None, help="Language code (e.g. en, fr); default: system")
+    parser.add_argument("--config", default=None, help="Path to config TOML file")
+    parser.set_defaults(**config)
     args = parser.parse_args()
+
+    if not getattr(args, "steamid", None):
+        parser.error(
+            "--steamid is required. Run 'steam-setup' to create a config file,"
+            " or pass --steamid directly."
+        )
 
     t = get_translator(args.lang)
     db = Database(Path(args.db))
@@ -157,11 +283,13 @@ def cmd_render() -> None:
 
 def cmd_run() -> None:
     """Fetch Steam library data then immediately render the HTML dashboard."""
+    config_path, setup_requested = _pre_parse_config()
+    config = load_config(config_path)
+    config = _maybe_run_wizard(config, config_path, setup_requested)
+
     parser = argparse.ArgumentParser(
         description="Fetch Steam library data and render the HTML dashboard in one step",
     )
-    parser.add_argument("--key", required=True, help="Steam API key")
-    parser.add_argument("--steamid", required=True, help="SteamID64")
     parser.add_argument("--db", default="steam_library.db", help="SQLite DB path")
     parser.add_argument("--output", default="steam_library.html", help="HTML output path")
     parser.add_argument("--max", type=int, default=None, help="Limit to N games (testing)")
@@ -177,15 +305,17 @@ def cmd_run() -> None:
         help="Re-fetch news for games cached more than N hours ago (default: 24)",
     )
     parser.add_argument("--verbose", "-v", action="store_true")
-    parser.add_argument(
-        "--no-wishlist", action="store_true", help="Ne pas récupérer la wishlist"
-    )
-    parser.add_argument(
-        "--followed", action="store_true",
-        help="Récupérer les jeux suivis (non disponible via clé Web API)",
-    )
     parser.add_argument("--lang", default=None, help="Language code (e.g. en, fr); default: system")
+    parser.add_argument("--config", default=None, help="Path to config TOML file")
+    parser.add_argument(
+        "--setup", action="store_true", help="Run the interactive setup wizard and exit"
+    )
+    for source in get_all_sources():
+        source.add_arguments(parser)
+    parser.set_defaults(**config)
     args = parser.parse_args()
+
+    _require_steam_credentials(args, parser)
 
     t = get_translator(args.lang)
 
@@ -196,42 +326,20 @@ def cmd_run() -> None:
 
     db = Database(Path(args.db))
 
-    # ── Fetch phase ────────────────────────────────────────────────────────────────────
-    print(t("cli_fetching_library"))
-    owned = get_owned_games(args.key, args.steamid)
-    if args.max:
-        owned = owned[: args.max]
-    print(t("cli_owned_count", count=len(owned)))
-    for game in owned:
+    # ── Game discovery (all sources) ───────────────────────────────────────
+    all_discovered: list[OwnedGame] = []
+    for source in get_all_sources():
+        if source.is_enabled(args):
+            all_discovered.extend(source.discover_games(args, db=db))
+
+    # Upsert everything to DB (DB enforces source priority: owned = epic > wishlist > followed)
+    for game in all_discovered:
         db.upsert_game(game)
-    games = list(owned)
-    seen: set[int] = {g.appid for g in games}
 
-    if not args.no_wishlist:
-        print(t("cli_fetching_wishlist"))
-        try:
-            wishlist = get_wishlist(args.key, args.steamid)
-            new_wl = [g for g in wishlist if g.appid not in seen]
-            for g in wishlist:
-                db.upsert_game(g)
-            games += new_wl
-            seen.update(g.appid for g in new_wl)
-            print(t("cli_wishlist_count", total=len(wishlist), new=len(new_wl)))
-        except Exception as exc:  # noqa: BLE001
-            print(t("cli_wishlist_error", error=exc))
+    games = _build_enrichment_queue(all_discovered)
 
-    if args.followed:
-        print(t("cli_fetching_followed"))
-        try:
-            followed = get_followed_games(args.key, args.steamid)
-            new_fol = [g for g in followed if g.appid not in seen]
-            for g in followed:
-                db.upsert_game(g)
-            games += new_fol
-            seen.update(g.appid for g in new_fol)
-            print(t("cli_followed_count", total=len(followed), new=len(new_fol)))
-        except Exception as exc:  # noqa: BLE001
-            print(t("cli_followed_error", error=exc))
+    if args.max:
+        games = games[: args.max]
 
     skip = set() if args.refresh else db.get_cached_appids()
     stale_news: set[int] | None = (
@@ -281,3 +389,6 @@ def cmd_run() -> None:
     write_news_html(records, args.steamid, news_out, library_href=out.name, lang=args.lang)
     print(t("cli_render_library", count=len(records), path=out.resolve()))
     print(t("cli_render_news", count=sum(len(r.news) for r in records), path=news_out.resolve()))
+    save_cli_credentials(
+        vars(args), existing=config, path=config_path, _explicit_keys=_get_explicit_cli_keys()
+    )

@@ -355,3 +355,121 @@ def test_write_news_html_creates_file(sample_record: GameRecord, tmp_path: Path)
     assert out.exists()
     assert "Half-Life 2" in out.read_text(encoding="utf-8")
 
+
+# ── Epic source display ───────────────────────────────────────────────────────
+
+def _epic_record() -> GameRecord:
+    """An Epic-only game with a hash-based appid (no Steam enrichment)."""
+    return GameRecord(
+        game=OwnedGame(
+            appid=2_047_593_821,
+            name="Fortnite",
+            source="epic",
+            external_id="epic:abc123CatalogId",
+        ),
+        status=GameStatus(label="—", badge="unknown", release_date="—"),
+    )
+
+
+def test_make_card_epic_has_data_store_epic() -> None:
+    card = make_card(_epic_record())
+    assert 'data-store="epic"' in card
+    assert 'data-lib-status="owned"' in card
+
+
+def test_make_card_epic_hint_is_epic_not_steam() -> None:
+    card = make_card(_epic_record())
+    assert "🎮 Epic" in card
+    assert "↗ Steam" not in card
+
+
+def test_make_card_epic_playtime_shows_epic_label() -> None:
+    card = make_card(_epic_record())
+    # Should show the Epic source label, not the "🕹 Xh" playtime format
+    assert "🎮 Epic" in card
+    assert "🕹" not in card
+
+
+def test_make_card_steam_owned_hint_is_steam() -> None:
+    record = GameRecord(
+        game=OwnedGame(appid=420, name="HL2", playtime_forever=120),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+    )
+    card = make_card(record)
+    assert "↗ Steam" in card
+
+
+def test_make_card_steam_owned_has_data_store_steam() -> None:
+    record = GameRecord(
+        game=OwnedGame(appid=420, name="HL2", playtime_forever=120, source="owned"),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+    )
+    card = make_card(record)
+    assert 'data-store="steam"' in card
+    assert 'data-lib-status="owned"' in card
+
+
+def test_make_card_wishlist_has_data_lib_status_wishlist() -> None:
+    record = GameRecord(
+        game=OwnedGame(appid=730, name="CS2", source="wishlist"),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+    )
+    card = make_card(record)
+    assert 'data-store="steam"' in card
+    assert 'data-lib-status="wishlist"' in card
+
+
+def test_make_card_followed_has_data_lib_status_followed() -> None:
+    record = GameRecord(
+        game=OwnedGame(appid=570, name="Dota 2", source="followed"),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+    )
+    card = make_card(record)
+    assert 'data-store="steam"' in card
+    assert 'data-lib-status="followed"' in card
+
+
+def test_make_news_row_has_data_store_and_lib_status() -> None:
+    news_item = NewsItem(
+        gid="1",
+        title="Big patch",
+        date=datetime(2024, 5, 1, tzinfo=UTC),
+        url="https://example.com/news",
+        author="Dev",
+        feedname="f",
+        feedlabel="F",
+        tags=["patchnotes"],
+    )
+    record = GameRecord(
+        game=OwnedGame(appid=420, name="HL2", source="owned"),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+    )
+    row = make_news_row(record, news_item)
+    assert 'data-store="steam"' in row
+    assert 'data-lib-status="owned"' in row
+
+
+def test_generate_html_has_steam_store_filter_button() -> None:
+    page = generate_html([_epic_record()], "0")
+    assert 'class="store-btn active" data-store="steam"' in page
+
+
+def test_generate_news_html_has_steam_store_filter_button() -> None:
+    page = generate_news_html([_epic_record()], "0")
+    assert 'class="store-btn active" data-store="steam"' in page
+
+
+def test_generate_html_has_epic_store_filter_button() -> None:
+    page = generate_html([_epic_record()], "0")
+    assert 'class="store-btn active" data-store="epic"' in page
+
+
+def test_generate_html_has_followed_collection_filter_button() -> None:
+    page = generate_html([_epic_record()], "0")
+    assert 'class="filter-btn" data-lib-status="followed"' in page
+
+
+def test_generate_news_html_has_epic_store_filter_button() -> None:
+    page = generate_news_html([_epic_record()], "0")
+    assert 'class="store-btn active" data-store="epic"' in page
+

@@ -5,6 +5,11 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
+# AppIDs >= this value are synthetic (hash-based) placeholders assigned to
+# Epic games that could not be resolved to a real Steam AppID.  Real Steam
+# AppIDs never exceed a few hundred million, so 2 billion is a safe sentinel.
+SYNTHETIC_APPID_BASE: int = 2_000_000_000
+
 
 class OwnedGame(BaseModel):
     appid: int
@@ -14,7 +19,8 @@ class OwnedGame(BaseModel):
     rtime_last_played: int = 0        # unix timestamp of last play session
     img_icon_url: str = ""
     img_logo_url: str = ""
-    source: str = "owned"             # "owned" | "wishlist" | "followed"
+    source: str = "owned"             # "owned" | "wishlist" | "followed" | "epic"
+    external_id: str = ""             # e.g. "epic:<catalogItemId>" for non-Steam games
 
 
 class AppDetails(BaseModel):

@@ -11,6 +11,80 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+### Added
+
+- **Docker deployment** — single self-contained image bundling nginx (serves generated HTML pages) and a configurable scheduler loop (default interval: 4 hours). Infrastructure files:
+  - `docker/Dockerfile` — Python 3.13-slim + nginx + supervisord
+  - `docker/nginx.conf` — serves `/data` on port 80; blocks direct access to `.db` files
+  - `docker/supervisord.conf` — manages nginx + scheduler as two supervised processes
+  - `docker/entrypoint.sh` — generates `config.toml` from env vars (or copies a mounted one), creates a loading placeholder page, then starts supervisord
+  - `docker/scheduler.sh` — fetch loop using `--config /data/config.toml`; no secrets in process args
+  - `docker-compose.yml` — ready-to-use Compose file with commented config-mount option; suitable for Synology NAS and any Docker engine
+  - `.env.example` — template covering all supported environment variables
+  - `.dockerignore` — keeps the build context lean
+  - `.github/workflows/docker.yml` — publishes image to GHCR on every `v*` tag and `main` push
+- **Two Docker configuration approaches**:
+  - **Option A (env vars)**: set `STEAM_API_KEY` + `STEAM_ID` in `.env`; `entrypoint.sh` generates `config.toml` at startup — simplest path for Steam-only setups.
+  - **Option B (mounted config)**: run `steam-setup` once locally (handles Epic OAuth2 browser flow, Twitch, all settings), copy the resulting `config.toml` next to `docker-compose.yml`, and uncomment the volume mount line — recommended when Epic or Twitch credentials are needed.
+
+### Changed
+
+- **Filter UI — store vs. collection** — The single mixed "Source" filter is replaced by two distinct filter groups on both the library and news pages:
+  - **Store** (multi-select toggle, OR logic): `🎮 Steam` / `⚡ Epic` — both active by default; the last active store cannot be deactivated.
+  - **Collection** (single-select): `All` / `Owned` / `🎁 Wishlist` / `👁 Followed`.
+  - The two groups are combined with AND: a game is shown only if its store is active **and** its collection status matches.
+  - `data-source` HTML attribute on cards and news rows is replaced by `data-store` + `data-lib-status` (derived from `OwnedGame.source` in the renderer; no model change).
+  - URL hash keys change from `source=…` to `stores=…` (comma-separated, omitted when all active) + `lib=…`.
+
+### Added
+
+- **TOML config file support** (`steam_tracker/config.py`) — Automatically loads `~/.config/steampulse/config.toml` (Linux/macOS) or `%APPDATA%\steampulse\config.toml` (Windows). All credentials and settings can be stored there; CLI flags still take precedence. Prints `✔ Config loaded from …` / `✔ Config written to …` messages. New CLI flag `--config <path>` to use a custom file.
+- **Interactive setup wizard** (`steam_tracker/wizard.py`, `steam-setup`) — Guides the user step by step through Steam credentials, optional Epic Games OAuth2 flow (including automatic browser launch, auth-code exchange, and automatic refresh token storage), optional Twitch/IGDB credentials, and optional settings. Writes the config file on confirmation. Available as `steam-setup` command or via `steampulse --setup` / `steam-fetch --setup`.
+- **Auto-wizard on first run** — If no config file exists and no `--key`/`--steamid` flags are present, the wizard starts automatically instead of failing with an error.
+- **CLI save-back** — Credentials passed directly on the command line are automatically persisted to the config file after a successful run, so they need not be repeated.
+- **`epic_auth_with_refresh()`** in `steam_tracker/epic_api.py` — Renews an Epic session from a saved refresh token (valid 30 days, automatically renewed on each use). Used by the wizard and `EpicSource` for all subsequent runs after first login.
+- **18 tests** in `tests/test_wizard.py` covering Steam-only flow, cancellation, custom settings, Twitch credentials, Epic refresh token flow, Epic auth failure resilience, browser launch, URL display, and pre-fill from existing config.
+- **26 tests** in `tests/test_config.py` covering `get_config_path`, `load_config`, `write_config`, and `save_cli_credentials` (including credential-vs-settings distinction and `_explicit_keys` logic).
+
+### Changed
+
+- **`--key` and `--steamid` are no longer required flags** — They are now optional (`required=False`) in `SteamSource.add_arguments()`. Missing values are caught post-parse with a helpful error message directing the user to `steam-setup`.
+- **`cmd_render` `--steamid` is no longer required** — Same pattern: missing value is caught post-parse.
+- **`cmd_fetch`, `cmd_render`, `cmd_run`** — All now pre-parse `--config` and `--setup`, load the config file, apply it via `parser.set_defaults()`, and save changed credentials back after a successful run.
+
+- **`GameSource` plugin architecture** (`steam_tracker/sources/`) — `GameSource` runtime-checkable Protocol; `get_all_sources()` registry; `SteamSource` plugin (owned library, wishlist, followed games) extracted from `cli.py`. New source plugins can be added without touching the CLI.
+- **Epic Games Store source plugin** (`steam_tracker/sources/epic.py`) — `EpicSource` discovers games from an Epic Games account via OAuth2 authorization code (first login) or a persisted refresh token (subsequent runs).
+- **Steam AppID resolver system** (`steam_tracker/resolver.py`) — Chain-of-responsibility pattern: `SteamStoreResolver` (fuzzy name matching via Steam Store Search API) and `IGDBResolver` (IGDB + Twitch OAuth). First successful result wins.
+- **`SYNTHETIC_APPID_BASE`** constant in `steam_tracker/models.py` — Sentinel value (`2_000_000_000`) used to tell real Steam AppIDs from hash-based placeholders assigned to unresolved Epic games.
+- **`appid_mappings` table** in the database — Caches resolved external→Steam AppID mappings. Manual entries (`manual=True`) are protected from automatic overwrite.
+- **`external_id` field** on `OwnedGame` — Identifies games from non-Steam sources (e.g. `"epic:<catalogItemId>"`).
+- **Epic Games API module** (`steam_tracker/epic_api.py`) — OAuth2 token exchange (authorization code + device auth flows) and paginated library retrieval via Epic’s undocumented API.
+- **Epic display in HTML dashboards** — Source filter buttons “👁 Followed” and “🎮 Epic” on both library and news pages. Epic cards show a “🎮 Epic” store hint. Playtime label adapts to source (Wishlist / Followed / Epic).
+- **New CLI flags**: `--epic-auth-code`, `--epic-refresh-token`, `--epic-account-id`, `--twitch-client-id`, `--twitch-client-secret` (replaces `--epic-device-id` / `--epic-device-secret`: Epic's `deviceAuths` endpoint is restricted; refresh tokens are more reliable and require no server-side permission).
+- **UX: per-game progress during Epic AppID resolution** — Inline `[N/total] Game Title` indicator updated in place via `\r`, followed by a resolved/unresolved summary.
+- **Epic i18n keys** (`cli_epic_*`) — Authentication, library count, resolution progress and summary in English and French.
+- **33 tests** in `tests/test_sources.py` (18 SteamSource + 15 EpicSource).
+- **17 tests** in `tests/test_epic.py` covering EpicSource protocol conformance, CLI arguments, auth flows, library discovery, and resolver integration.
+- **14 tests** in `tests/test_resolver.py` covering SteamStoreResolver, IGDBResolver, fuzzy matching, and resolver chain.
+- **9 tests** in `tests/test_cli.py` covering `_build_enrichment_queue` including boundary values and deduplication.
+- **9 new tests** in `tests/test_db.py` covering `appid_mappings` CRUD, manual mapping protection, `external_id` persistence, and Epic source priority.
+- **Bilingual documentation** — `docs/en/user-guide.md` and `docs/fr/user-guide.md` updated with Epic prerequisites section, all new CLI flags, source filter docs, and FAQ entry.
+
+### Changed
+
+- **`cli.py`** — Enrichment filter extracted into `_build_enrichment_queue()` (pure, testable helper). Games with a synthetic appid (`≥ SYNTHETIC_APPID_BASE`) are excluded from the Steam Store enrichment pass; resolved Epic games (real Steam AppID) are correctly included.
+- **`db.py`** — Source priority treats `"epic"` at the same level as `"owned"`. `upsert_game` persists the new `external_id` column.
+- **`sources/__init__.py`** — `get_all_sources()` returns `[SteamSource(), EpicSource()]`.
+- **`README.md`** — Added “Multi-store” feature line (EN + FR); test count updated to 168.
+
+### Fixed
+
+- Resolved Epic games (with a real Steam AppID) are now correctly enriched via the Steam Store API; previously the `external_id` presence check incorrectly excluded them.
+- Epic game display names now use `sandboxName` (human-readable title, e.g. “Gone Home”) instead of the internal `appName` codename (e.g. “Flier”).
+- Epic OAuth login URL in documentation had a truncated `clientId` (missing trailing `a`).
+
+---
+
 ## [1.1.0] — 2026-03-15
 
 ### Added

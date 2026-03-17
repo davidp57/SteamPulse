@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS games (
     img_icon_url     TEXT    NOT NULL DEFAULT '',
     img_logo_url     TEXT    NOT NULL DEFAULT '',
     last_seen_at     TEXT    NOT NULL,
-    source           TEXT    NOT NULL DEFAULT 'owned'
+    source           TEXT    NOT NULL DEFAULT 'owned',
+    external_id      TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS app_details (
@@ -68,6 +69,16 @@ CREATE TABLE IF NOT EXISTS news (
     fetched_at TEXT    NOT NULL,
     UNIQUE (appid, url)
 );
+
+CREATE TABLE IF NOT EXISTS appid_mappings (
+    external_source TEXT NOT NULL,
+    external_id     TEXT NOT NULL,
+    external_name   TEXT NOT NULL,
+    steam_appid     INTEGER,
+    resolved_at     TEXT NOT NULL,
+    manual          INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (external_source, external_id)
+);
 """
 
 # Columns added after initial release — added via ALTER TABLE for existing DBs.
@@ -102,6 +113,7 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("games", "source", "TEXT NOT NULL DEFAULT 'owned'"),
     ("games", "details_fetched_at", "TEXT"),
     ("games", "news_fetched_at", "TEXT"),
+    ("games", "external_id", "TEXT NOT NULL DEFAULT ''"),
 ]
 
 
@@ -167,8 +179,9 @@ class Database:
                 """
                 INSERT INTO games
                     (appid, name, playtime_forever, playtime_2weeks,
-                     rtime_last_played, img_icon_url, img_logo_url, last_seen_at, source)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     rtime_last_played, img_icon_url, img_logo_url, last_seen_at, source,
+                     external_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(appid) DO UPDATE SET
                     name = CASE WHEN excluded.name != ''
                         THEN excluded.name ELSE name END,
@@ -185,10 +198,14 @@ class Database:
                     source = CASE
                         WHEN source = 'owned'          THEN 'owned'
                         WHEN excluded.source = 'owned' THEN 'owned'
+                        WHEN source = 'epic'           THEN 'epic'
+                        WHEN excluded.source = 'epic'  THEN 'epic'
                         WHEN source = 'wishlist'          THEN 'wishlist'
                         WHEN excluded.source = 'wishlist' THEN 'wishlist'
                         ELSE excluded.source
                     END,
+                    external_id = CASE WHEN excluded.external_id != ''
+                        THEN excluded.external_id ELSE external_id END,
                     last_seen_at = excluded.last_seen_at
                 """,
                 (
@@ -201,6 +218,7 @@ class Database:
                     game.img_logo_url,
                     _now(),
                     game.source,
+                    game.external_id,
                 ),
             )
 
@@ -381,7 +399,7 @@ class Database:
         with self._connect() as con:
             games_rows = con.execute(
                 "SELECT appid, name, playtime_forever, playtime_2weeks, "
-                "rtime_last_played, img_icon_url, img_logo_url, source "
+                "rtime_last_played, img_icon_url, img_logo_url, source, external_id "
                 "FROM games ORDER BY name COLLATE NOCASE"
             ).fetchall()
 
@@ -397,6 +415,7 @@ class Database:
                     img_icon_url=str(row[5]),
                     img_logo_url=str(row[6]),
                     source=str(row[7]),
+                    external_id=str(row[8]),
                 )
 
                 det = con.execute(
@@ -467,3 +486,53 @@ class Database:
                 )
 
         return records
+
+    def get_appid_mapping(self, source: str, external_id: str) -> int | None:
+        """Return the cached Steam AppID for an external game, or None."""
+        with self._connect() as con:
+            row = con.execute(
+                "SELECT steam_appid FROM appid_mappings "
+                "WHERE external_source = ? AND external_id = ?",
+                (source, external_id),
+            ).fetchone()
+        if row is None or row[0] is None:
+            return None
+        return int(row[0])
+
+    def upsert_appid_mapping(
+        self,
+        source: str,
+        external_id: str,
+        name: str,
+        steam_appid: int | None,
+        *,
+        manual: bool = False,
+    ) -> None:
+        """Insert or update an AppID mapping.
+
+        Manual mappings (``manual=True``) are never overwritten by automatic
+        resolution.
+        """
+        with self._connect() as con:
+            con.execute(
+                """
+                INSERT INTO appid_mappings
+                    (external_source, external_id, external_name,
+                     steam_appid, resolved_at, manual)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(external_source, external_id) DO UPDATE SET
+                    external_name = excluded.external_name,
+                    steam_appid   = CASE
+                        WHEN appid_mappings.manual = 1 AND excluded.manual = 0
+                            THEN appid_mappings.steam_appid
+                        ELSE excluded.steam_appid
+                    END,
+                    resolved_at   = excluded.resolved_at,
+                    manual        = CASE
+                        WHEN appid_mappings.manual = 1 AND excluded.manual = 0
+                            THEN appid_mappings.manual
+                        ELSE excluded.manual
+                    END
+                """,
+                (source, external_id, name, steam_appid, _now(), int(manual)),
+            )

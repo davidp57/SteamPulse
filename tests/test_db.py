@@ -169,3 +169,88 @@ def test_games_sorted_case_insensitively(db: Database) -> None:
     names = [r.game.name for r in db.get_all_game_records()]
     assert names == sorted(names, key=str.lower)
 
+
+# ─── appid_mappings ──────────────────────────────────────────────────
+
+
+def test_upsert_appid_mapping_insert(db: Database) -> None:
+    db.upsert_appid_mapping("epic", "abc123", "Hades", 1145360)
+    assert db.get_appid_mapping("epic", "abc123") == 1145360
+
+
+def test_upsert_appid_mapping_update(db: Database) -> None:
+    db.upsert_appid_mapping("epic", "abc123", "Hades", None)
+    assert db.get_appid_mapping("epic", "abc123") is None
+    db.upsert_appid_mapping("epic", "abc123", "Hades", 1145360)
+    assert db.get_appid_mapping("epic", "abc123") == 1145360
+
+
+def test_get_appid_mapping_not_found(db: Database) -> None:
+    assert db.get_appid_mapping("epic", "nonexistent") is None
+
+
+def test_manual_mapping_preserved(db: Database) -> None:
+    """A manual mapping must not be overwritten by automatic resolution."""
+    db.upsert_appid_mapping("epic", "abc123", "Hades", 999, manual=True)
+    # Auto-resolve tries to overwrite with a different appid
+    db.upsert_appid_mapping("epic", "abc123", "Hades", 1145360, manual=False)
+    assert db.get_appid_mapping("epic", "abc123") == 999
+
+
+def test_manual_mapping_overwritten_by_manual(db: Database) -> None:
+    """A manual mapping CAN be overwritten by another manual mapping."""
+    db.upsert_appid_mapping("epic", "abc123", "Hades", 999, manual=True)
+    db.upsert_appid_mapping("epic", "abc123", "Hades", 1145360, manual=True)
+    assert db.get_appid_mapping("epic", "abc123") == 1145360
+
+
+# ─── external_id ─────────────────────────────────────────────────────
+
+
+def test_owned_game_external_id_default() -> None:
+    game = OwnedGame(appid=1, name="Test")
+    assert game.external_id == ""
+
+
+def test_upsert_game_stores_external_id(db: Database) -> None:
+    game = OwnedGame(appid=1, name="Hades", source="epic", external_id="epic:abc123")
+    db.upsert_game(game)
+    rec = db.get_all_game_records()[0]
+    assert rec.game.external_id == "epic:abc123"
+    assert rec.game.source == "epic"
+
+
+def test_upsert_game_external_id_preserved_on_update(db: Database) -> None:
+    """An update with empty external_id must NOT erase an existing one."""
+    game = OwnedGame(appid=1, name="Hades", source="epic", external_id="epic:abc123")
+    db.upsert_game(game)
+    update = OwnedGame(appid=1, name="Hades", source="owned")
+    db.upsert_game(update)
+    rec = db.get_all_game_records()[0]
+    assert rec.game.external_id == "epic:abc123"
+
+
+def test_upsert_game_epic_source_priority(db: Database) -> None:
+    """Epic source has same priority as owned — whichever is inserted first wins."""
+    db.upsert_game(OwnedGame(appid=1, name="Hades", source="epic"))
+    db.upsert_game(OwnedGame(appid=1, name="Hades", source="wishlist"))
+    assert db.get_all_game_records()[0].game.source == "epic"
+
+    db.upsert_game(OwnedGame(appid=2, name="Celeste", source="wishlist"))
+    db.upsert_game(OwnedGame(appid=2, name="Celeste", source="epic"))
+    assert db.get_all_game_records()[0].game.source == "epic"
+
+
+def test_upsert_game_owned_beats_epic(db: Database) -> None:
+    """owned always wins over epic, regardless of insertion order."""
+    # epic first → owned overwrites
+    db.upsert_game(OwnedGame(appid=10, name="Hades", source="epic"))
+    db.upsert_game(OwnedGame(appid=10, name="Hades", source="owned"))
+    assert db.get_all_game_records()[0].game.source == "owned"
+
+    # owned first → stays owned
+    db.upsert_game(OwnedGame(appid=11, name="Celeste", source="owned"))
+    db.upsert_game(OwnedGame(appid=11, name="Celeste", source="epic"))
+    records = {r.game.appid: r.game.source for r in db.get_all_game_records()}
+    assert records[11] == "owned"
+

@@ -11,9 +11,10 @@
 5. [Référence des modules](#5-référence-des-modules)
 6. [Lancer les tests](#6-lancer-les-tests)
 7. [Lint et vérification de types](#7-lint-et-vérification-de-types)
-8. [Ajouter une traduction](#8-ajouter-une-traduction)
-9. [Ajouter une source de données](#9-ajouter-une-source-de-données)
-10. [Contribuer](#10-contribuer)
+8. [CI/CD](#8-cicd)
+9. [Ajouter une traduction](#9-ajouter-une-traduction)
+10. [Ajouter un plugin source](#10-ajouter-un-plugin-source)
+11. [Contribuer](#11-contribuer)
 
 ---
 
@@ -23,27 +24,36 @@
 steam_tracker/
 ├── __init__.py
 ├── models.py      # Modèles Pydantic v2
-├── api.py         # Wrappers HTTP typés vers l'API Steam
+├── api.py         # Wrappers HTTP typés vers l'API Steam (enrichissement uniquement : details + news)
+├── epic_api.py    # Wrappers OAuth2 + API bibliothèque Epic Games
+├── resolver.py    # Chaîne de résolution Steam AppID (IGDB, Steam Store Search)
 ├── db.py          # Couche de persistance SQLite
 ├── fetcher.py     # Fetcher multi-threadé + RateLimiter
 ├── renderer.py    # Générateur HTML statique
-├── cli.py         # Points d'entrée steam-fetch / steam-render
+├── cli.py         # Points d'entrée steam-fetch / steam-render / steampulse
+├── sources/
+│   ├── __init__.py  # Protocole GameSource + registre get_all_sources()
+│   ├── steam.py     # SteamSource : bibliothèque possédée, wishlist, jeux suivis
+│   └── epic.py      # EpicSource : bibliothèque Epic Games Store
 └── i18n/
     ├── __init__.py  # Translator, get_translator(), detect_lang()
     ├── en.py        # Chaînes anglaises
     └── fr.py        # Chaînes françaises
-├── tests/
-│   ├── conftest.py
-│   ├── test_api.py
-│   ├── test_db.py
-│   ├── test_fetcher.py
-│   └── test_renderer.py
-├── docs/
-│   ├── en/            # Documentation anglaise
-│   └── fr/            # Documentation française
-├── pyproject.toml
-├── README.md
-└── CHANGELOG.md
+tests/
+├── conftest.py
+├── test_api.py
+├── test_db.py
+├── test_epic.py
+├── test_fetcher.py
+├── test_renderer.py
+├── test_resolver.py
+└── test_sources.py
+docs/
+├── en/            # Documentation anglaise
+└── fr/            # Documentation française
+pyproject.toml
+README.md
+CHANGELOG.md
 ```
 
 ---
@@ -59,7 +69,7 @@ Wishlist API ───┘
 
 **Flux de données :**
 
-1. `cli.py:cmd_fetch` appelle `api.py` pour récupérer les jeux possédés, la wishlist et les jeux suivis
+1. `cli.py:cmd_fetch` itère sur `get_all_sources()` et appelle `discover_games(args)` sur chaque plugin actif pour récupérer la liste des jeux
 2. Chaque `OwnedGame` est upsertée dans la table `games` immédiatement
 3. `fetcher.py:SteamFetcher.fetch_all()` dispatche des requêtes concurrentes pour les app details et les news
    - Les jeux dont les app details sont en cache sont ignorés (`skip_appids`)
@@ -86,7 +96,8 @@ Représente un jeu provenant de n'importe quelle source.
 | `rtime_last_played` | `int` | Timestamp Unix de la dernière session |
 | `img_icon_url` | `str` | Fragment d'URL de l'icône |
 | `img_logo_url` | `str` | Fragment d'URL du logo |
-| `source` | `str` | `"owned"` \| `"wishlist"` \| `"followed"` |
+| `source` | `str` | `"owned"` \| `"wishlist"` \| `"followed"` \| `"epic"` |
+| `external_id` | `str` | Identifiant externe (ex. `"epic:<catalogItemId>"`) — vide pour les jeux Steam natifs |
 
 ### `AppDetails`
 
@@ -160,7 +171,7 @@ class GameStatus:
 
 ## 4. Schéma de la base de données
 
-Trois tables ; clés étrangères activées ; mode journal WAL.
+Trois tables principales plus un cache de mapping AppID ; clés étrangères activées ; mode journal WAL.
 
 ```sql
 -- Une ligne par appid suivi
@@ -173,7 +184,8 @@ CREATE TABLE games (
     img_icon_url      TEXT    NOT NULL DEFAULT '',
     img_logo_url      TEXT    NOT NULL DEFAULT '',
     last_seen_at      TEXT    NOT NULL,
-    source            TEXT    NOT NULL DEFAULT 'owned'
+    source            TEXT    NOT NULL DEFAULT 'owned',
+    external_id       TEXT    NOT NULL DEFAULT ''
 );
 
 -- Une ligne par appid (métadonnées Store)
@@ -199,6 +211,17 @@ CREATE TABLE news (
     fetched_at TEXT    NOT NULL,
     UNIQUE (appid, url)
 );
+
+-- Correspondance IDs de jeux externes vers Steam AppIDs
+CREATE TABLE appid_mappings (
+    external_source TEXT NOT NULL,   -- "epic", "gog", ...
+    external_id     TEXT NOT NULL,   -- ID catalogue spécifique au store
+    external_name   TEXT NOT NULL,   -- nom du jeu sur le store externe
+    steam_appid     INTEGER,         -- NULL si non résolu
+    resolved_at     TEXT NOT NULL,
+    manual          INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (external_source, external_id)
+);
 ```
 
 ### Migrations additives
@@ -207,7 +230,7 @@ Les nouvelles colonnes sont ajoutées via `_MIGRATIONS` dans `db.py` — une lis
 
 ### Priorité de source dans les upserts
 
-Quand un même jeu apparaît dans plusieurs sources, `upsert_game` utilise une expression SQL `CASE WHEN` pour appliquer la priorité : **owned > wishlist > followed**. Le temps de jeu et les timestamps ne sont mis à jour que pour les jeux `source = 'owned'`.
+Quand un même jeu apparaît dans plusieurs sources, `upsert_game` utilise une expression SQL `CASE WHEN` pour appliquer la priorité : **owned = epic > wishlist > followed**. Le temps de jeu et les timestamps ne sont mis à jour que pour les jeux `source = 'owned'`.
 
 ---
 
@@ -235,6 +258,8 @@ Les erreurs HTTP 403/404 sur les endpoints news/details sont loguées en DEBUG (
 | `get_cached_appids()` | Ensemble des appids déjà dans `app_details` |
 | `get_stale_news_appids(max_age_s)` | Ensemble des appids sans news ou dont les news ont plus de `max_age_s` secondes |
 | `get_all_game_records()` | Liste dénormalisée complète pour le renderer |
+| `get_appid_mapping(source, external_id)` | AppID Steam en cache pour un jeu externe, ou `None` |
+| `upsert_appid_mapping(source, external_id, name, steam_appid, manual)` | Insère/met à jour un mapping AppID ; les mappings manuels sont protégés contre l'écrasement automatique |
 
 ### `fetcher.py — SteamFetcher`
 
@@ -257,6 +282,48 @@ SteamFetcher(
 Deux fonctions publiques : `write_html` et `write_news_html`. Elles acceptent une `list[GameRecord]`, un `steam_id` pour l'en-tête, un `Path` de sortie, optionnellement un href de lien croisé, et un code `lang` optionnel.
 
 Le HTML est construit par interpolation de chaînes dans les raw strings `_HTML_TEMPLATE` et `_NEWS_TEMPLATE`. Aucune bibliothèque de templating externe n'est utilisée. Les libellés visibles utilisent des placeholders `__T_key__` remplacés au moment du rendu via `_apply_html_t()` ; les chaînes JavaScript sont injectées sous forme d'un bloc `const I18N = {...}` via `_build_i18n_js()`.
+
+### `sources/__init__.py — GameSource`
+
+| Symbole | Description |
+|---|---|
+| `GameSource` | Protocole `runtime_checkable` — toute classe avec `name`, `add_arguments()`, `is_enabled()`, `discover_games()` le satisfait |
+| `get_all_sources()` | Retourne une nouvelle liste de toutes les instances `GameSource` enregistrées |
+
+### `sources/steam.py — SteamSource`
+
+`SteamSource` implémente `GameSource` pour Steam. Il enregistre `--key`, `--steamid`, `--no-wishlist` et `--followed` comme arguments CLI et délègue aux trois fonctions de découverte de `api.py`.
+
+`discover_games(args)` retourne **tous** les jeux de chaque sous-source (possédés, puis wishlist, puis suivis) — potentiellement avec le même `appid` sous différents labels `source`. Le CLI les upsert tous en base (qui applique la priorité `owned > wishlist > followed`) puis construit une liste dédupliquée pour le fetcher.
+
+### `sources/epic.py — EpicSource`
+
+`EpicSource` implémente `GameSource` pour l'Epic Games Store. Il enregistre `--epic-auth-code`, `--epic-device-id`, `--epic-account-id`, `--epic-device-secret`, `--twitch-client-id` et `--twitch-client-secret` comme arguments CLI.
+
+`is_enabled(args)` retourne `True` si un code d'auth ou des credentials device complets sont fournis.
+
+`discover_games(args)` s'authentifie auprès d'Epic, récupère la bibliothèque, et pour chaque jeu :
+- Résout l'AppID Steam via `resolve_steam_appid()` (fallback Steam Store Search)
+- Si résolu : définit `appid = steam_appid` pour enrichissement complet
+- Si non résolu : génère un appid déterministe basé sur un hash (≥ 2 000 000 000)
+- Tous les jeux reçoivent `source="epic"` et `external_id="epic:<catalogItemId>"`
+
+### `resolver.py`
+
+| Symbole | Description |
+|---|---|
+| `AppIdResolver` | Protocole — toute classe avec `resolve(name, session) → int \| None` le satisfait |
+| `SteamStoreResolver` | Résolution via l'API Steam Store Search avec correspondance floue (SequenceMatcher ≥ 0.8) |
+| `IGDBResolver(twitch_client_id, twitch_client_secret)` | Résolution via IGDB : OAuth Twitch → recherche de jeu → lookup external_games (category=Steam) |
+| `resolve_steam_appid(name, resolvers, session)` | Itère les resolvers dans l'ordre ; le premier résultat l'emporte |
+
+### `epic_api.py`
+
+| Fonction | Description |
+|---|---|
+| `epic_auth_with_code(auth_code)` | Échange un code d'autorisation Epic contre un token d'accès |
+| `epic_auth_with_device(device_id, account_id, secret)` | Authentification via credentials device persistants |
+| `epic_get_library(access_token)` | Récupère la bibliothèque Epic de l'utilisateur avec pagination |
 
 ### `i18n/__init__.py`
 
@@ -314,7 +381,64 @@ Points notables :
 
 ---
 
-## 8. Ajouter une traduction
+## 8. CI/CD
+
+Deux workflows GitHub Actions se trouvent dans `.github/workflows/`.
+
+### `ci.yml` — Quality gate
+
+Déclenché sur chaque **push** ou **pull request** ciblant `main` ou `master`.
+
+| Propriété | Valeur |
+|---|---|
+| Runner | `windows-latest` |
+| Matrice Python | 3.11 · 3.12 · 3.13 |
+| Commande d'installation | `pip install -e ".[dev]"` |
+
+**Étapes (dans l'ordre) :**
+
+1. `ruff check steam_tracker` — lint, zéro avertissement requis
+2. `mypy steam_tracker` — vérification de types stricte, zéro erreur requise
+3. `pytest -q --tb=short` — suite de tests complète
+
+Les trois étapes doivent passer sur les trois versions de Python pour que le workflow réussisse. Ce workflow **ne publie aucun artefact**.
+
+### `build.yml` — Release de l'EXE Windows
+
+Déclenché sur :
+- un **push de tag** correspondant à `v*.*.*` (ex. `v1.2.0`) → build complet + GitHub Release
+- un **déclenchement manuel** (`workflow_dispatch`) → build + upload d'artefact uniquement (pas de release)
+
+| Propriété | Valeur |
+|---|---|
+| Runner | `windows-latest` |
+| Python | 3.11 (fixe) |
+| Commande d'installation | `pip install -e ".[build]"` |
+| Permissions | `contents: write` (nécessaire pour publier une GitHub Release) |
+
+**Étapes (dans l'ordre) :**
+
+1. **Build** — exécute `pyinstaller steampulse.spec` depuis le répertoire `build/` ; produit `dist/steampulse.exe`.
+2. **Smoke test** — exécute `dist\steampulse.exe --help` pour vérifier que l'exécutable démarre correctement.
+3. **Version** — lit la version du package via `importlib.metadata` et l'expose en tant qu'output `VERSION`.
+4. **Archive** — compresse `steampulse.exe` dans `steampulse-v<VERSION>-windows-x64.zip`.
+5. **Upload artefact** — téléverse toujours le zip comme artefact de workflow (téléchargeable depuis la page du run Actions).
+6. **Notes de release** — extrait la section de la version courante dans `CHANGELOG.md` via une regex PowerShell ; replie sur un lien vers le changelog si la section est introuvable.
+7. **Publication de release** *(tag uniquement)* — crée ou met à jour la GitHub Release pour le tag via `softprops/action-gh-release@v2`, en attachant le zip et les notes de release extraites.
+
+### Déclencher une release
+
+```bash
+# Tagger le commit et pousser — build.yml se déclenche automatiquement
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+Mettez à jour `CHANGELOG.md` avec une section `## [1.2.0]` **avant** de pousser le tag pour que les notes de release soient correctement extraites.
+
+---
+
+## 9. Ajouter une traduction
 
 1. Créer `steam_tracker/i18n/<code>.py` (ex. `de.py` pour l'allemand) avec un unique `STRINGS: dict[str, str]` qui reprend les clés de `en.py`. Seules les clés à traduire sont nécessaires — les clés manquantes replient automatiquement sur l'anglais.
 
@@ -327,25 +451,43 @@ Points notables :
 
 ---
 
-## 9. Ajouter une source de données
+## 10. Ajouter un plugin source
 
-Pour ajouter une nouvelle source de jeux (ex. Epic Games, GOG) :
+Pour ajouter un nouveau plugin source (ex. GOG, Epic Games) :
 
-1. **`models.py`** — ajouter la nouvelle valeur dans le commentaire/docstring du champ `source` (le champ est une `str` simple, pas un enum).
+1. **Créer `steam_tracker/sources/<nom>.py`** avec une classe satisfaisant le protocole `GameSource` :
 
-2. **`api.py`** — écrire une nouvelle fonction `get_<source>_games(...)` retournant `list[OwnedGame]` avec `source="<source>"`.
+   ```python
+   class GogSource:
+       name = "gog"
 
-3. **`db.py`** — mettre à jour l'expression `CASE WHEN` de priorité des sources dans `upsert_game` si la nouvelle source nécessite une priorité spécifique.
+       def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+           parser.add_argument("--gog-token", help="Token OAuth GOG")
 
-4. **`cli.py`** — ajouter un flag `--<source>` / `--no-<source>` dans `cmd_fetch`, appeler la nouvelle fonction API, upsert les résultats, et ajouter les nouveaux jeux à la liste `games`.
+       def is_enabled(self, args: argparse.Namespace) -> bool:
+           return bool(getattr(args, "gog_token", None))
 
-5. **`renderer.py`** — ajouter optionnellement un bouton de filtre dans `_HTML_TEMPLATE` (div `#sourceBtns`) et un label d'affichage dans `make_card()`.
+       def discover_games(self, args: argparse.Namespace) -> list[OwnedGame]:
+           # récupérer depuis l'API GOG, mapper vers OwnedGame avec source="gog"
+           ...
+   ```
 
-6. **Tests** — ajouter des tests unitaires dans `tests/test_api.py` et des tests d'intégration dans `tests/test_db.py`.
+2. **Enregistrer la source** dans `steam_tracker/sources/__init__.py` :
+
+   ```python
+   def get_all_sources() -> list[GameSource]:
+       from .steam import SteamSource
+       from .gog import GogSource  # ajouter ceci
+       return [SteamSource(), GogSource()]  # ajouter l'instance
+   ```
+
+3. **Correspondance avec les AppIDs Steam** — Le pipeline d'enrichissement (details, news) fonctionne via les AppIDs Steam. Utilisez le système de résolution dans `steam_tracker/resolver.py` (`SteamStoreResolver` pour la correspondance floue zéro-config, `IGDBResolver` si des credentials Twitch/IGDB sont disponibles) via `resolve_steam_appid(name, resolvers)`. Les AppIDs résolus peuvent être mis en cache dans la table `appid_mappings`. Si aucun AppID n'est trouvé, définissez un appid déterministe basé sur un hash (≥ 2 000 000 000) et un `external_id` non vide — le CLI exclura ces jeux du pipeline d'enrichissement Steam.
+
+4. **Ajouter des tests** dans `tests/test_sources.py` — couvrir `add_arguments`, `is_enabled` et `discover_games` avec des appels HTTP mockés.
 
 ---
 
-## 10. Contribuer
+## 11. Contribuer
 
 ```bash
 # 1. Créer une branche
