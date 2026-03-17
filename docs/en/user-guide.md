@@ -365,6 +365,10 @@ Press `Ctrl+C` — in-flight tasks are cancelled cleanly and already-collected d
 
 ## 12. Docker deployment
 
+> **TL;DR** — Copy your `config.toml`, download `docker-compose.yml` from the
+> release page, place them in the same folder, run `docker compose up -d`, open
+> `http://<host>:8080`.
+
 SteamPulse publishes a ready-to-use Docker image on every release:
 
 ```
@@ -372,137 +376,80 @@ ghcr.io/davidp57/steampulse:latest
 ```
 
 The container fetches your game data on a schedule and serves the dashboards on
-an HTTP port via nginx. No build required — just pull and run.
+port 80 via nginx. No build required — pull and run.
 
 ---
 
-### Step 1 — Locate your `config.toml`
+### Step 1 — Get your `config.toml`
 
-The `config.toml` file is the only thing the container needs. It holds all your
-credentials (Steam API key, SteamID, Epic tokens, Twitch…).
+The `config.toml` file is the only thing the container needs. It holds all
+your credentials (Steam API key, SteamID, Epic tokens, Twitch credentials…).
 
 **Already using `steampulse.exe` on Windows?**
-The wizard created it the first time you launched the app. It is at:
+The wizard created it on first launch. Find it at:
 
 ```
 %APPDATA%\steampulse\config.toml
 ```
 
-Copy it to the machine where Docker runs:
-
-```cmd
-copy "%APPDATA%\steampulse\config.toml" config.toml
-```
-
-That is all. Go to Step 2.
+Copy it to the folder where you will run Docker (e.g. your NAS, a server, or your
+local machine). That is all — go to Step 2.
 
 **Never ran `steampulse.exe` yet?**
 Launch it once — the wizard starts automatically, saves the file, and exits.
-Then copy it as above.
+Your `config.toml` is then ready.
 
-**Steam only, no `config.toml`?**
-Skip this step. You will pass your credentials as `-e` flags in Step 2.
-
-> Epic Games / Twitch require an interactive browser login that cannot happen
-> inside a container. You must run the wizard on a real machine at least once
-> to generate `config.toml`, then mount it in Docker.
+> **Epic Games / Twitch:** the OAuth2 login flow requires a real browser and
+> cannot run inside a container. You must complete the wizard on a local machine
+> at least once. After that, the refresh token stored in `config.toml` handles
+> re-authentication automatically — no further interaction needed.
 
 ---
 
-### Step 2 — Start the container
+### Step 2 — Download `docker-compose.yml` and start the container
 
-**With `config.toml` (works for Steam, Epic, Twitch):**
+The `docker-compose.yml` for SteamPulse is included in each GitHub release.
+Download the file for your version:
 
-```bash
-docker run -d \
-  --name steampulse \
-  --restart unless-stopped \
-  -p 8080:80 \
-  -v steampulse_data:/data \
-  -v /absolute/path/to/config.toml:/config/config.toml:ro \
-  ghcr.io/davidp57/steampulse:latest
+```
+https://github.com/davidp57/SteamPulse/releases/latest/download/docker-compose.yml
 ```
 
-Replace `/absolute/path/to/config.toml` with the actual path on the host.
-If you are running this command on the same Windows machine where you copied the
-file, use the full path:
+Place it in the same folder as your `config.toml`:
 
-```powershell
-docker run -d `
-  --name steampulse `
-  --restart unless-stopped `
-  -p 8080:80 `
-  -v steampulse_data:/data `
-  -v "C:\Users\YourName\config.toml:/config/config.toml:ro" `
-  ghcr.io/davidp57/steampulse:latest
+```
+your-folder/
+├── docker-compose.yml   ← downloaded from the release
+└── config.toml          ← copied from %APPDATA%\steampulse\
 ```
 
-**Steam only, without `config.toml`:**
+Then start the container:
 
 ```bash
-docker run -d \
-  --name steampulse \
-  --restart unless-stopped \
-  -p 8080:80 \
-  -v steampulse_data:/data \
-  -e STEAM_API_KEY=your_32_char_key \
-  -e STEAM_ID=76561198xxxxxxxxx \
-  ghcr.io/davidp57/steampulse:latest
+docker compose up -d
+```
+
+That is it. Docker pulls the image automatically on first run.
+
+To change the refresh interval or force French dashboards, edit the
+`environment` section in `docker-compose.yml` before running the command:
+
+```yaml
+    environment:
+      INTERVAL_HOURS: "6"   # default: 4
+      SP_LANG: fr           # default: system language
 ```
 
 ---
 
 ### Step 3 — Open your dashboards
 
-Navigate to `http://localhost:8080` (or `http://<server-ip>:8080`).
+Navigate to `http://localhost:8080` (or `http://<server-ip>:8080` from another
+device).
 
-The container regenerates the dashboards every 4 hours automatically. The
+The container regenerates the dashboards every `INTERVAL_HOURS` hours. Your
 SQLite database is stored in the `steampulse_data` Docker volume and survives
 container restarts and image updates.
-
----
-
-### Keeping the container running — `docker-compose.yml`
-
-If you want the container to restart automatically on boot or prefer to keep
-your configuration in a file (useful for NAS management UIs), use
-`docker-compose.yml` instead of a bare `docker run`.
-
-Create a `docker-compose.yml` file on the host:
-
-```yaml
-services:
-  steampulse:
-    image: ghcr.io/davidp57/steampulse:latest
-    restart: unless-stopped
-    ports:
-      - "8080:80"
-    volumes:
-      - steampulse_data:/data
-      - /absolute/path/to/config.toml:/config/config.toml:ro
-    environment:
-      INTERVAL_HOURS: "4"   # regenerate dashboards every N hours
-      SP_LANG: en           # or fr
-
-volumes:
-  steampulse_data:
-```
-
-Then start it with:
-
-```bash
-docker compose up -d
-```
-
-**Steam only, without `config.toml`:** remove the `config.toml` volume line and
-add your credentials under `environment` instead:
-
-```yaml
-    environment:
-      STEAM_API_KEY: your_32_char_key
-      STEAM_ID: "76561198xxxxxxxxx"
-      INTERVAL_HOURS: "4"
-```
 
 ---
 
@@ -510,66 +457,44 @@ add your credentials under `environment` instead:
 
 ```bash
 # View logs
-docker logs -f steampulse          # with docker run
-docker compose logs -f             # with docker compose
+docker compose logs -f
 
-# Force an immediate re-fetch (outside the schedule)
-docker exec steampulse steampulse \
+# Force an immediate re-fetch right now (outside the schedule)
+docker compose exec steampulse steampulse \
   --config /run/steampulse/config.toml \
   --db /data/steam_library.db \
   --output /data/steam_library.html \
   --refresh
 
 # Update to the latest image
-docker pull ghcr.io/davidp57/steampulse:latest
-docker stop steampulse && docker rm steampulse
-# then re-run the docker run command from Step 2
-
-# Or with docker compose:
 docker compose pull && docker compose up -d
 
-# Wipe all data and start from scratch
-docker volume rm steampulse_data   # with docker run
-docker compose down -v             # with docker compose
+# Wipe all data and start from scratch  ⚠ deletes the database
+docker compose down -v && docker compose up -d
 ```
 
 ---
 
-### Environment variables reference
+### Deploying on a NAS (Synology, QNAP…)
 
-When `config.toml` is mounted, the credential variables (`STEAM_API_KEY`,
-`STEAM_ID`, `EPIC_*`, `TWITCH_*`) are ignored — only the behaviour variables
-below are read from the environment.
-
-| Variable | Default | Description |
-|---|---|---|
-| `STEAM_API_KEY` | — | Steam API key *(only without config.toml)* |
-| `STEAM_ID` | — | SteamID64 *(only without config.toml)* |
-| `INTERVAL_HOURS` | `4` | How often (in hours) the fetch loop runs |
-| `REFRESH` | `false` | `true` to force a full re-fetch every run |
-| `SP_LANG` | system | Dashboard language: `en` or `fr` |
-| `WORKERS` | `4` | Parallel HTTP fetch workers |
-| `NEWS_AGE` | `24` | Maximum news age in hours before re-fetching |
-
----
-
-### NAS deployment examples
+The steps are the same as above — the NAS just acts as your Docker host.
 
 **Synology — Container Manager (DSM 7.2+):**
 
-1. Upload `config.toml` to a folder on the NAS (e.g.
-   `/volume1/docker/steampulse/config.toml`)
-2. Create `docker-compose.yml` in the same folder (see above), setting the
-   volume path to `/volume1/docker/steampulse/config.toml`
-3. Open **Container Manager** → **Projects** → **Create**, paste the file
-4. Click **Build** — the image is pulled from GHCR automatically
-5. Open `http://<NAS-IP>:8080`
+1. Use **File Station** to create a folder (e.g. `/volume1/docker/steampulse`)
+2. Upload `docker-compose.yml` and `config.toml` to that folder
+3. Open **Container Manager** → **Projects** → **Create**
+4. Select the folder you just created — it detects `docker-compose.yml` automatically
+5. Click **Build** — the image is pulled from GHCR, no local build needed
+6. Open `http://<NAS-IP>:8080`
 
 **Portainer:**
 
 1. Go to **Stacks** → **Add stack**
-2. Paste `docker-compose.yml` (update the config.toml path)
-3. Click **Deploy the stack**
+2. Paste the contents of `docker-compose.yml`
+3. In the **Volumes** or bind-mount settings, ensure `config.toml` is accessible
+   at the path declared in the compose file
+4. Click **Deploy the stack**
 
 The container restarts automatically after a reboot thanks to
 `restart: unless-stopped`.

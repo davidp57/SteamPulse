@@ -1,0 +1,27 @@
+# SteamPulse — Docker Compose
+#
+# Prerequisites:
+#   1. Copy your config.toml next to this file (see README for the path)
+#   2. docker compose up -d
+#   3. Open http://localhost:8080
+#
+# The config.toml is created by steampulse.exe on first launch (Windows):
+#   %APPDATA%\steampulse\config.toml
+#
+# On Linux / macOS, run:  steampulse --setup
+
+services:
+  steampulse:
+    image: ghcr.io/davidp57/steampulse:latest
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - steampulse_data:/data
+      - ./config.toml:/config/config.toml:ro
+    environment:
+      INTERVAL_HOURS: "4"    # regenerate dashboards every N hours
+      # SP_LANG: fr          # uncomment to force French dashboards
+
+volumes:
+  steampulse_data:
