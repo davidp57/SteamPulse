@@ -399,6 +399,66 @@ def test_make_card_steam_owned_hint_is_steam() -> None:
     assert "↗ Steam" in card
 
 
+def test_make_card_steam_owned_has_data_store_steam() -> None:
+    record = GameRecord(
+        game=OwnedGame(appid=420, name="HL2", playtime_forever=120, source="owned"),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+    )
+    card = make_card(record)
+    assert 'data-store="steam"' in card
+    assert 'data-lib-status="owned"' in card
+
+
+def test_make_card_wishlist_has_data_lib_status_wishlist() -> None:
+    record = GameRecord(
+        game=OwnedGame(appid=730, name="CS2", source="wishlist"),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+    )
+    card = make_card(record)
+    assert 'data-store="steam"' in card
+    assert 'data-lib-status="wishlist"' in card
+
+
+def test_make_card_followed_has_data_lib_status_followed() -> None:
+    record = GameRecord(
+        game=OwnedGame(appid=570, name="Dota 2", source="followed"),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+    )
+    card = make_card(record)
+    assert 'data-store="steam"' in card
+    assert 'data-lib-status="followed"' in card
+
+
+def test_make_news_row_has_data_store_and_lib_status() -> None:
+    news_item = NewsItem(
+        gid="1",
+        title="Big patch",
+        date=datetime(2024, 5, 1, tzinfo=UTC),
+        url="https://example.com/news",
+        author="Dev",
+        feedname="f",
+        feedlabel="F",
+        tags=["patchnotes"],
+    )
+    record = GameRecord(
+        game=OwnedGame(appid=420, name="HL2", source="owned"),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+    )
+    row = make_news_row(record, news_item)
+    assert 'data-store="steam"' in row
+    assert 'data-lib-status="owned"' in row
+
+
+def test_generate_html_has_steam_store_filter_button() -> None:
+    page = generate_html([_epic_record()], "0")
+    assert 'class="store-btn active" data-store="steam"' in page
+
+
+def test_generate_news_html_has_steam_store_filter_button() -> None:
+    page = generate_news_html([_epic_record()], "0")
+    assert 'class="store-btn active" data-store="steam"' in page
+
+
 def test_generate_html_has_epic_store_filter_button() -> None:
     page = generate_html([_epic_record()], "0")
     assert 'class="store-btn active" data-store="epic"' in page

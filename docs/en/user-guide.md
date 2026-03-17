@@ -262,14 +262,17 @@ For each **Epic** game: the game is resolved to a Steam AppID when possible — 
 
 **Filter panel (collapsible):**
 
-| Group | Options |
-|---|---|
-| **Statut** | All · Early Access · Released · Upcoming |
-| **Source** | 🎮 All · Owned · 🎁 Wishlist · 👁 Followed · 🎮 Epic |
-| **Type news** | All types · 📋 Patch notes · 📰 News |
-| **Temps de jeu** | All · Never played · < 1 h · 1–10 h · > 10 h |
-| **Metacritic** | All · No score · < 50 · 50–75 · > 75 |
-| **Recent update** | All · 2 days · 5 days · 15 days · 30 days (based on last patch note date) |
+| Group | Options | Behaviour |
+|---|---|---|
+| **Status** | All · Early Access · Released · Upcoming | Single-select |
+| **Store** | 🎮 Steam · ⚡ Epic | Multi-select (OR) — both active by default; last active store cannot be deactivated |
+| **Collection** | All · Owned · 🎁 Wishlist · 👁 Followed | Single-select |
+| **News type** | All types · 📋 Patch notes · 📰 News | Single-select |
+| **Playtime** | All · Never played · < 1 h · 1–10 h · > 10 h | Single-select |
+| **Metacritic** | All · No score · < 50 · 50–75 · > 75 | Single-select |
+| **Recent update** | All · 2 days · 5 days · 15 days · 30 days (based on last patch note date) | Single-select |
+
+> The **Store** and **Collection** filters are combined with AND: only games matching an active store **and** the selected collection status are shown.
 
 All filter and sort state is persisted in the URL hash so you can bookmark or share a filtered view.
 
@@ -289,7 +292,7 @@ Clicking anywhere on a card opens the Steam store page in a new tab.
 ### News page (`steam_news.html`)
 
 - All news from all games, sorted by descending date
-- Same two-layer toolbar: search + sort in the main row, Status and Type news filters in the collapsible panel
+- Same two-layer toolbar: search in the main row, Status, Store, Collection and Type news filters in the collapsible panel
 - Type badge on each row (green for `patchnotes`, grey for others)
 - Live result counter
 - Click a row to open the news item on Steam

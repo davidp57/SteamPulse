@@ -14,7 +14,6 @@ from steam_tracker.config import (
     write_config,
 )
 
-
 # ── get_config_path ───────────────────────────────────────────────────────────
 
 
