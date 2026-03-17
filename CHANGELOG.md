@@ -17,15 +17,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - `docker/Dockerfile` — Python 3.13-slim + nginx + supervisord
   - `docker/nginx.conf` — serves `/data` on port 80; blocks direct access to `.db` files
   - `docker/supervisord.conf` — manages nginx + scheduler as two supervised processes
-  - `docker/entrypoint.sh` — generates `config.toml` from env vars (or copies a mounted one), creates a loading placeholder page, then starts supervisord
-  - `docker/scheduler.sh` — fetch loop using `--config /data/config.toml`; no secrets in process args
-  - `docker-compose.yml` — ready-to-use Compose file with commented config-mount option; suitable for Synology NAS and any Docker engine
-  - `.env.example` — template covering all supported environment variables
+  - `docker/entrypoint.sh` — mounts a user-provided `config.toml`, creates a loading placeholder page, then starts supervisord
+  - `docker/scheduler.sh` — fetch loop using `--config /run/steampulse/config.toml`; no secrets in process args
+  - `docker-compose.yml` — ready-to-use Compose file distributed with each GitHub release; bind-mounts `./config.toml` (read-only) and `./data` (database + HTML output); suitable for Synology NAS and any Docker engine
   - `.dockerignore` — keeps the build context lean
-  - `.github/workflows/docker.yml` — publishes image to GHCR on every `v*` tag and `main` push
-- **Two Docker configuration approaches**:
-  - **Option A (env vars)**: set `STEAM_API_KEY` + `STEAM_ID` in `.env`; `entrypoint.sh` generates `config.toml` at startup — simplest path for Steam-only setups.
-  - **Option B (mounted config)**: run `steam-setup` once locally (handles Epic OAuth2 browser flow, Twitch, all settings), copy the resulting `config.toml` next to `docker-compose.yml`, and uncomment the volume mount line — recommended when Epic or Twitch credentials are needed.
+  - `.github/workflows/docker.yml` — publishes image to GHCR (`ghcr.io/davidp57/steampulse`) on every `v*` tag and `main` push (`latest` tag); `develop` branch pushes produce a `:develop` tag for pre-release testing
+- **`docker-compose.yml` in GitHub releases** — the CI `build.yml` workflow now attaches `docker-compose.yml` as a release asset, so users can `curl` or download it directly without cloning the repo
 
 ### Changed
 
@@ -78,8 +75,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **`README.md`** — Added “Multi-store” feature line (EN + FR); test count updated to 168.
 
 ### Fixed
-
-- Resolved Epic games (with a real Steam AppID) are now correctly enriched via the Steam Store API; previously the `external_id` presence check incorrectly excluded them.
+- **Incremental DB writes during fetch** — `SteamFetcher` now accepts an `on_result` callback (`ResultCallback` type) called as each future completes; `cmd_fetch` and `cmd_run` write each game to the database immediately rather than buffering all results until the end. This means the database is populated progressively and a Ctrl+C still saves partial results.
+- **Docker data directory** — switched from a named Docker volume to a bind mount (`./data:/data`) so the SQLite database and generated HTML files are directly accessible on the host filesystem (e.g. NAS File Station).
+- **Wizard skipped on `--help` / `-h`** — the auto-wizard trigger now checks for `--help`/`-h` in `sys.argv` and returns early, preventing the wizard from interrupting `steampulse --help`.
+- **Wizard always exits after completion** — whether invoked explicitly (`--setup`) or automatically (no config found), the wizard now always prints the config path and exits cleanly with `sys.exit(0)` rather than continuing to a fetch.- Resolved Epic games (with a real Steam AppID) are now correctly enriched via the Steam Store API; previously the `external_id` presence check incorrectly excluded them.
 - Epic game display names now use `sandboxName` (human-readable title, e.g. “Gone Home”) instead of the internal `appName` codename (e.g. “Flier”).
 - Epic OAuth login URL in documentation had a truncated `clientId` (missing trailing `a`).
 
