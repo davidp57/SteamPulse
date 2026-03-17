@@ -15,6 +15,7 @@
 9. [Stratégie de cache et rafraîchissement](#9-stratégie-de-cache-et-rafraîchissement)
 10. [Usage avancé — étapes séparées](#10-usage-avancé--étapes-séparées)
 11. [FAQ](#11-faq)
+12. [Déploiement Docker](#12-déploiement-docker)
 
 ---
 
@@ -352,6 +353,137 @@ Lit uniquement la base SQLite et régénère le HTML à partir des données exis
 
 **J'ai des jeux Epic qui n'apparaissent pas avec les détails du store — pourquoi ?**  
 SteamPulse essaie de faire correspondre chaque jeu Epic à un AppID Steam via la correspondance floue de noms (et IGDB si tu fournis des credentials Twitch). Si aucune correspondance n'est trouvée, le jeu apparaît quand même dans le dashboard avec le badge 🎮 Epic, mais sans détails ni news.
+
+---
+
+## 12. Déploiement Docker
+
+L'image Docker embarque **nginx** (sert les pages HTML générées) et un **scheduler** (relance SteamPulse à intervalle configurable) dans un seul conteneur autonome.  
+Aucun Python ni outillage supplémentaire n'est requis sur l'hôte — seul Docker est nécessaire.
+
+> **NAS Synology** : dépose les fichiers via File Station et utilise le Container Manager, ou connecte-toi en SSH et suis les étapes CLI ci-dessous.
+
+### Deux façons de configurer les credentials
+
+#### Option A — Variables d'environnement (simple, Steam uniquement)
+
+Renseigne `STEAM_API_KEY` et `STEAM_ID` dans `.env`. Le conteneur génère un `config.toml` à partir de ces vars au démarrage.
+
+```env
+STEAM_API_KEY=ta_clé_api_32_chars
+STEAM_ID=76561198000000000
+```
+
+C'est le chemin le plus rapide pour un déploiement Steam uniquement.
+
+#### Option B — Fichier config monté (recommandé pour Epic / Twitch)
+
+Lance l'assistant de configuration **une seule fois, sur une machine où SteamPulse est installé** (pas dans le conteneur) :
+
+```bash
+steam-setup
+```
+
+L'assistant gère Steam, Epic OAuth2 (y compris le flux navigateur) et Twitch, puis écrit un `config.toml` dont il affiche le chemin à la fin.  
+Copie ce fichier à côté du `docker-compose.yml` :
+
+```bash
+cp ~/.config/steampulse/config.toml ./config.toml   # Linux/macOS
+# ou
+copy %APPDATA%\steampulse\config.toml .\config.toml  # Windows
+```
+
+Puis dé-commente la ligne de volume dans `docker-compose.yml` :
+
+```yaml
+volumes:
+  - steampulse_data:/data
+  - ./config.toml:/config/config.toml:ro   # ← dé-commenter cette ligne
+```
+
+Quand un fichier de config est monté, les variables d'environnement de credentials (`STEAM_API_KEY`, `STEAM_ID`, `EPIC_*`, `TWITCH_*`) sont ignorées. Les variables de planification (`INTERVAL_HOURS`, `REFRESH`) sont toujours lues depuis l'environnement.
+
+#### Pourquoi ne pas lancer l'assistant dans le conteneur ?
+
+L'assistant nécessite un terminal interactif et un navigateur pour le flux OAuth2 Epic — ni l'un ni l'autre ne sont disponibles dans un conteneur sans surveillance. L'option B (assistant une fois en local, puis montage du fichier) est la solution propre.
+
+### Démarrage rapide
+
+1. **Récupère les fichiers Docker :**
+   ```bash
+   git clone https://github.com/davidp57/SteamPulse.git && cd SteamPulse
+   ```
+2. **Prépare les credentials** en suivant l'option A ou B ci-dessus.
+3. **Construis et démarre :**
+   ```bash
+   docker compose up -d
+   ```
+
+Ouvre **http://\<hôte\>:8080** — une page de chargement s'affiche pendant le premier fetch (15–30 min pour une grande bibliothèque).
+
+| Variable | Défaut | Description |
+|---|---|---|
+| `STEAM_API_KEY` | *(requis, option A)* | Clé Steam Web API |
+| `STEAM_ID` | *(requis, option A)* | SteamID64 |
+| `INTERVAL_HOURS` | `4` | Heures entre deux re-fetches automatiques |
+| `HOST_PORT` | `8080` | Port hôte mappé sur le port nginx 80 |
+| `SP_LANG` | *(depuis config)* | Langue de l'interface (`en` ou `fr`), option A uniquement |
+| `WORKERS` | `4` | Threads de fetch parallèles, option A uniquement |
+| `NEWS_AGE` | `24` | Re-fetcher les news plus vieilles que N heures, option A uniquement |
+| `REFRESH` | `false` | Mettre à `true` pour ignorer le cache à chaque run |
+| `EPIC_REFRESH_TOKEN` | *(aucun)* | Refresh token Epic, option A uniquement |
+| `EPIC_ACCOUNT_ID` | *(aucun)* | Account ID Epic, option A uniquement |
+| `TWITCH_CLIENT_ID` | *(aucun)* | Client ID Twitch/IGDB, option A uniquement |
+| `TWITCH_CLIENT_SECRET` | *(aucun)* | Client secret Twitch/IGDB, option A uniquement |
+
+> `INTERVAL_HOURS` et `REFRESH` sont toujours lus depuis l'environnement, même quand un fichier de config est monté.
+
+### Epic Games dans Docker
+
+Epic nécessite un flux OAuth2 avec navigateur qui ne peut pas s'exécuter dans un conteneur sans surveillance.
+
+- **Option A** : lance `steam-setup` en local une fois ; copie `EPIC_REFRESH_TOKEN` et `EPIC_ACCOUNT_ID` du `config.toml` généré dans `.env`.
+- **Option B** (recommandé) : monte le `config.toml` complet — il contient déjà tous les credentials Epic. Pas besoin de variables individuelles.
+
+### Volume de données
+
+Toutes les données persistantes (base SQLite + pages HTML générées) sont stockées dans le volume Docker nommé `steampulse_data`, monté sur `/data` dans le conteneur.  
+Les fichiers sont accessibles depuis l'hôte via :
+
+```bash
+docker volume inspect steampulse_data
+```
+
+### Commandes utiles
+
+```bash
+# Démarrer en arrière-plan
+docker compose up -d
+
+# Suivre les logs (sortie du scheduler)
+docker compose logs -f
+
+# Forcer un re-fetch immédiat (hors planning)
+docker compose exec steampulse bash -c \
+  'steampulse --config /data/config.toml --db /data/steam_library.db --output /data/steam_library.html --refresh'
+
+# Arrêter le conteneur (le volume de données est conservé)
+docker compose down
+
+# Tout supprimer, y compris le volume
+docker compose down -v
+```
+
+### Image pré-construite (GHCR)
+
+Si tu préfères ne pas construire localement, tu peux utiliser l'image publiée sur le GitHub Container Registry :
+
+```yaml
+# Dans docker-compose.yml, remplace le bloc build: par :
+image: ghcr.io/davidp57/steampulse:latest
+```
+
+Les nouvelles images sont publiées automatiquement lors de chaque nouveau tag de release.
 
 **Mon profil Steam est privé, est-ce que ça marche ?**  
 La clé API contourne la restriction de confidentialité pour les requêtes portant sur ton propre compte.

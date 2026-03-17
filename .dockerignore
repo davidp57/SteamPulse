@@ -1,0 +1,31 @@
+# Python artifacts
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+
+# Build artifacts
+dist/
+build/work/
+
+# Runtime data (not needed during build)
+*.db
+*.db.bak
+*.json
+*.html
+*.exe
+
+# Development files
+tests/
+docs/
+.git/
+.gitignore
+.vscode/
+.github/
+
+# Secrets
+.env
