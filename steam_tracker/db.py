@@ -197,8 +197,8 @@ class Database:
                         THEN excluded.img_logo_url ELSE img_logo_url END,
                     source = CASE
                         WHEN source = 'owned'          THEN 'owned'
-                        WHEN excluded.source = 'owned' THEN 'owned'
                         WHEN source = 'epic'           THEN 'epic'
+                        WHEN excluded.source = 'owned' THEN 'owned'
                         WHEN excluded.source = 'epic'  THEN 'epic'
                         WHEN source = 'wishlist'          THEN 'wishlist'
                         WHEN excluded.source = 'wishlist' THEN 'wishlist'

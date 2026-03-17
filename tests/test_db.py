@@ -240,3 +240,17 @@ def test_upsert_game_epic_source_priority(db: Database) -> None:
     db.upsert_game(OwnedGame(appid=2, name="Celeste", source="epic"))
     assert db.get_all_game_records()[0].game.source == "epic"
 
+
+def test_upsert_game_epic_vs_owned_first_wins(db: Database) -> None:
+    """When epic and owned collide, the first-inserted source is preserved."""
+    # epic first → stays epic even after owned upsert
+    db.upsert_game(OwnedGame(appid=10, name="Hades", source="epic"))
+    db.upsert_game(OwnedGame(appid=10, name="Hades", source="owned"))
+    assert db.get_all_game_records()[0].game.source == "epic"
+
+    # owned first → stays owned even after epic upsert
+    db.upsert_game(OwnedGame(appid=11, name="Celeste", source="owned"))
+    db.upsert_game(OwnedGame(appid=11, name="Celeste", source="epic"))
+    records = {r.game.appid: r.game.source for r in db.get_all_game_records()}
+    assert records[11] == "owned"
+

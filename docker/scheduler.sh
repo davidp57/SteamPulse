@@ -1,14 +1,19 @@
 #!/bin/bash
-# Periodic fetch loop — credentials and settings come from /data/config.toml,
+# Periodic fetch loop — credentials and settings come from /run/steampulse/config.toml,
 # which is written by entrypoint.sh from env vars or a mounted config file.
 set -euo pipefail
 
-INTERVAL_SECONDS=$(( ${INTERVAL_HOURS:-4} * 3600 ))
+_RAW_INTERVAL="${INTERVAL_HOURS:-4}"
+if ! [[ "$_RAW_INTERVAL" =~ ^[1-9][0-9]*$ ]]; then
+    echo "[SteamPulse] WARNING: INTERVAL_HOURS=${_RAW_INTERVAL@Q} is not a positive integer; defaulting to 4." >&2
+    _RAW_INTERVAL=4
+fi
+INTERVAL_SECONDS=$(( _RAW_INTERVAL * 3600 ))
 
 while true; do
     args=(
         steampulse
-        --config /data/config.toml
+        --config /run/steampulse/config.toml
         --db     /data/steam_library.db
         --output /data/steam_library.html
     )
@@ -19,6 +24,6 @@ while true; do
         && echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Fetch complete." \
         || echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] WARNING: fetch exited with an error."
 
-    echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Next run in ${INTERVAL_HOURS:-4}h (${INTERVAL_SECONDS}s)."
+    echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Next run in ${_RAW_INTERVAL}h (${INTERVAL_SECONDS}s)."
     sleep "$INTERVAL_SECONDS"
 done

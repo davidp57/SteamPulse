@@ -66,7 +66,7 @@ steampulse.exe --setup
 ### Ce que couvre l'assistant
 
 1. **Steam** — clé API et SteamID64
-2. **Epic Games** (optionnel) — flux OAuth2 complet : l'assistant affiche l'URL d'auth, ouvre éventuellement ton navigateur, demande le code d'autorisation, et l'échange automatiquement contre un refresh token persistant. Pas de navigation JSON manuelle.
+2. **Epic Games** (optionnel) — flux OAuth2 complet : l'assistant affiche l'URL d'auth, ouvre éventuellement ton navigateur, te demande de copier le champ `authorizationCode` depuis la page JSON résultante, et l'échange automatiquement contre un refresh token persistant. Aucun traitement JSON automatique requis — il suffit d'un copier-coller depuis ton navigateur.
 3. **Twitch/IGDB** (optionnel) — client ID et secret pour une meilleure résolution Epic→Steam AppID
 4. **Paramètres** (optionnel) — chemin de la base, threads de travail, âge des news, langue
 
@@ -465,7 +465,7 @@ docker compose logs -f
 
 # Forcer un re-fetch immédiat (hors planning)
 docker compose exec steampulse bash -c \
-  'steampulse --config /data/config.toml --db /data/steam_library.db --output /data/steam_library.html --refresh'
+  'steampulse --config /run/steampulse/config.toml --db /data/steam_library.db --output /data/steam_library.html --refresh'
 
 # Arrêter le conteneur (le volume de données est conservé)
 docker compose down
