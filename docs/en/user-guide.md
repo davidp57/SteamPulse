@@ -504,6 +504,14 @@ The container restarts automatically after a reboot thanks to
 A new image is published on every release. Your data in `./data/` is never
 touched by an update.
 
+**Image tags:**
+
+| Tag | Source | Use |
+|---|---|---|
+| `latest` | `main` branch / releases | **Production — use this** |
+| `develop` | `develop` branch | Pre-release testing only |
+| `v1.2.3` | Version tag | Pin to a specific release |
+
 **Terminal / SSH (any host):**
 
 ```bash
@@ -540,3 +548,16 @@ docker images ghcr.io/davidp57/steampulse
 
 If the date shown is older than the release, the old image is still cached.
 Run `docker compose pull && docker compose up -d` to force the update.
+
+**Testing the `develop` build before a release:**
+
+The `develop` tag is not aliased to `latest` — it is a separate image. To
+test it on your NAS, pull and retag it locally:
+
+```bash
+docker pull ghcr.io/davidp57/steampulse:develop
+docker tag ghcr.io/davidp57/steampulse:develop ghcr.io/davidp57/steampulse:latest
+docker compose up -d
+```
+
+Revert to the official image at any time with `docker compose pull && docker compose up -d`.

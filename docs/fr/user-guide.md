@@ -515,6 +515,14 @@ Le conteneur redémarre automatiquement après un reboot grâce à
 Une nouvelle image est publiée à chaque release. Tes données dans `./data/`
 ne sont jamais touchées par une mise à jour.
 
+**Tags d'image :**
+
+| Tag | Source | Usage |
+|---|---|---|
+| `latest` | branche `main` / releases | **Production — utilise ce tag** |
+| `develop` | branche `develop` | Tests pré-release uniquement |
+| `v1.2.3` | Tag de version | Fixer une version précise |
+
 **Terminal / SSH (n'importe quel hôte) :**
 
 ```bash
@@ -553,3 +561,16 @@ docker images ghcr.io/davidp57/steampulse
 Si la date affichée est antérieure à la release, l'ancienne image est toujours
 en cache. Lance `docker compose pull && docker compose up -d` pour forcer la
 mise à jour.
+
+**Tester le build `develop` avant une release :**
+
+Le tag `develop` n'est pas un alias de `latest` — c'est une image distincte.
+Pour la tester sur ton NAS, pull et retague-la localement :
+
+```bash
+docker pull ghcr.io/davidp57/steampulse:develop
+docker tag ghcr.io/davidp57/steampulse:develop ghcr.io/davidp57/steampulse:latest
+docker compose up -d
+```
+
+Reviens à l'image officielle à tout moment avec `docker compose pull && docker compose up -d`.
