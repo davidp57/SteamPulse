@@ -4,6 +4,14 @@ name: Docker
   push:
     branches: [main]
     tags: ["v*"]
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "docker/**"
+      - "docker-compose.yml"
+      - ".dockerignore"
+      - "pyproject.toml"
+      - "steam_tracker/**"
   workflow_dispatch:
 
 env:
@@ -23,6 +31,7 @@ jobs:
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -44,6 +53,6 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
