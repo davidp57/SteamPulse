@@ -31,6 +31,7 @@ import argparse
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from ..db import Database
     from ..models import OwnedGame
 
 
@@ -70,7 +71,9 @@ class GameSource(Protocol):
         """
         ...
 
-    def discover_games(self, args: argparse.Namespace) -> list[OwnedGame]:
+    def discover_games(
+        self, args: argparse.Namespace, db: Database | None = None
+    ) -> list[OwnedGame]:
         """Discover all games for this source and return them.
 
         The returned list may contain the same ``appid`` with different
@@ -79,6 +82,8 @@ class GameSource(Protocol):
 
         Args:
             args: Parsed CLI namespace.
+            db: Optional database instance; sources may use it to cache
+                name→AppID resolution results across runs.
 
         Returns:
             All :class:`~steam_tracker.models.OwnedGame` instances found.

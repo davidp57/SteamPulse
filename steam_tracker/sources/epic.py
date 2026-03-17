@@ -10,11 +10,15 @@ from __future__ import annotations
 import argparse
 import hashlib
 import logging
+from typing import TYPE_CHECKING
 
 from ..epic_api import epic_auth_with_code, epic_auth_with_refresh, epic_get_library
 from ..i18n import get_translator
 from ..models import SYNTHETIC_APPID_BASE, OwnedGame
-from ..resolver import SteamStoreResolver, resolve_steam_appid
+from ..resolver import IGDBResolver, SteamStoreResolver, resolve_steam_appid
+
+if TYPE_CHECKING:
+    from ..db import Database
 
 log = logging.getLogger(__name__)
 
@@ -76,20 +80,20 @@ class EpicSource:
             args: Parsed CLI namespace.
 
         Returns:
-            True if an auth code or device credentials are provided.
+            True if an auth code or a refresh token is provided.
         """
         if getattr(args, "epic_auth_code", None):
             return True
-        return bool(
-            getattr(args, "epic_refresh_token", None)
-            and getattr(args, "epic_account_id", None)
-        )
+        return bool(getattr(args, "epic_refresh_token", None))
 
-    def discover_games(self, args: argparse.Namespace) -> list[OwnedGame]:
+    def discover_games(
+        self, args: argparse.Namespace, db: Database | None = None
+    ) -> list[OwnedGame]:
         """Discover Epic Games library and resolve Steam AppIDs.
 
         Args:
             args: Parsed CLI namespace with Epic credentials.
+            db: Optional database instance used to cache name→AppID resolutions.
 
         Returns:
             List of discovered games with source="epic".
@@ -115,8 +119,12 @@ class EpicSource:
 
         print(t("cli_epic_library_count", count=len(library_items)))
 
-        # ── Build resolvers ────────────────────────────────────────────
-        resolvers = [SteamStoreResolver()]
+        # ── Build resolver chain ───────────────────────────────────────
+        resolvers: list[SteamStoreResolver | IGDBResolver] = [SteamStoreResolver()]
+        twitch_id = getattr(args, "twitch_client_id", None)
+        twitch_secret = getattr(args, "twitch_client_secret", None)
+        if twitch_id and twitch_secret:
+            resolvers.append(IGDBResolver(str(twitch_id), str(twitch_secret)))
 
         # ── Resolve each game ──────────────────────────────────────────
         print(t("cli_epic_resolving"))
@@ -135,7 +143,17 @@ class EpicSource:
             log.debug("Epic item: internal=%r  title=%r", internal_name, name)
 
             print(f"\r   [{idx:>{width}}/{total}] {name[:55]:<55}", end="", flush=True)
-            steam_appid = resolve_steam_appid(name, resolvers)
+
+            # Check persistent cache before hitting the network.
+            external_id = f"epic:{catalog_id}"
+            steam_appid: int | None = None
+            if db is not None:
+                steam_appid = db.get_appid_mapping("epic", external_id)
+            if steam_appid is None:
+                steam_appid = resolve_steam_appid(name, resolvers)
+                if db is not None:
+                    db.upsert_appid_mapping("epic", external_id, name, steam_appid)
+
             appid = steam_appid if steam_appid is not None else _hash_appid(catalog_id)
             if steam_appid is not None:
                 resolved_count += 1
@@ -145,7 +163,7 @@ class EpicSource:
                     appid=appid,
                     name=name,
                     source="epic",
-                    external_id=f"epic:{catalog_id}",
+                    external_id=external_id,
                 )
             )
 

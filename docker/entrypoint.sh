@@ -1,16 +1,19 @@
 #!/bin/bash
 # Container entry point:
-# 1. Build /data/config.toml from env vars, OR copy a mounted /config/config.toml
+# 1. Build /run/steampulse/config.toml from env vars, OR copy a mounted /config/config.toml
 # 2. Create a placeholder HTML page if the data directory is empty
 # 3. Hand off to supervisord
 set -euo pipefail
 
-CONFIG_DEST=/data/config.toml
+# Keep config outside the nginx web root so secrets are never served over HTTP.
+mkdir -p /run/steampulse
+CONFIG_DEST=/run/steampulse/config.toml
 
 if [ -f /config/config.toml ]; then
     # ── A config file was mounted: use it directly ───────────────────────────
     echo "[SteamPulse] Using mounted config file /config/config.toml"
     cp /config/config.toml "$CONFIG_DEST"
+    chmod 600 "$CONFIG_DEST"
 else
     # ── Generate config.toml from environment variables ──────────────────────
     # STEAM_API_KEY and STEAM_ID are required when no config file is mounted.
@@ -26,11 +29,29 @@ else
     # Python handles TOML escaping properly for all secret values.
     python3 - << 'PYEOF'
 import os
+import sys
 
 
 def q(v: str) -> str:
-    """Escape a string value for inline TOML."""
-    return v.replace("\\", "\\\\").replace('"', '\\"')
+    """Escape a string value for inline TOML basic strings."""
+    # Escape backslash first, then the other special characters.
+    v = v.replace("\\", "\\\\")
+    v = v.replace('"', '\\"')
+    v = v.replace("\n", "\\n")
+    v = v.replace("\r", "\\r")
+    v = v.replace("\t", "\\t")
+    return v
+
+
+def _int_env(name: str, default: int) -> int:
+    raw = os.environ.get(name, str(default))
+    try:
+        value = int(raw)
+    except ValueError:
+        print(f"[SteamPulse] WARNING: {name}={raw!r} is not an integer; using {default}.",
+              file=sys.stderr, flush=True)
+        return default
+    return value
 
 
 lines = [
@@ -59,8 +80,8 @@ if twitch_id and twitch_secret:
         f'client_secret = "{q(twitch_secret)}"',
     ]
 
-workers  = os.environ.get("WORKERS", "4")
-news_age = os.environ.get("NEWS_AGE", "24")
+workers  = _int_env("WORKERS", 4)
+news_age = _int_env("NEWS_AGE", 24)
 lang     = os.environ.get("SP_LANG", "")
 lines += [
     "",
@@ -72,8 +93,12 @@ lines += [
 if lang:
     lines.append(f'lang     = "{q(lang)}"')
 
-with open("/data/config.toml", "w") as f:
+dest = "/run/steampulse/config.toml"
+with open(dest, "w") as f:
     f.write("\n".join(lines) + "\n")
+
+import stat
+os.chmod(dest, stat.S_IRUSR | stat.S_IWUSR)  # 0o600 — owner read/write only
 
 print("[SteamPulse] config.toml generated from environment variables.")
 PYEOF
