@@ -371,9 +371,10 @@ def _epic_record() -> GameRecord:
     )
 
 
-def test_make_card_epic_has_data_source_epic() -> None:
+def test_make_card_epic_has_data_store_epic() -> None:
     card = make_card(_epic_record())
-    assert 'data-source="epic"' in card
+    assert 'data-store="epic"' in card
+    assert 'data-lib-status="owned"' in card
 
 
 def test_make_card_epic_hint_is_epic_not_steam() -> None:
@@ -398,17 +399,17 @@ def test_make_card_steam_owned_hint_is_steam() -> None:
     assert "↗ Steam" in card
 
 
-def test_generate_html_has_epic_source_filter_button() -> None:
+def test_generate_html_has_epic_store_filter_button() -> None:
     page = generate_html([_epic_record()], "0")
-    assert 'class="source-btn" data-source="epic"' in page
+    assert 'class="store-btn active" data-store="epic"' in page
 
 
-def test_generate_html_has_followed_source_filter_button() -> None:
+def test_generate_html_has_followed_collection_filter_button() -> None:
     page = generate_html([_epic_record()], "0")
-    assert 'class="source-btn" data-source="followed"' in page
+    assert 'data-lib-status="followed"' in page
 
 
-def test_generate_news_html_has_epic_source_filter_button() -> None:
+def test_generate_news_html_has_epic_store_filter_button() -> None:
     page = generate_news_html([_epic_record()], "0")
-    assert 'class="source-btn" data-source="epic"' in page
+    assert 'class="store-btn active" data-store="epic"' in page
 

@@ -661,8 +661,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   .card { content-visibility: auto; contain-intrinsic-size: 340px 320px; will-change: transform; }
   .grid.list-view .card { contain-intrinsic-size: auto 56px; }
 
-  /* PLAYTIME FILTER */
-  .source-btn {
+  /* STORE FILTER (multi-select toggle) */
+  .store-btn {
     padding: 6px 14px;
     border-radius: 20px;
     border: 1px solid var(--border);
@@ -674,8 +674,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     font-family: 'IBM Plex Mono', monospace;
     letter-spacing: .5px;
   }
-  .source-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .source-btn.active { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 500; }
+  .store-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .store-btn.active { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 500; }
 
   /* THEME TOGGLE */
   .theme-toggle {
@@ -820,13 +820,19 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       </div>
     </div>
     <div class="filter-group">
-      <div class="filter-group-label">__T_filter_source__</div>
-      <div class="filter-btns" id="sourceBtns">
-        <button class="source-btn active" data-source="all">🎮 __T_lbl_all__</button>
-        <button class="source-btn" data-source="owned">__T_lbl_owned__</button>
-        <button class="source-btn" data-source="wishlist">🎁 Wishlist</button>
-        <button class="source-btn" data-source="followed">👁 __T_lbl_followed__</button>
-        <button class="source-btn" data-source="epic">🎮 Epic</button>
+      <div class="filter-group-label">__T_filter_store__</div>
+      <div class="filter-btns" id="storeBtns">
+        <button class="store-btn active" data-store="steam">🎮 Steam</button>
+        <button class="store-btn active" data-store="epic">⚡ Epic</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">__T_filter_collection__</div>
+      <div class="filter-btns" id="libStatusBtns">
+        <button class="filter-btn active" data-lib-status="all">__T_lbl_all__</button>
+        <button class="filter-btn" data-lib-status="owned">__T_lbl_owned__</button>
+        <button class="filter-btn" data-lib-status="wishlist">🎁 Wishlist</button>
+        <button class="filter-btn" data-lib-status="followed">👁 __T_lbl_followed__</button>
       </div>
     </div>
     <div class="filter-group">
@@ -891,7 +897,9 @@ __I18N_JS__
 const allCards = Array.from(document.querySelectorAll('.card'));
 __SHARED_JS__
 function getFilter()    { return document.querySelector('#filterBtns .filter-btn.active').dataset.filter; }
-function getSrcFilter() { return document.querySelector('#sourceBtns .source-btn.active').dataset.source; }
+function getActiveStores()    { return new Set(Array.from(document.querySelectorAll('#storeBtns .store-btn.active')).map(b => b.dataset.store)); }
+function allStoresActive()    { const all = document.querySelectorAll('#storeBtns .store-btn'); return Array.from(all).every(b => b.classList.contains('active')); }
+function getLibStatusFilter() { return document.querySelector('#libStatusBtns .filter-btn.active').dataset.libStatus; }
 function getTagFilter() { return document.querySelector('#tagBtns .tag-btn.active').dataset.tag; }
 function getPtFilter()  { return document.querySelector('#playtimeBtns .filter-btn.active').dataset.pt; }
 function getMcFilter()  { return document.querySelector('#mcBtns .filter-btn.active').dataset.mc; }
@@ -910,19 +918,20 @@ function checkMcFilter(mc, card) {
 }
 
 function isDefaultState() {
-  return getFilter() === 'all' && getSrcFilter() === 'all' && getTagFilter() === 'all'
+  return getFilter() === 'all' && allStoresActive() && getLibStatusFilter() === 'all' && getTagFilter() === 'all'
     && getPtFilter() === 'all' && getMcFilter() === 'all' && getRecentFilter() === 'all'
     && !getSearch() && getSort() === 'name';
 }
 
 function updateFilterBadge() {
   let n = 0;
-  if (getFilter() !== 'all')       n++;
-  if (getSrcFilter() !== 'all')    n++;
-  if (getTagFilter() !== 'all')    n++;
-  if (getPtFilter() !== 'all')     n++;
-  if (getMcFilter() !== 'all')     n++;
-  if (getRecentFilter() !== 'all') n++;
+  if (getFilter() !== 'all')         n++;
+  if (!allStoresActive())             n++;
+  if (getLibStatusFilter() !== 'all') n++;
+  if (getTagFilter() !== 'all')      n++;
+  if (getPtFilter() !== 'all')       n++;
+  if (getMcFilter() !== 'all')       n++;
+  if (getRecentFilter() !== 'all')   n++;
   const badge = document.getElementById('filterBadge');
   badge.textContent = n;
   badge.classList.toggle('show', n > 0);
@@ -931,14 +940,15 @@ function updateFilterBadge() {
 
 function saveStateToHash() {
   const s = {};
-  if (getFilter() !== 'all')    s.status = getFilter();
-  if (getSrcFilter() !== 'all') s.source = getSrcFilter();
-  if (getTagFilter() !== 'all') s.tag = getTagFilter();
-  if (getPtFilter() !== 'all')  s.pt = getPtFilter();
-  if (getMcFilter() !== 'all')    s.mc = getMcFilter();
-  if (getRecentFilter() !== 'all') s.recent = getRecentFilter();
-  if (getSearch())                 s.q = getSearch();
-  if (getSort() !== 'name')     s.sort = getSort();
+  if (getFilter() !== 'all')          s.status = getFilter();
+  if (!allStoresActive())             s.stores = Array.from(getActiveStores()).join(',');
+  if (getLibStatusFilter() !== 'all') s.lib = getLibStatusFilter();
+  if (getTagFilter() !== 'all')       s.tag = getTagFilter();
+  if (getPtFilter() !== 'all')        s.pt = getPtFilter();
+  if (getMcFilter() !== 'all')        s.mc = getMcFilter();
+  if (getRecentFilter() !== 'all')    s.recent = getRecentFilter();
+  if (getSearch())                    s.q = getSearch();
+  if (getSort() !== 'name')           s.sort = getSort();
   const grid = document.getElementById('grid');
   if (grid.classList.contains('list-view')) s.view = 'list';
   const h = new URLSearchParams(s).toString();
@@ -952,10 +962,11 @@ function saveStateToHash() {
   const navLink = document.querySelector('.nav-link[href^="steam_news"]');
   if (navLink) {
     const nf = {};
-    if (getFilter() !== 'all')       nf.status = getFilter();
-    if (getSrcFilter() !== 'all')    nf.source = getSrcFilter();
-    if (getTagFilter() !== 'all')    nf.tag = getTagFilter();
-    if (getRecentFilter() !== 'all') nf.recent = getRecentFilter();
+    if (getFilter() !== 'all')          nf.status = getFilter();
+    if (!allStoresActive())             nf.stores = Array.from(getActiveStores()).join(',');
+    if (getLibStatusFilter() !== 'all') nf.lib = getLibStatusFilter();
+    if (getTagFilter() !== 'all')       nf.tag = getTagFilter();
+    if (getRecentFilter() !== 'all')    nf.recent = getRecentFilter();
     const nh = new URLSearchParams(nf).toString();
     navLink.href = 'steam_news.html' + (nh ? '#' + nh : '');
   }
@@ -975,7 +986,13 @@ function loadStateFromHash() {
   if (!h) return;
   const p = new URLSearchParams(h);
   if (p.get('status')) { activateBtn('#filterBtns .filter-btn', 'filter', p.get('status')); }
-  if (p.get('source')) { activateBtn('#sourceBtns .source-btn', 'source', p.get('source')); }
+  if (p.get('stores')) {
+    const storeSet = new Set(p.get('stores').split(','));
+    document.querySelectorAll('#storeBtns .store-btn').forEach(b => {
+      b.classList.toggle('active', storeSet.has(b.dataset.store));
+    });
+  }
+  if (p.get('lib'))    { activateBtn('#libStatusBtns .filter-btn', 'libStatus', p.get('lib')); }
   if (p.get('tag'))    { activateBtn('#tagBtns .tag-btn', 'tag', p.get('tag')); }
   if (p.get('pt'))     { activateBtn('#playtimeBtns .filter-btn', 'pt', p.get('pt')); }
   if (p.get('mc'))     { activateBtn('#mcBtns .filter-btn', 'mc', p.get('mc')); }
@@ -994,23 +1011,25 @@ function loadStateFromHash() {
 }
 
 function updateGrid() {
-  const filter    = getFilter();
-  const srcFilter = getSrcFilter();
-  const tagFilter = getTagFilter();
-  const ptFilter  = getPtFilter();
-  const search    = getSearch();
-  const sort      = getSort();
+  const filter          = getFilter();
+  const activeStores    = getActiveStores();
+  const libStatusFilter = getLibStatusFilter();
+  const tagFilter       = getTagFilter();
+  const ptFilter        = getPtFilter();
+  const search          = getSearch();
+  const sort            = getSort();
 
   const mcFilter     = getMcFilter();
   const recentFilter  = getRecentFilter();
   let visible = allCards.filter(c => {
-    const badgeOk   = filter === 'all' || c.dataset.status === filter;
-    const srcOk     = srcFilter === 'all' || c.dataset.source === srcFilter;
-    const searchOk  = !search || c.dataset.name.includes(search);
-    const ptOk      = checkPtFilter(ptFilter, c);
-    const mcOk      = checkMcFilter(mcFilter, c);
-    const recentOk  = checkRecentFilter(recentFilter, c);
-    return badgeOk && srcOk && searchOk && ptOk && mcOk && recentOk;
+    const badgeOk     = filter === 'all' || c.dataset.status === filter;
+    const storeOk     = activeStores.has(c.dataset.store);
+    const libStatusOk = libStatusFilter === 'all' || c.dataset.libStatus === libStatusFilter;
+    const searchOk    = !search || c.dataset.name.includes(search);
+    const ptOk        = checkPtFilter(ptFilter, c);
+    const mcOk        = checkMcFilter(mcFilter, c);
+    const recentOk    = checkRecentFilter(recentFilter, c);
+    return badgeOk && storeOk && libStatusOk && searchOk && ptOk && mcOk && recentOk;
   });
 
   visible.sort((a, b) => {
@@ -1099,7 +1118,16 @@ function setupFilterGroup(selector, callback) {
   });
 }
 setupFilterGroup('#filterBtns .filter-btn');
-setupFilterGroup('#sourceBtns .source-btn');
+// Store filter: multi-select toggle (OR logic; can't deactivate last active store)
+document.querySelectorAll('#storeBtns .store-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const active = document.querySelectorAll('#storeBtns .store-btn.active');
+    if (active.length === 1 && btn.classList.contains('active')) return;
+    btn.classList.toggle('active');
+    updateGrid();
+  });
+});
+setupFilterGroup('#libStatusBtns .filter-btn');
 setupFilterGroup('#tagBtns .tag-btn');
 setupFilterGroup('#playtimeBtns .filter-btn');
 setupFilterGroup('#mcBtns .filter-btn');
@@ -1109,7 +1137,8 @@ setupFilterGroup('#recentBtns .filter-btn');
 document.getElementById('resetBtn').addEventListener('click', () => {
   document.getElementById('search').value = '';
   document.getElementById('sortBy').value = 'name';
-  ['#filterBtns .filter-btn', '#sourceBtns .source-btn', '#tagBtns .tag-btn', '#playtimeBtns .filter-btn', '#mcBtns .filter-btn', '#recentBtns .filter-btn'].forEach(sel => {
+  document.querySelectorAll('#storeBtns .store-btn').forEach(b => b.classList.add('active'));
+  ['#filterBtns .filter-btn', '#libStatusBtns .filter-btn', '#tagBtns .tag-btn', '#playtimeBtns .filter-btn', '#mcBtns .filter-btn', '#recentBtns .filter-btn'].forEach(sel => {
     document.querySelectorAll(sel).forEach(b => b.classList.remove('active'));
     const first = document.querySelector(sel);
     if (first) first.classList.add('active');
@@ -1223,13 +1252,13 @@ _NEWS_TEMPLATE = r"""<!DOCTYPE html>
   .search-wrap input:focus { border-color:var(--accent); }
   .search-wrap .icon { position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none; }
   .filter-btns { display:flex; gap:6px; }
-  .filter-btn, .source-btn, .tag-btn {
+  .filter-btn, .store-btn, .tag-btn {
     padding:6px 14px; border-radius:20px; border:1px solid var(--border);
     background:transparent; color:var(--muted); font-size:12px; cursor:pointer;
     transition:all .2s; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px;
   }
-  .filter-btn:hover, .source-btn:hover, .tag-btn:hover { border-color:var(--accent); color:var(--accent); }
-  .filter-btn.active, .source-btn.active, .tag-btn.active { background:var(--accent); border-color:var(--accent); color:#000; font-weight:500; }
+  .filter-btn:hover, .store-btn:hover, .tag-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .filter-btn.active, .store-btn.active, .tag-btn.active { background:var(--accent); border-color:var(--accent); color:#000; font-weight:500; }
   .feed-tag {
     display:inline-block; padding:1px 6px; border-radius:3px; margin-left:8px; flex-shrink:0;
     font-size:10px; font-weight:600; font-family:'IBM Plex Mono',monospace;
@@ -1347,13 +1376,19 @@ _NEWS_TEMPLATE = r"""<!DOCTYPE html>
       </div>
     </div>
     <div class="filter-group">
-      <div class="filter-group-label">__T_filter_source__</div>
-      <div class="filter-btns" id="sourceBtns">
-        <button class="source-btn active" data-source="all">🎮 __T_lbl_all__</button>
-        <button class="source-btn" data-source="owned">__T_lbl_owned__</button>
-        <button class="source-btn" data-source="wishlist">🎁 Wishlist</button>
-        <button class="source-btn" data-source="followed">👁 __T_lbl_followed__</button>
-        <button class="source-btn" data-source="epic">🎮 Epic</button>
+      <div class="filter-group-label">__T_filter_store__</div>
+      <div class="filter-btns" id="storeBtns">
+        <button class="store-btn active" data-store="steam">🎮 Steam</button>
+        <button class="store-btn active" data-store="epic">⚡ Epic</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">__T_filter_collection__</div>
+      <div class="filter-btns" id="libStatusBtns">
+        <button class="filter-btn active" data-lib-status="all">__T_lbl_all__</button>
+        <button class="filter-btn" data-lib-status="owned">__T_lbl_owned__</button>
+        <button class="filter-btn" data-lib-status="wishlist">🎁 Wishlist</button>
+        <button class="filter-btn" data-lib-status="followed">👁 __T_lbl_followed__</button>
       </div>
     </div>
     <div class="filter-group">
@@ -1412,13 +1447,15 @@ __I18N_JS__
 const allRows = Array.from(document.querySelectorAll('.feed-item'));
 __SHARED_JS__
 // --- Getters ---
-function getStatusFilter() { return document.querySelector('#statusBtns .filter-btn.active').dataset.filter; }
-function getSrcFilter()    { return document.querySelector('#sourceBtns .source-btn.active').dataset.source; }
-function getTagFilter()    { return document.querySelector('#tagBtns .tag-btn.active').dataset.tag; }
-function getPtFilter()     { return document.querySelector('#playtimeBtns .filter-btn.active').dataset.pt; }
-function getMcFilter()     { return document.querySelector('#mcBtns .filter-btn.active').dataset.mc; }
-function getRecentFilter() { return document.querySelector('#recentBtns .filter-btn.active').dataset.recent; }
-function getSearch()       { return document.getElementById('search').value.toLowerCase().trim(); }
+function getStatusFilter()    { return document.querySelector('#statusBtns .filter-btn.active').dataset.filter; }
+function getActiveStores()    { return new Set(Array.from(document.querySelectorAll('#storeBtns .store-btn.active')).map(b => b.dataset.store)); }
+function allStoresActive()    { const all = document.querySelectorAll('#storeBtns .store-btn'); return Array.from(all).every(b => b.classList.contains('active')); }
+function getLibStatusFilter() { return document.querySelector('#libStatusBtns .filter-btn.active').dataset.libStatus; }
+function getTagFilter()       { return document.querySelector('#tagBtns .tag-btn.active').dataset.tag; }
+function getPtFilter()        { return document.querySelector('#playtimeBtns .filter-btn.active').dataset.pt; }
+function getMcFilter()        { return document.querySelector('#mcBtns .filter-btn.active').dataset.mc; }
+function getRecentFilter()    { return document.querySelector('#recentBtns .filter-btn.active').dataset.recent; }
+function getSearch()          { return document.getElementById('search').value.toLowerCase().trim(); }
 
 // --- Check functions ---
 function checkMcFilter(mc, row) {
@@ -1432,19 +1469,20 @@ function checkMcFilter(mc, row) {
   return true;
 }
 function isDefaultState() {
-  return getStatusFilter() === 'all' && getSrcFilter() === 'all' && getTagFilter() === 'all'
+  return getStatusFilter() === 'all' && allStoresActive() && getLibStatusFilter() === 'all' && getTagFilter() === 'all'
     && getPtFilter() === 'all' && getMcFilter() === 'all' && getRecentFilter() === 'all'
     && !getSearch();
 }
 
 function updateFilterBadge() {
   let n = 0;
-  if (getStatusFilter() !== 'all') n++;
-  if (getSrcFilter() !== 'all')    n++;
-  if (getTagFilter() !== 'all')    n++;
-  if (getPtFilter() !== 'all')     n++;
-  if (getMcFilter() !== 'all')     n++;
-  if (getRecentFilter() !== 'all') n++;
+  if (getStatusFilter() !== 'all')   n++;
+  if (!allStoresActive())             n++;
+  if (getLibStatusFilter() !== 'all') n++;
+  if (getTagFilter() !== 'all')      n++;
+  if (getPtFilter() !== 'all')       n++;
+  if (getMcFilter() !== 'all')       n++;
+  if (getRecentFilter() !== 'all')   n++;
   const badge = document.getElementById('filterBadge');
   badge.textContent = n;
   badge.classList.toggle('show', n > 0);
@@ -1453,23 +1491,25 @@ function updateFilterBadge() {
 
 function saveStateToHash() {
   const s = {};
-  if (getStatusFilter() !== 'all') s.status = getStatusFilter();
-  if (getSrcFilter() !== 'all')    s.source = getSrcFilter();
-  if (getTagFilter() !== 'all')    s.tag = getTagFilter();
-  if (getPtFilter() !== 'all')     s.pt = getPtFilter();
-  if (getMcFilter() !== 'all')     s.mc = getMcFilter();
-  if (getRecentFilter() !== 'all') s.recent = getRecentFilter();
-  if (getSearch())                 s.q = getSearch();
+  if (getStatusFilter() !== 'all')    s.status = getStatusFilter();
+  if (!allStoresActive())             s.stores = Array.from(getActiveStores()).join(',');
+  if (getLibStatusFilter() !== 'all') s.lib = getLibStatusFilter();
+  if (getTagFilter() !== 'all')       s.tag = getTagFilter();
+  if (getPtFilter() !== 'all')        s.pt = getPtFilter();
+  if (getMcFilter() !== 'all')        s.mc = getMcFilter();
+  if (getRecentFilter() !== 'all')    s.recent = getRecentFilter();
+  if (getSearch())                    s.q = getSearch();
   const h = new URLSearchParams(s).toString();
   history.replaceState(null, '', h ? '#' + h : location.pathname);
   // Update back link to carry compatible filters to library page
   const backLink = document.querySelector('.nav-link[href^="steam_library"]');
   if (backLink) {
     const nf = {};
-    if (getStatusFilter() !== 'all') nf.status = getStatusFilter();
-    if (getSrcFilter() !== 'all')    nf.source = getSrcFilter();
-    if (getTagFilter() !== 'all')    nf.tag = getTagFilter();
-    if (getRecentFilter() !== 'all') nf.recent = getRecentFilter();
+    if (getStatusFilter() !== 'all')    nf.status = getStatusFilter();
+    if (!allStoresActive())             nf.stores = Array.from(getActiveStores()).join(',');
+    if (getLibStatusFilter() !== 'all') nf.lib = getLibStatusFilter();
+    if (getTagFilter() !== 'all')       nf.tag = getTagFilter();
+    if (getRecentFilter() !== 'all')    nf.recent = getRecentFilter();
     const nh = new URLSearchParams(nf).toString();
     backLink.href = 'steam_library.html' + (nh ? '#' + nh : '');
   }
@@ -1480,7 +1520,13 @@ function loadStateFromHash() {
   if (!h) return;
   const p = new URLSearchParams(h);
   if (p.get('status')) { activateBtn('#statusBtns .filter-btn', 'filter', p.get('status')); }
-  if (p.get('source')) { activateBtn('#sourceBtns .source-btn', 'source', p.get('source')); }
+  if (p.get('stores')) {
+    const storeSet = new Set(p.get('stores').split(','));
+    document.querySelectorAll('#storeBtns .store-btn').forEach(b => {
+      b.classList.toggle('active', storeSet.has(b.dataset.store));
+    });
+  }
+  if (p.get('lib'))    { activateBtn('#libStatusBtns .filter-btn', 'libStatus', p.get('lib')); }
   if (p.get('tag'))    { activateBtn('#tagBtns .tag-btn', 'tag', p.get('tag')); }
   if (p.get('pt'))     { activateBtn('#playtimeBtns .filter-btn', 'pt', p.get('pt')); }
   if (p.get('mc'))     { activateBtn('#mcBtns .filter-btn', 'mc', p.get('mc')); }
@@ -1492,22 +1538,24 @@ function loadStateFromHash() {
 }
 
 function updateFeed() {
-  const statusFilter = getStatusFilter();
-  const srcFilter    = getSrcFilter();
-  const tagFilter    = getTagFilter();
-  const ptFilter     = getPtFilter();
-  const mcFilter     = getMcFilter();
-  const recentFilter = getRecentFilter();
-  const search       = getSearch();
+  const statusFilter    = getStatusFilter();
+  const activeStores    = getActiveStores();
+  const libStatusFilter = getLibStatusFilter();
+  const tagFilter       = getTagFilter();
+  const ptFilter        = getPtFilter();
+  const mcFilter        = getMcFilter();
+  const recentFilter    = getRecentFilter();
+  const search          = getSearch();
   let visible = allRows.filter(r => {
-    const statusOk = statusFilter === 'all' || r.dataset.status === statusFilter;
-    const srcOk    = srcFilter === 'all' || r.dataset.source === srcFilter;
-    const tagOk    = tagFilter === 'all' || r.dataset.tag === tagFilter;
-    const searchOk = !search || r.dataset.name.includes(search);
-    const ptOk     = checkPtFilter(ptFilter, r);
-    const mcOk     = checkMcFilter(mcFilter, r);
-    const recentOk = checkRecentFilter(recentFilter, r);
-    return statusOk && srcOk && tagOk && searchOk && ptOk && mcOk && recentOk;
+    const statusOk    = statusFilter === 'all' || r.dataset.status === statusFilter;
+    const storeOk     = activeStores.has(r.dataset.store);
+    const libStatusOk = libStatusFilter === 'all' || r.dataset.libStatus === libStatusFilter;
+    const tagOk       = tagFilter === 'all' || r.dataset.tag === tagFilter;
+    const searchOk    = !search || r.dataset.name.includes(search);
+    const ptOk        = checkPtFilter(ptFilter, r);
+    const mcOk        = checkMcFilter(mcFilter, r);
+    const recentOk    = checkRecentFilter(recentFilter, r);
+    return statusOk && storeOk && libStatusOk && tagOk && searchOk && ptOk && mcOk && recentOk;
   });
   allRows.forEach(r => r.style.display = 'none');
   visible.forEach(r => r.style.display = '');
@@ -1545,7 +1593,16 @@ function setupFilterGroup(selector, callback) {
   });
 }
 setupFilterGroup('#statusBtns .filter-btn');
-setupFilterGroup('#sourceBtns .source-btn');
+// Store filter: multi-select toggle (OR logic; can't deactivate last active store)
+document.querySelectorAll('#storeBtns .store-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const active = document.querySelectorAll('#storeBtns .store-btn.active');
+    if (active.length === 1 && btn.classList.contains('active')) return;
+    btn.classList.toggle('active');
+    updateFeed();
+  });
+});
+setupFilterGroup('#libStatusBtns .filter-btn');
 setupFilterGroup('#tagBtns .tag-btn');
 setupFilterGroup('#playtimeBtns .filter-btn');
 setupFilterGroup('#mcBtns .filter-btn');
@@ -1554,7 +1611,8 @@ setupFilterGroup('#recentBtns .filter-btn');
 // Reset
 document.getElementById('resetBtn').addEventListener('click', () => {
   document.getElementById('search').value = '';
-  ['#statusBtns .filter-btn', '#sourceBtns .source-btn', '#tagBtns .tag-btn',
+  document.querySelectorAll('#storeBtns .store-btn').forEach(b => b.classList.add('active'));
+  ['#statusBtns .filter-btn', '#libStatusBtns .filter-btn', '#tagBtns .tag-btn',
    '#playtimeBtns .filter-btn', '#mcBtns .filter-btn', '#recentBtns .filter-btn'].forEach(sel => {
     document.querySelectorAll(sel).forEach(b => b.classList.remove('active'));
     const first = document.querySelector(sel);
@@ -1780,7 +1838,8 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
                 last_other_ts = _ts
                 last_other_date = _n.date.strftime("%d/%m/%Y")
     placeholder = html.escape(game.name[:2].upper())
-    source_tag = html.escape(game.source)
+    store_tag = "epic" if game.source == "epic" else "steam"
+    lib_status_tag = "owned" if game.source in ("owned", "epic") else game.source
     if game.source == "wishlist":
         pt_display = t("source_wishlist")
     elif game.source == "followed":
@@ -1793,7 +1852,7 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
     store_hint = "🎮 Epic" if game.source == "epic" else "↗ Steam"
     return (
         f'<div class="card" data-appid="{appid}" data-status="{status.badge}" '
-        f'data-source="{source_tag}" data-name="{name.lower()}" '
+        f'data-store="{store_tag}" data-lib-status="{lib_status_tag}" data-name="{name.lower()}" '
         f'data-playtime="{game.playtime_forever}" '
         f'data-metacritic="{metacritic_score}" '
         f'data-release="{rel_date}" data-release-ts="{release_ts}" '
@@ -1913,7 +1972,8 @@ def make_news_row(record: GameRecord, item: NewsItem, t: Translator | None = Non
         else ""
     )
 
-    source_tag = html.escape(game.source)
+    store_tag = "epic" if game.source == "epic" else "steam"
+    lib_status_tag = "owned" if game.source in ("owned", "epic") else game.source
     playtime = game.playtime_forever
     metacritic_score = details.metacritic_score if details else 0
     last_patch_ts = 0
@@ -1926,7 +1986,7 @@ def make_news_row(record: GameRecord, item: NewsItem, t: Translator | None = Non
 
     return (
         f'<div class="feed-item" data-status="{status.badge}" data-name="{name.lower()}" '
-        f'data-tag="{tag_data}" data-source="{source_tag}" '
+        f'data-tag="{tag_data}" data-store="{store_tag}" data-lib-status="{lib_status_tag}" '
         f'data-playtime="{playtime}" data-metacritic="{metacritic_score}" '
         f'data-last-patch-ts="{last_patch_ts}">\n'
         f'  <img class="feed-thumb" src="{html.escape(img_url)}" alt="" loading="lazy">\n'
