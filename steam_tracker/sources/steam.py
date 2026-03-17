@@ -12,10 +12,14 @@ from __future__ import annotations
 
 import argparse
 import logging
+from typing import TYPE_CHECKING
 
 from ..api import get_followed_games, get_owned_games, get_wishlist
 from ..i18n import get_translator
 from ..models import OwnedGame
+
+if TYPE_CHECKING:
+    from ..db import Database
 
 log = logging.getLogger(__name__)
 
@@ -76,7 +80,9 @@ class SteamSource:
         """
         return True
 
-    def discover_games(self, args: argparse.Namespace) -> list[OwnedGame]:
+    def discover_games(
+        self, args: argparse.Namespace, db: Database | None = None
+    ) -> list[OwnedGame]:
         """Discover Steam games (owned, wishlist, followed) for the given account.
 
         Prints progress messages to stdout using the translator for ``args.lang``.
@@ -84,6 +90,7 @@ class SteamSource:
         Args:
             args: Parsed CLI namespace; must include ``key``, ``steamid``,
                 ``no_wishlist``, ``followed``, and ``lang`` attributes.
+            db: Unused; accepted for protocol compatibility.
 
         Returns:
             All discovered :class:`~steam_tracker.models.OwnedGame` instances,

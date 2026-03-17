@@ -394,7 +394,7 @@ def test_epic_source_enabled_with_auth_code() -> None:
 
 
 def test_epic_source_enabled_with_refresh_token() -> None:
-    args = _epic_args(epic_refresh_token="rt", epic_account_id="aid")
+    args = _epic_args(epic_refresh_token="rt")
     assert EpicSource().is_enabled(args) is True
 
 
@@ -403,9 +403,10 @@ def test_epic_source_disabled_with_no_credentials() -> None:
     assert EpicSource().is_enabled(args) is False
 
 
-def test_epic_source_disabled_with_incomplete_credentials() -> None:
-    args = _epic_args(epic_refresh_token="rt")  # missing account_id
-    assert EpicSource().is_enabled(args) is False
+def test_epic_source_enabled_with_refresh_token_only() -> None:
+    """Refresh token alone is sufficient — account_id is not required."""
+    args = _epic_args(epic_refresh_token="rt")  # no account_id
+    assert EpicSource().is_enabled(args) is True
 
 
 # ---------------------------------------------------------------------------

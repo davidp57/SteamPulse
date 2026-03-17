@@ -15,6 +15,7 @@
 9. [Cache strategy & refresh](#9-cache-strategy--refresh)
 10. [Advanced usage — separate steps](#10-advanced-usage--separate-steps)
 11. [FAQ](#11-faq)
+12. [Docker deployment](#12-docker-deployment)
 
 ---
 
@@ -63,7 +64,7 @@ steampulse.exe --setup
 ### What the wizard covers
 
 1. **Steam** — API key and SteamID64
-2. **Epic Games** (optional) — full OAuth2 flow: the wizard displays the auth URL, optionally opens your browser, prompts for the authorization code, and automatically exchanges it for a persistent refresh token. No manual JSON navigation required.
+2. **Epic Games** (optional) — full OAuth2 flow: the wizard displays the auth URL, optionally opens your browser, prompts you to copy the `authorizationCode` from the resulting JSON page, and automatically exchanges it for a persistent refresh token. No programmatic JSON parsing required — just one copy-paste from your browser.
 3. **Twitch/IGDB** (optional) — client ID and secret for better Epic→Steam AppID resolution
 4. **Settings** (optional) — database path, worker threads, news age, language
 
@@ -348,6 +349,137 @@ SteamPulse tries to match each Epic game to a Steam AppID using fuzzy name match
 
 **My Steam profile is private — will it still work?**  
 The API key bypasses privacy restrictions for requests about your own account.
+
+---
+
+## 12. Docker deployment
+
+The Docker image bundles **nginx** (serves the generated HTML pages) and a **scheduler** (runs SteamPulse at a configurable interval) in a single self-contained container.  
+No Python or extra tooling is required on the host — only Docker.
+
+> **Synology NAS**: upload the files via File Station and use the Container Manager UI, or SSH into the NAS and follow the CLI steps below.
+
+### Two ways to configure credentials
+
+#### Option A — Environment variables (simple, Steam-only)
+
+Set `STEAM_API_KEY` and `STEAM_ID` in `.env`. The container generates a `config.toml` from them at startup.
+
+```env
+STEAM_API_KEY=your_32_char_api_key
+STEAM_ID=76561198000000000
+```
+
+This is the quickest path for a Steam-only setup.
+
+#### Option B — Mounted config file (recommended for Epic / Twitch)
+
+Run the interactive setup wizard **once on a machine where SteamPulse is installed** (not inside the container):
+
+```bash
+steam-setup
+```
+
+The wizard handles Steam, Epic OAuth2 (including the browser flow), and Twitch, then writes a `config.toml` whose path is shown at the end.  
+Copy that file next to `docker-compose.yml`:
+
+```bash
+cp ~/.config/steampulse/config.toml ./config.toml   # Linux/macOS
+# or
+copy %APPDATA%\steampulse\config.toml .\config.toml  # Windows
+```
+
+Then uncomment the config volume line in `docker-compose.yml`:
+
+```yaml
+volumes:
+  - steampulse_data:/data
+  - ./config.toml:/config/config.toml:ro   # ← uncomment this
+```
+
+When a config file is mounted, the credential env vars (`STEAM_API_KEY`, `STEAM_ID`, `EPIC_*`, `TWITCH_*`) are ignored. Scheduling variables (`INTERVAL_HOURS`, `REFRESH`) are always read from the environment.
+
+#### Why not run the wizard inside the container?
+
+The wizard requires an interactive terminal and a browser for Epic OAuth2 — neither of which is available in an unattended container. Option B (wizard once locally, then mount the config file) is the clean solution.
+
+### Getting started
+
+1. **Get the Docker files:**
+   ```bash
+   git clone https://github.com/davidp57/SteamPulse.git && cd SteamPulse
+   ```
+2. **Prepare credentials** using Option A or B above.
+3. **Build and start:**
+   ```bash
+   docker compose up -d
+   ```
+
+Open **http://\<host\>:8080** — a loading page is shown while the first fetch runs (15–30 min for a large library).
+
+| Variable | Default | Description |
+|---|---|---|
+| `STEAM_API_KEY` | *(required, option A)* | Steam Web API key |
+| `STEAM_ID` | *(required, option A)* | SteamID64 |
+| `INTERVAL_HOURS` | `4` | Hours between automatic re-fetches |
+| `HOST_PORT` | `8080` | Host port mapped to the nginx port 80 |
+| `SP_LANG` | *(from config)* | Interface language (`en` or `fr`), option A only |
+| `WORKERS` | `4` | Parallel fetch threads, option A only |
+| `NEWS_AGE` | `24` | Re-fetch news older than N hours, option A only |
+| `REFRESH` | `false` | Set to `true` to ignore cache on every run |
+| `EPIC_REFRESH_TOKEN` | *(none)* | Epic refresh token, option A only |
+| `EPIC_ACCOUNT_ID` | *(none)* | Epic account ID, option A only |
+| `TWITCH_CLIENT_ID` | *(none)* | Twitch/IGDB client ID, option A only |
+| `TWITCH_CLIENT_SECRET` | *(none)* | Twitch/IGDB client secret, option A only |
+
+> `INTERVAL_HOURS` and `REFRESH` are always read from the environment, even when a config file is mounted.
+
+### Epic Games in Docker
+
+Epic requires an OAuth2 browser flow that cannot run in an unattended container.
+
+- **Option A**: run `steam-setup` locally once; copy `EPIC_REFRESH_TOKEN` and `EPIC_ACCOUNT_ID` from the generated `config.toml` into `.env`.
+- **Option B** (recommended): mount the full `config.toml` — it already contains all Epic credentials. No need for individual env vars.
+
+### Data volume
+
+All persistent data (SQLite database + generated HTML pages) is stored in the named Docker volume `steampulse_data` mounted at `/data` inside the container.  
+The files are accessible from the host via:
+
+```bash
+docker volume inspect steampulse_data
+```
+
+### Useful commands
+
+```bash
+# Start in background
+docker compose up -d
+
+# Follow logs (scheduler output)
+docker compose logs -f
+
+# Force an immediate re-fetch (outside the schedule)
+docker compose exec steampulse bash -c \
+  'steampulse --config /run/steampulse/config.toml --db /data/steam_library.db --output /data/steam_library.html --refresh'
+
+# Stop container (data volume is preserved)
+docker compose down
+
+# Remove everything including the volume
+docker compose down -v
+```
+
+### Pre-built image (GHCR)
+
+If you prefer not to build locally, you can pull the image published to the GitHub Container Registry:
+
+```yaml
+# In docker-compose.yml, replace the build: block with:
+image: ghcr.io/davidp57/steampulse:latest
+```
+
+New images are published automatically on each new release tag.
 
 **Is any data sent anywhere?**  
 No. Everything stays local: the SQLite database on your disk, HTML pages generated locally. Only read requests are made to the public Steam API.

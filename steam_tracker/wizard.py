@@ -193,11 +193,17 @@ def run_wizard(config_path: Path | None = None) -> None:
     _def_workers = str(existing.get("workers", _DEFAULT_WORKERS))
     workers_raw = _ask("  Worker threads", default=_def_workers)
     if workers_raw and (workers_raw != str(_DEFAULT_WORKERS) or "workers" in existing):
-        data["workers"] = int(workers_raw)
+        try:
+            data["workers"] = int(workers_raw)
+        except ValueError:
+            print(f"  Invalid value {workers_raw!r}; keeping default ({_DEFAULT_WORKERS}).")
     _def_news_age = str(existing.get("news_age", _DEFAULT_NEWS_AGE))
     news_age_raw = _ask("  News age (hours)", default=_def_news_age)
     if news_age_raw and (news_age_raw != str(_DEFAULT_NEWS_AGE) or "news_age" in existing):
-        data["news_age"] = int(news_age_raw)
+        try:
+            data["news_age"] = int(news_age_raw)
+        except ValueError:
+            print(f"  Invalid value {news_age_raw!r}; keeping default ({_DEFAULT_NEWS_AGE}).")
     _def_lang = existing.get("lang")
     lang = _ask("  Language (en/fr)     [auto]", default=_def_lang)
     if lang:

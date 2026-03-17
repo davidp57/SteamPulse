@@ -11,6 +11,22 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+### Added
+
+- **Docker deployment** — single self-contained image bundling nginx (serves generated HTML pages) and a configurable scheduler loop (default interval: 4 hours). Infrastructure files:
+  - `docker/Dockerfile` — Python 3.13-slim + nginx + supervisord
+  - `docker/nginx.conf` — serves `/data` on port 80; blocks direct access to `.db` files
+  - `docker/supervisord.conf` — manages nginx + scheduler as two supervised processes
+  - `docker/entrypoint.sh` — generates `config.toml` from env vars (or copies a mounted one), creates a loading placeholder page, then starts supervisord
+  - `docker/scheduler.sh` — fetch loop using `--config /data/config.toml`; no secrets in process args
+  - `docker-compose.yml` — ready-to-use Compose file with commented config-mount option; suitable for Synology NAS and any Docker engine
+  - `.env.example` — template covering all supported environment variables
+  - `.dockerignore` — keeps the build context lean
+  - `.github/workflows/docker.yml` — publishes image to GHCR on every `v*` tag and `main` push
+- **Two Docker configuration approaches**:
+  - **Option A (env vars)**: set `STEAM_API_KEY` + `STEAM_ID` in `.env`; `entrypoint.sh` generates `config.toml` at startup — simplest path for Steam-only setups.
+  - **Option B (mounted config)**: run `steam-setup` once locally (handles Epic OAuth2 browser flow, Twitch, all settings), copy the resulting `config.toml` next to `docker-compose.yml`, and uncomment the volume mount line — recommended when Epic or Twitch credentials are needed.
+
 ### Changed
 
 - **Filter UI — store vs. collection** — The single mixed "Source" filter is replaced by two distinct filter groups on both the library and news pages:

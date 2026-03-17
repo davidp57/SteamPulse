@@ -196,9 +196,9 @@ def cmd_fetch() -> None:
     all_discovered: list[OwnedGame] = []
     for source in get_all_sources():
         if source.is_enabled(args):
-            all_discovered.extend(source.discover_games(args))
+            all_discovered.extend(source.discover_games(args, db=db))
 
-    # Upsert everything to DB (DB enforces source priority: owned > wishlist > followed)
+    # Upsert everything to DB (DB enforces source priority: owned = epic > wishlist > followed)
     for game in all_discovered:
         db.upsert_game(game)
 
@@ -341,9 +341,9 @@ def cmd_run() -> None:
     all_discovered: list[OwnedGame] = []
     for source in get_all_sources():
         if source.is_enabled(args):
-            all_discovered.extend(source.discover_games(args))
+            all_discovered.extend(source.discover_games(args, db=db))
 
-    # Upsert everything to DB (DB enforces source priority: owned > wishlist > followed)
+    # Upsert everything to DB (DB enforces source priority: owned = epic > wishlist > followed)
     for game in all_discovered:
         db.upsert_game(game)
 
