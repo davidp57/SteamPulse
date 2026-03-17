@@ -87,6 +87,9 @@ def _maybe_run_wizard(
         Updated config dict (reloaded after the wizard writes the file).
     """
     if setup_requested or (not config and not _has_steam_credentials_in_argv()):
+        # Don't interrupt --help / -h with the wizard.
+        if "--help" in sys.argv or "-h" in sys.argv:
+            return config
         from .wizard import run_wizard
 
         run_wizard(config_path=config_path or get_config_path())
