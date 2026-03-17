@@ -488,11 +488,33 @@ The steps are the same as above — the NAS just acts as your Docker host.
 
 **Portainer:**
 
-1. Go to **Stacks** → **Add stack**
-2. Paste the contents of `docker-compose.yml`
-3. In the **Volumes** or bind-mount settings, ensure `config.toml` is accessible
-   at the path declared in the compose file
-4. Click **Deploy the stack**
+> **Known limitation:** when you paste a Compose file into Portainer's stack editor,
+> relative paths like `./config.toml` are resolved against Portainer's internal
+> working directory (e.g. `/data/compose/3/`), **not** your folder. This causes
+> a `Bind mount failed` error.
+
+The recommended approach is **not** to use Portainer's paste editor for SteamPulse.
+Instead, SSH into the Docker host, place the files there, and run Compose directly:
+
+```bash
+mkdir -p /opt/steampulse/data
+# copy config.toml to /opt/steampulse/config.toml via scp or File Station
+cd /opt/steampulse
+curl -LO https://github.com/davidp57/SteamPulse/releases/latest/download/docker-compose.yml
+docker compose up -d
+```
+
+If you still want to deploy via Portainer's UI, use **absolute paths** in the
+compose file. Edit the `volumes:` section before pasting:
+
+```yaml
+volumes:
+  - /opt/steampulse/data:/data
+  - /opt/steampulse/config.toml:/config/config.toml:ro
+```
+
+Make sure `/opt/steampulse/config.toml` exists on the host **before** clicking
+**Deploy the stack**, otherwise the bind mount will fail.
 
 The container restarts automatically after a reboot thanks to
 `restart: unless-stopped`.

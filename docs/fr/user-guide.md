@@ -499,11 +499,34 @@ d'hôte Docker.
 
 **Portainer :**
 
-1. Va dans **Stacks** → **Add stack**
-2. Colle le contenu de `docker-compose.yml`
-3. Dans les paramètres de volumes, vérifie que `config.toml` est accessible
-   au chemin déclaré dans le fichier compose
-4. Clique sur **Deploy the stack**
+> **Limitation connue :** quand tu colles un fichier Compose dans l’éditeur de
+> stack Portainer, les chemins relatifs comme `./config.toml` sont résolus par
+> rapport au répertoire interne de Portainer (ex. `/data/compose/3/`), **pas**
+> ton dossier. Cela génère une erreur `Bind mount failed`.
+
+L’approche recommandée est de **ne pas** utiliser l’éditeur de paste de
+Portainer pour SteamPulse. À la place, connecte-toi en SSH sur l’hôte Docker,
+place les fichiers, et lance Compose directement :
+
+```bash
+mkdir -p /opt/steampulse/data
+# copie config.toml dans /opt/steampulse/config.toml via scp ou File Station
+cd /opt/steampulse
+curl -LO https://github.com/davidp57/SteamPulse/releases/latest/download/docker-compose.yml
+docker compose up -d
+```
+
+Si tu veux quand même passer par l’UI Portainer, utilise des **chemins absolus**
+dans le fichier compose. Modifie la section `volumes:` avant de coller :
+
+```yaml
+volumes:
+  - /opt/steampulse/data:/data
+  - /opt/steampulse/config.toml:/config/config.toml:ro
+```
+
+Assure-toi que `/opt/steampulse/config.toml` existe sur l’hôte **avant** de
+cliquer sur **Deploy the stack**, sinon le bind mount échouera.
 
 Le conteneur redémarre automatiquement après un reboot grâce à
 `restart: unless-stopped`.
