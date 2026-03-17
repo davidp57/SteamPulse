@@ -507,3 +507,30 @@ d'hôte Docker.
 
 Le conteneur redémarre automatiquement après un reboot grâce à
 `restart: unless-stopped`.
+
+---
+
+### Mettre à jour l'image
+
+Une nouvelle image est publiée à chaque release. Tes données dans `./data/`
+ne sont jamais touchées par une mise à jour.
+
+**Terminal / SSH (n'importe quel hôte) :**
+
+```bash
+cd /chemin/vers/ton-dossier
+docker compose pull
+docker compose up -d
+```
+
+**Synology — Container Manager :**
+
+1. Ouvre **Container Manager** → **Projets**
+2. Sélectionne le projet `steampulse`
+3. Clique sur **Action** → **Construire** — Container Manager télécharge la
+   nouvelle image et recrée le conteneur automatiquement
+
+**Portainer :**
+
+1. Va dans **Stacks** → sélectionne `steampulse`
+2. Clique sur **Pull and redeploy**

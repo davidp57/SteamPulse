@@ -496,3 +496,30 @@ The steps are the same as above — the NAS just acts as your Docker host.
 
 The container restarts automatically after a reboot thanks to
 `restart: unless-stopped`.
+
+---
+
+### Updating the image
+
+A new image is published on every release. Your data in `./data/` is never
+touched by an update.
+
+**Terminal / SSH (any host):**
+
+```bash
+cd /path/to/your-folder
+docker compose pull
+docker compose up -d
+```
+
+**Synology — Container Manager:**
+
+1. Open **Container Manager** → **Projects**
+2. Select the `steampulse` project
+3. Click **Action** → **Build** — Container Manager pulls the new image and
+   recreates the container automatically
+
+**Portainer:**
+
+1. Go to **Stacks** → select `steampulse`
+2. Click **Pull and redeploy**
