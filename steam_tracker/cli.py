@@ -10,7 +10,7 @@ from .config import get_config_path, load_config, save_cli_credentials
 from .db import Database
 from .fetcher import SteamFetcher
 from .i18n import get_translator
-from .models import SYNTHETIC_APPID_BASE, OwnedGame
+from .models import SYNTHETIC_APPID_BASE, AppDetails, NewsItem, OwnedGame
 from .renderer import write_html, write_news_html
 from .sources import get_all_sources
 
@@ -225,22 +225,26 @@ def cmd_fetch() -> None:
     def on_progress(done: int, total: int, name: str) -> None:
         print(f"\r[{done:>{width}}/{total}] {name[:52]:<52}", end="", flush=True)
 
-    fetcher = SteamFetcher(max_workers=args.workers, on_progress=on_progress)
-    try:
-        results = fetcher.fetch_all(games, skip_appids=skip, refresh_news_appids=stale_news)
-    except KeyboardInterrupt:
-        print(t("cli_interrupted"))
-        return
-
     failed_details: set[int] = set()
     news_fetched: set[int] = set()
-    for appid, (details, news) in results.items():
+
+    def on_result(appid: int, details: AppDetails | None, news: list[NewsItem]) -> None:
         if details:
             db.upsert_app_details(details)
         elif appid not in skip:
             failed_details.add(appid)
         db.upsert_news(appid, news)
         news_fetched.add(appid)
+
+    fetcher = SteamFetcher(max_workers=args.workers, on_progress=on_progress, on_result=on_result)
+    try:
+        results = fetcher.fetch_all(games, skip_appids=skip, refresh_news_appids=stale_news)
+    except KeyboardInterrupt:
+        print(t("cli_interrupted"))
+        db.mark_fetched(failed_details, details=True)
+        db.mark_fetched(news_fetched, news=True)
+        return
+
     db.mark_fetched(failed_details, details=True)
     db.mark_fetched(news_fetched, news=True)
 
@@ -366,22 +370,26 @@ def cmd_run() -> None:
     def on_progress(done: int, total: int, name: str) -> None:
         print(f"\r[{done:>{width}}/{total}] {name[:52]:<52}", end="", flush=True)
 
-    fetcher = SteamFetcher(max_workers=args.workers, on_progress=on_progress)
-    try:
-        results = fetcher.fetch_all(games, skip_appids=skip, refresh_news_appids=stale_news)
-    except KeyboardInterrupt:
-        print(t("cli_interrupted"))
-        return
-
     failed_details: set[int] = set()
     news_fetched: set[int] = set()
-    for appid, (details, news) in results.items():
+
+    def on_result(appid: int, details: AppDetails | None, news: list[NewsItem]) -> None:
         if details:
             db.upsert_app_details(details)
         elif appid not in skip:
             failed_details.add(appid)
         db.upsert_news(appid, news)
         news_fetched.add(appid)
+
+    fetcher = SteamFetcher(max_workers=args.workers, on_progress=on_progress, on_result=on_result)
+    try:
+        results = fetcher.fetch_all(games, skip_appids=skip, refresh_news_appids=stale_news)
+    except KeyboardInterrupt:
+        print(t("cli_interrupted"))
+        db.mark_fetched(failed_details, details=True)
+        db.mark_fetched(news_fetched, news=True)
+        return
+
     db.mark_fetched(failed_details, details=True)
     db.mark_fetched(news_fetched, news=True)
 
