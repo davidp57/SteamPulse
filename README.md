@@ -48,6 +48,20 @@ steampulse --key <API_KEY> --steamid <STEAMID64>
 
 Open `steam_library.html` in a browser — no server required.
 
+**Option C — Docker (NAS / server / always-on)**
+
+A pre-built image is available on GHCR. It runs a periodic fetch and serves the dashboard on port 80:
+
+```bash
+# Minimal setup (Steam only)
+echo "STEAM_API_KEY=your_key\nSTEAM_ID=your_steamid64" > .env
+curl -O https://raw.githubusercontent.com/davidp57/SteamPulse/main/docker-compose.yml
+docker compose up -d
+# → open http://localhost:8080
+```
+
+See [docs/en/user-guide.md — Section 12](docs/en/user-guide.md#12-docker-deployment) for the full guide (Epic credentials, Synology NAS, Portainer, environment variables reference).
+
 ### Documentation
 
 | Document | 🇬🇧 English | 🇫🇷 Français |
@@ -101,6 +115,20 @@ steampulse --key <API_KEY> --steamid <STEAMID64>
 - SteamID64 → <https://steamid.io>
 
 Ouvre `steam_library.html` dans un navigateur — aucun serveur requis.
+
+**Option C — Docker (NAS / serveur / machine permanente)**
+
+Une image préconstruite est disponible sur GHCR. Elle lance un fetch périodique et sert le dashboard sur le port 80 :
+
+```bash
+# Configuration minimale (Steam uniquement)
+echo "STEAM_API_KEY=ta_cle\nSTEAM_ID=ton_steamid64" > .env
+curl -O https://raw.githubusercontent.com/davidp57/SteamPulse/main/docker-compose.yml
+docker compose up -d
+# → ouvre http://localhost:8080
+```
+
+Voir [docs/fr/user-guide.md — Section 12](docs/fr/user-guide.md#12-déploiement-docker) pour le guide complet (credentials Epic, NAS Synology, Portainer, référence des variables d'environnement).
 
 ### Documentation
 

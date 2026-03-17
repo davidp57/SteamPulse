@@ -367,3 +367,161 @@ Oui. Le cache intelligent évite de re-fetcher les jeux déjà à jour. Seuls le
 
 **Comment interrompre un fetch en cours ?**  
 `Ctrl+C` — les tâches en cours sont annulées proprement et les données déjà collectées sont sauvegardées.
+
+---
+
+## 12. Déploiement Docker
+
+SteamPulse embarque une image Docker préconstruite (`ghcr.io/davidp57/steampulse:latest`) qui fonctionne sur n'importe quel hôte Docker — NAS, serveur domestique, VPS ou machine locale. Elle démarre une boucle de fetch périodique et sert les pages HTML générées sur le port 80 via nginx.
+
+```
+Conteneur
+├── nginx           → http://hôte:PORT  →  steam_library.html
+└── boucle scheduler  → steampulse (toutes les INTERVAL_HOURS)
+
+/data  (volume nommé — persistant entre les redémarrages)
+├── steam_library.db    ← base SQLite
+├── steam_library.html  ← dashboard bibliothèque
+└── steam_news.html     ← flux d'actualités
+```
+
+### Prérequis
+
+- Docker Engine 20.10+ et Docker Compose v2 (`docker compose`)
+- Une clé API Steam et ton SteamID64 (voir [section 4](#4-prérequis-steam))
+- *(optionnel)* Credentials Epic / Twitch pour le multi-store (voir [section 5](#5-prérequis-epic-games))
+
+### Deux façons de fournir les credentials
+
+#### Option A — Variables d'environnement (simple, Steam uniquement)
+
+Idéale si tu n'utilises que Steam. Renseigne les variables dans un fichier `.env` ; le conteneur génère `config.toml` au démarrage.
+
+```bash
+# 1. Télécharger le fichier Compose et le modèle d'env
+curl -O https://raw.githubusercontent.com/davidp57/SteamPulse/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/davidp57/SteamPulse/main/.env.example
+
+# 2. Créer ton .env
+cp .env.example .env
+# Édite .env : renseigne au minimum STEAM_API_KEY et STEAM_ID
+
+# 3. Démarrer
+docker compose up -d
+```
+
+#### Option B — Fichier config monté (recommandé pour Epic + Twitch)
+
+Utilise cette option si tu as des credentials Epic Games ou Twitch/IGDB. Lance l'assistant une fois sur ta machine locale ; le `config.toml` résultant est ensuite monté en lecture seule dans le conteneur.
+
+```bash
+# 1. Sur une machine avec SteamPulse installé :
+steam-setup
+#   → suis l'assistant ; config.toml est écrit dans :
+#     Windows : %APPDATA%\steampulse\config.toml
+#     Linux/macOS : ~/.config/steampulse/config.toml
+
+# 2. Copie-le à côté de docker-compose.yml
+cp ~/.config/steampulse/config.toml ./config.toml    # Linux/macOS
+# copy %APPDATA%\steampulse\config.toml config.toml  # Windows
+
+# 3. Dans docker-compose.yml, décommente :
+#     - ./config.toml:/config/config.toml:ro
+
+# 4. Démarrer
+docker compose up -d
+```
+
+Quand `/config/config.toml` est monté, les variables d'environnement de credentials sont ignorées. `INTERVAL_HOURS` et `REFRESH` sont toujours lus depuis l'environnement.
+
+> **Pourquoi ne pas lancer l'assistant dans le conteneur ?** L'assistant a besoin d'un navigateur et d'un terminal interactif pour le flux OAuth2 Epic — aucun des deux n'est disponible dans un conteneur headless. Le lancer une fois sur ta machine produit un `config.toml` portable qui se monte directement dans Docker.
+
+### `docker-compose.yml`
+
+```yaml
+services:
+  steampulse:
+    image: ghcr.io/davidp57/steampulse:latest
+    restart: unless-stopped
+    ports:
+      - "8080:80"      # ouvre http://localhost:8080 dans ton navigateur
+    env_file: .env
+    volumes:
+      - steampulse_data:/data
+      # - ./config.toml:/config/config.toml:ro   # Option B : décommenter
+
+volumes:
+  steampulse_data:
+```
+
+### Variables d'environnement
+
+| Variable | Défaut | Description |
+|---|---|---|
+| `STEAM_API_KEY` | *(requis — option A)* | Ta clé API Steam (32 caractères hexadécimaux) |
+| `STEAM_ID` | *(requis — option A)* | Ton SteamID64 |
+| `EPIC_AUTH_CODE` | *(option A uniquement)* | Code d'autorisation Epic à usage unique (premier login) |
+| `EPIC_REFRESH_TOKEN` | *(option A uniquement)* | Refresh token Epic (auth persistante) |
+| `TWITCH_CLIENT_ID` | *(option A uniquement)* | Client ID Twitch/IGDB |
+| `TWITCH_CLIENT_SECRET` | *(option A uniquement)* | Client secret Twitch/IGDB |
+| `INTERVAL_HOURS` | `4` | Fréquence de la boucle de fetch (en heures) |
+| `REFRESH` | `false` | Mettre à `true` pour forcer un re-fetch complet à chaque run |
+| `SP_LANG` | *(système)* | Forcer la langue du dashboard (`en`, `fr`) |
+| `WORKERS` | `4` | Nombre de workers HTTP parallèles |
+| `NEWS_AGE` | `24` | Âge maximum des news (heures) avant re-fetch |
+
+Toutes les variables de credentials sont ignorées quand un fichier config est monté dans `/config/config.toml`.
+
+### Volume de données
+
+Toutes les données persistantes se trouvent dans le volume nommé `steampulse_data` (monté sur `/data`). La base de données survit aux mises à jour du conteneur.
+
+Pour tout effacer et repartir de zéro :
+
+```bash
+docker compose down -v   # ⚠ supprime toutes les données y compris la base
+docker compose up -d
+```
+
+### Commandes utiles
+
+```bash
+# Afficher les logs (scheduler + nginx)
+docker compose logs -f
+
+# Forcer un fetch immédiat en dehors du planning
+docker compose exec steampulse \
+  steampulse --config /run/steampulse/config.toml \
+             --db /data/steam_library.db \
+             --output /data/steam_library.html \
+             --refresh
+
+# Ouvrir un shell dans le conteneur
+docker compose exec steampulse bash
+
+# Mettre à jour vers la dernière image
+docker compose pull
+docker compose up -d
+```
+
+### Déploiement sur NAS ou serveur permanent
+
+N'importe quel hôte avec Docker fonctionne. Les exemples ci-dessous utilisent un NAS Synology, mais la démarche est identique sur tout autre serveur.
+
+**Synology — Container Manager (DSM 7.2+) :**
+
+1. Ouvre **Container Manager** → **Projets** → **Créer**
+2. Donne un nom au projet (ex. `steampulse`) et choisis un dossier sur le NAS (ex. `/volume1/docker/steampulse`)
+3. Importe ou colle le contenu de `docker-compose.yml` dans l'éditeur
+4. Crée un fichier `.env` dans le même dossier avec tes credentials
+5. Clique sur **Construire** — l'image est tirée de GHCR automatiquement
+6. Une fois démarré, ouvre `http://<IP-du-NAS>:8080` dans un navigateur
+
+**Synology — Portainer :**
+
+1. Va dans **Stacks** → **Add stack**
+2. Colle le contenu de `docker-compose.yml`
+3. Dans **Environment variables**, ajoute `STEAM_API_KEY`, `STEAM_ID` et les variables optionnelles
+4. Clique sur **Deploy the stack**
+
+Le conteneur redémarre automatiquement après un reboot du NAS grâce à `restart: unless-stopped`.
