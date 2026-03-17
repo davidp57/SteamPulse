@@ -11,9 +11,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-### Added
+## [1.2.0] — 2026-03-17
 
-- **Docker deployment** — single self-contained image bundling nginx (serves generated HTML pages) and a configurable scheduler loop (default interval: 4 hours). Infrastructure files:
+### Added — single self-contained image bundling nginx (serves generated HTML pages) and a configurable scheduler loop (default interval: 4 hours). Infrastructure files:
   - `docker/Dockerfile` — Python 3.13-slim + nginx + supervisord
   - `docker/nginx.conf` — serves `/data` on port 80; blocks direct access to `.db` files
   - `docker/supervisord.conf` — manages nginx + scheduler as two supervised processes
