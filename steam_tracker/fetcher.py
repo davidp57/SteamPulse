@@ -15,6 +15,7 @@ from .models import AppDetails, NewsItem, OwnedGame
 log = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[int, int, str], None]
+ResultCallback = Callable[[int, "AppDetails | None", list["NewsItem"]], None]
 FetchResult = dict[int, tuple[AppDetails | None, list[NewsItem]]]
 
 
@@ -49,11 +50,13 @@ class SteamFetcher:
         max_workers: int = 4,
         news_per_game: int = 5,
         on_progress: ProgressCallback | None = None,
+        on_result: ResultCallback | None = None,
     ) -> None:
         self._limiter = RateLimiter(rate_limit)
         self._max_workers = max_workers
         self._news_per_game = news_per_game
         self._on_progress: ProgressCallback = on_progress or (lambda *_: None)
+        self._on_result: ResultCallback = on_result or (lambda *_: None)
 
     def _fetch_one(
         self,
@@ -128,7 +131,10 @@ class SteamFetcher:
                         log.error(
                             "fetch failed for %s (%d)", game.name, game.appid, exc_info=True
                         )
-                        results[game.appid] = (None, [])
+                        appid = game.appid
+                        details, news = None, []
+                        results[appid] = (details, news)
+                    self._on_result(appid, details, news)
                     self._on_progress(done, total, game.name)
             except KeyboardInterrupt:
                 print("\n⚠ Interruption — annulation des tâches en cours...")

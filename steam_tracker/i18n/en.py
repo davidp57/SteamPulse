@@ -13,6 +13,10 @@ STRINGS: dict[str, str] = {
         "   {details} game(s) to fetch · {news} news to refresh ({cached} up to date)"
     ),
     "cli_interrupted":       "\nInterrupted.",
+    "cli_wizard_done":        (
+        "\n\u2705 Config saved to: {path}\n"
+        "   Run the program again to generate your dashboard."
+    ),
     "cli_fetch_done":        "\n✅ Done — {count} entry/entries updated in {db}",
     "cli_rendering":         "🖥  Rendering HTML pages...",
     "cli_render_library":    "✅ {count} games · library → {path}",

@@ -10,7 +10,7 @@ from .config import get_config_path, load_config, save_cli_credentials
 from .db import Database
 from .fetcher import SteamFetcher
 from .i18n import get_translator
-from .models import SYNTHETIC_APPID_BASE, OwnedGame
+from .models import SYNTHETIC_APPID_BASE, AppDetails, NewsItem, OwnedGame
 from .renderer import write_html, write_news_html
 from .sources import get_all_sources
 
@@ -87,13 +87,20 @@ def _maybe_run_wizard(
         Updated config dict (reloaded after the wizard writes the file).
     """
     if setup_requested or (not config and not _has_steam_credentials_in_argv()):
+        # Don't interrupt --help / -h with the wizard.
+        if "--help" in sys.argv or "-h" in sys.argv:
+            return config
         from .wizard import run_wizard
 
-        run_wizard(config_path=config_path or get_config_path())
-        if setup_requested:
-            # Explicit --setup / 'setup': wizard only, do not proceed to fetch.
-            sys.exit(0)
-        return load_config(config_path)
+        effective_path = config_path or get_config_path()
+        run_wizard(config_path=effective_path)
+        # Whether triggered explicitly (--setup) or automatically (no config),
+        # always stop here so the user can review the config before the first fetch.
+        from .i18n import detect_lang, get_translator
+
+        t = get_translator(detect_lang())
+        print(t("cli_wizard_done", path=effective_path))
+        sys.exit(0)
     return config
 
 
@@ -218,22 +225,26 @@ def cmd_fetch() -> None:
     def on_progress(done: int, total: int, name: str) -> None:
         print(f"\r[{done:>{width}}/{total}] {name[:52]:<52}", end="", flush=True)
 
-    fetcher = SteamFetcher(max_workers=args.workers, on_progress=on_progress)
-    try:
-        results = fetcher.fetch_all(games, skip_appids=skip, refresh_news_appids=stale_news)
-    except KeyboardInterrupt:
-        print(t("cli_interrupted"))
-        return
-
     failed_details: set[int] = set()
     news_fetched: set[int] = set()
-    for appid, (details, news) in results.items():
+
+    def on_result(appid: int, details: AppDetails | None, news: list[NewsItem]) -> None:
         if details:
             db.upsert_app_details(details)
         elif appid not in skip:
             failed_details.add(appid)
         db.upsert_news(appid, news)
         news_fetched.add(appid)
+
+    fetcher = SteamFetcher(max_workers=args.workers, on_progress=on_progress, on_result=on_result)
+    try:
+        results = fetcher.fetch_all(games, skip_appids=skip, refresh_news_appids=stale_news)
+    except KeyboardInterrupt:
+        print(t("cli_interrupted"))
+        db.mark_fetched(failed_details, details=True)
+        db.mark_fetched(news_fetched, news=True)
+        return
+
     db.mark_fetched(failed_details, details=True)
     db.mark_fetched(news_fetched, news=True)
 
@@ -359,22 +370,26 @@ def cmd_run() -> None:
     def on_progress(done: int, total: int, name: str) -> None:
         print(f"\r[{done:>{width}}/{total}] {name[:52]:<52}", end="", flush=True)
 
-    fetcher = SteamFetcher(max_workers=args.workers, on_progress=on_progress)
-    try:
-        results = fetcher.fetch_all(games, skip_appids=skip, refresh_news_appids=stale_news)
-    except KeyboardInterrupt:
-        print(t("cli_interrupted"))
-        return
-
     failed_details: set[int] = set()
     news_fetched: set[int] = set()
-    for appid, (details, news) in results.items():
+
+    def on_result(appid: int, details: AppDetails | None, news: list[NewsItem]) -> None:
         if details:
             db.upsert_app_details(details)
         elif appid not in skip:
             failed_details.add(appid)
         db.upsert_news(appid, news)
         news_fetched.add(appid)
+
+    fetcher = SteamFetcher(max_workers=args.workers, on_progress=on_progress, on_result=on_result)
+    try:
+        results = fetcher.fetch_all(games, skip_appids=skip, refresh_news_appids=stale_news)
+    except KeyboardInterrupt:
+        print(t("cli_interrupted"))
+        db.mark_fetched(failed_details, details=True)
+        db.mark_fetched(news_fetched, news=True)
+        return
+
     db.mark_fetched(failed_details, details=True)
     db.mark_fetched(news_fetched, news=True)
 
