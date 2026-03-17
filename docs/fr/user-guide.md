@@ -437,17 +437,7 @@ Puis lance le conteneur :
 docker compose up -d
 ```
 
-C'est tout. Docker télécharge l'image automatiquement au premier lancement.
-
-Pour changer l'intervalle de rafraîchissement ou forcer les dashboards en
-français, édite la section `environment` dans `docker-compose.yml` avant de
-lancer la commande :
-
-```yaml
-    environment:
-      INTERVAL_HOURS: "6"   # défaut : 4
-      SP_LANG: fr           # défaut : langue du système
-```
+Docker télécharge l'image automatiquement au premier lancement.
 
 ---
 

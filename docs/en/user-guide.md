@@ -429,16 +429,7 @@ Then start the container:
 docker compose up -d
 ```
 
-That is it. Docker pulls the image automatically on first run.
-
-To change the refresh interval or force French dashboards, edit the
-`environment` section in `docker-compose.yml` before running the command:
-
-```yaml
-    environment:
-      INTERVAL_HOURS: "6"   # default: 4
-      SP_LANG: fr           # default: system language
-```
+Docker pulls the image automatically on first run.
 
 ---
 

@@ -21,7 +21,6 @@ services:
       - ./config.toml:/config/config.toml:ro
     environment:
       INTERVAL_HOURS: "4"    # regenerate dashboards every N hours
-      # SP_LANG: fr          # uncomment to force French dashboards
 
 volumes:
   steampulse_data:

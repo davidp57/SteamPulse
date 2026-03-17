@@ -53,14 +53,17 @@ Open `steam_library.html` in a browser — no server required.
 A pre-built image is available on GHCR. It runs a periodic fetch and serves the dashboard on port 80:
 
 ```bash
-# Minimal setup (Steam only)
-echo "STEAM_API_KEY=your_key\nSTEAM_ID=your_steamid64" > .env
-curl -O https://raw.githubusercontent.com/davidp57/SteamPulse/main/docker-compose.yml
+# 1. Run steampulse.exe once on Windows to generate config.toml
+#    (%APPDATA%\steampulse\config.toml)
+# 2. Download docker-compose.yml from the latest release and place
+#    config.toml next to it, then:
 docker compose up -d
 # → open http://localhost:8080
 ```
 
-See [docs/en/user-guide.md — Section 12](docs/en/user-guide.md#12-docker-deployment) for the full guide (Epic credentials, Synology NAS, Portainer, environment variables reference).
+Download `docker-compose.yml`: <https://github.com/davidp57/SteamPulse/releases/latest/download/docker-compose.yml>
+
+See [docs/en/user-guide.md — Section 12](docs/en/user-guide.md#12-docker-deployment) for the full guide (Epic credentials, Synology NAS, Portainer).
 
 ### Documentation
 
@@ -121,14 +124,17 @@ Ouvre `steam_library.html` dans un navigateur — aucun serveur requis.
 Une image préconstruite est disponible sur GHCR. Elle lance un fetch périodique et sert le dashboard sur le port 80 :
 
 ```bash
-# Configuration minimale (Steam uniquement)
-echo "STEAM_API_KEY=ta_cle\nSTEAM_ID=ton_steamid64" > .env
-curl -O https://raw.githubusercontent.com/davidp57/SteamPulse/main/docker-compose.yml
+# 1. Lance steampulse.exe une fois sur Windows pour générer config.toml
+#    (%APPDATA%\steampulse\config.toml)
+# 2. Télécharge docker-compose.yml depuis la dernière release et place
+#    config.toml à côté, puis :
 docker compose up -d
 # → ouvre http://localhost:8080
 ```
 
-Voir [docs/fr/user-guide.md — Section 12](docs/fr/user-guide.md#12-déploiement-docker) pour le guide complet (credentials Epic, NAS Synology, Portainer, référence des variables d'environnement).
+Télécharge `docker-compose.yml` : <https://github.com/davidp57/SteamPulse/releases/latest/download/docker-compose.yml>
+
+Voir [docs/fr/user-guide.md — Section 12](docs/fr/user-guide.md#12-déploiement-docker) pour le guide complet (credentials Epic, NAS Synology, Portainer).
 
 ### Documentation
 
