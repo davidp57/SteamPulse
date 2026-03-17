@@ -11,6 +11,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+### Changed
+
+- **Filter UI — store vs. collection** — The single mixed "Source" filter is replaced by two distinct filter groups on both the library and news pages:
+  - **Store** (multi-select toggle, OR logic): `🎮 Steam` / `⚡ Epic` — both active by default; the last active store cannot be deactivated.
+  - **Collection** (single-select): `All` / `Owned` / `🎁 Wishlist` / `👁 Followed`.
+  - The two groups are combined with AND: a game is shown only if its store is active **and** its collection status matches.
+  - `data-source` HTML attribute on cards and news rows is replaced by `data-store` + `data-lib-status` (derived from `OwnedGame.source` in the renderer; no model change).
+  - URL hash keys change from `source=…` to `stores=…` (comma-separated, omitted when all active) + `lib=…`.
+
 ### Added
 
 - **TOML config file support** (`steam_tracker/config.py`) — Automatically loads `~/.config/steampulse/config.toml` (Linux/macOS) or `%APPDATA%\steampulse\config.toml` (Windows). All credentials and settings can be stored there; CLI flags still take precedence. Prints `✔ Config loaded from …` / `✔ Config written to …` messages. New CLI flag `--config <path>` to use a custom file.
