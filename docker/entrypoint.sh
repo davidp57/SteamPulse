@@ -49,7 +49,7 @@ def _int_env(name: str, default: int) -> int:
         value = int(raw)
     except ValueError:
         print(f"[SteamPulse] WARNING: {name}={raw!r} is not an integer; using {default}.",
-              flush=True)
+              file=sys.stderr, flush=True)
         return default
     return value
 
@@ -97,8 +97,8 @@ dest = "/run/steampulse/config.toml"
 with open(dest, "w") as f:
     f.write("\n".join(lines) + "\n")
 
-import stat, os as _os
-_os.chmod(dest, stat.S_IRUSR | stat.S_IWUSR)  # 0o600 — owner read/write only
+import stat
+os.chmod(dest, stat.S_IRUSR | stat.S_IWUSR)  # 0o600 — owner read/write only
 
 print("[SteamPulse] config.toml generated from environment variables.")
 PYEOF
