@@ -2,8 +2,9 @@
 #
 # Prerequisites:
 #   1. Copy your config.toml next to this file (see README for the path)
-#   2. docker compose up -d
-#   3. Open http://localhost:8080
+#   2. mkdir data
+#   3. docker compose up -d
+#   4. Open http://localhost:8080
 #
 # The config.toml is created by steampulse.exe on first launch (Windows):
 #   %APPDATA%\steampulse\config.toml

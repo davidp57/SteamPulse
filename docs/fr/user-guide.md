@@ -435,9 +435,10 @@ ton-dossier/
     └── steam_news.html
 ```
 
-Puis lance le conteneur :
+Crée le dossier de données puis lance le conteneur :
 
 ```bash
+mkdir data
 docker compose up -d
 ```
 
@@ -489,11 +490,12 @@ d'hôte Docker.
 1. Utilise **File Station** pour créer un dossier (ex.
    `/volume1/docker/steampulse`)
 2. Dépose `docker-compose.yml` et `config.toml` dans ce dossier
-3. Ouvre **Container Manager** → **Projets** → **Créer**
-4. Sélectionne le dossier créé — il détecte `docker-compose.yml` automatiquement
-5. Clique sur **Construire** — l'image est téléchargée depuis GHCR, aucune
+3. Dans ce dossier, crée un sous-dossier `data` (via File Station)
+4. Ouvre **Container Manager** → **Projets** → **Créer**
+5. Sélectionne le dossier créé — il détecte `docker-compose.yml` automatiquement
+6. Clique sur **Construire** — l'image est téléchargée depuis GHCR, aucune
    compilation locale
-6. Ouvre `http://<IP-du-NAS>:8080`
+7. Ouvre `http://<IP-du-NAS>:8080`
 
 **Portainer :**
 

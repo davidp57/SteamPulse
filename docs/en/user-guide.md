@@ -427,9 +427,10 @@ your-folder/
     └── steam_news.html
 ```
 
-Then start the container:
+Create the data folder then start the container:
 
 ```bash
+mkdir data
 docker compose up -d
 ```
 
@@ -479,10 +480,11 @@ The steps are the same as above — the NAS just acts as your Docker host.
 
 1. Use **File Station** to create a folder (e.g. `/volume1/docker/steampulse`)
 2. Upload `docker-compose.yml` and `config.toml` to that folder
-3. Open **Container Manager** → **Projects** → **Create**
-4. Select the folder you just created — it detects `docker-compose.yml` automatically
-5. Click **Build** — the image is pulled from GHCR, no local build needed
-6. Open `http://<NAS-IP>:8080`
+3. In that folder, create a `data` subfolder (via File Station)
+4. Open **Container Manager** → **Projects** → **Create**
+5. Select the folder you just created — it detects `docker-compose.yml` automatically
+6. Click **Build** — the image is pulled from GHCR, no local build needed
+7. Open `http://<NAS-IP>:8080`
 
 **Portainer:**
 
