@@ -466,7 +466,7 @@ def test_generate_html_has_epic_store_filter_button() -> None:
 
 def test_generate_html_has_followed_collection_filter_button() -> None:
     page = generate_html([_epic_record()], "0")
-    assert 'data-lib-status="followed"' in page
+    assert 'class="filter-btn" data-lib-status="followed"' in page
 
 
 def test_generate_news_html_has_epic_store_filter_button() -> None:

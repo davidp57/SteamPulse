@@ -88,7 +88,48 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     document.getElementById('resetBtn').click();
   }
-});"""
+});
+
+// --- Store + collection filter helpers (shared by library and news pages) ---
+function getActiveStores() {
+  const active = Array.from(document.querySelectorAll('#storeBtns .store-btn.active')).map(b => b.dataset.store);
+  // Fallback: if crafted URL produced no active store, treat all as active
+  if (active.length === 0) {
+    return new Set(Array.from(document.querySelectorAll('#storeBtns .store-btn')).map(b => b.dataset.store));
+  }
+  return new Set(active);
+}
+function allStoresActive() { const all = document.querySelectorAll('#storeBtns .store-btn'); return Array.from(all).every(b => b.classList.contains('active')); }
+function getLibStatusFilter() { return document.querySelector('#libStatusBtns .filter-btn.active').dataset.libStatus; }
+function setupStoreFilter(updateFn) {
+  document.querySelectorAll('#storeBtns .store-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const active = document.querySelectorAll('#storeBtns .store-btn.active');
+      if (active.length === 1 && btn.classList.contains('active')) return;
+      btn.classList.toggle('active');
+      updateFn();
+    });
+  });
+}
+// Load stores state from URL hash; also handles legacy source= parameter.
+function loadStoreHash(p) {
+  if (p.get('stores')) {
+    const storeSet = new Set(p.get('stores').split(',').filter(Boolean));
+    document.querySelectorAll('#storeBtns .store-btn').forEach(b => {
+      b.classList.toggle('active', storeSet.has(b.dataset.store));
+    });
+  } else if (p.get('source')) {
+    // Backward compat: map old source= values to new store+lib filters.
+    const src = p.get('source');
+    if (src === 'epic') {
+      document.querySelectorAll('#storeBtns .store-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.store === 'epic');
+      });
+    } else if (src !== 'all') {
+      activateBtn('#libStatusBtns .filter-btn', 'libStatus', src);
+    }
+  }
+}"""
 
 # ─── HTML Template ────────────────────────────────────────────────────────────
 _HTML_TEMPLATE = r"""<!DOCTYPE html>
@@ -897,9 +938,6 @@ __I18N_JS__
 const allCards = Array.from(document.querySelectorAll('.card'));
 __SHARED_JS__
 function getFilter()    { return document.querySelector('#filterBtns .filter-btn.active').dataset.filter; }
-function getActiveStores()    { return new Set(Array.from(document.querySelectorAll('#storeBtns .store-btn.active')).map(b => b.dataset.store)); }
-function allStoresActive()    { const all = document.querySelectorAll('#storeBtns .store-btn'); return Array.from(all).every(b => b.classList.contains('active')); }
-function getLibStatusFilter() { return document.querySelector('#libStatusBtns .filter-btn.active').dataset.libStatus; }
 function getTagFilter() { return document.querySelector('#tagBtns .tag-btn.active').dataset.tag; }
 function getPtFilter()  { return document.querySelector('#playtimeBtns .filter-btn.active').dataset.pt; }
 function getMcFilter()  { return document.querySelector('#mcBtns .filter-btn.active').dataset.mc; }
@@ -986,12 +1024,7 @@ function loadStateFromHash() {
   if (!h) return;
   const p = new URLSearchParams(h);
   if (p.get('status')) { activateBtn('#filterBtns .filter-btn', 'filter', p.get('status')); }
-  if (p.get('stores')) {
-    const storeSet = new Set(p.get('stores').split(','));
-    document.querySelectorAll('#storeBtns .store-btn').forEach(b => {
-      b.classList.toggle('active', storeSet.has(b.dataset.store));
-    });
-  }
+  loadStoreHash(p);
   if (p.get('lib'))    { activateBtn('#libStatusBtns .filter-btn', 'libStatus', p.get('lib')); }
   if (p.get('tag'))    { activateBtn('#tagBtns .tag-btn', 'tag', p.get('tag')); }
   if (p.get('pt'))     { activateBtn('#playtimeBtns .filter-btn', 'pt', p.get('pt')); }
@@ -1118,15 +1151,7 @@ function setupFilterGroup(selector, callback) {
   });
 }
 setupFilterGroup('#filterBtns .filter-btn');
-// Store filter: multi-select toggle (OR logic; can't deactivate last active store)
-document.querySelectorAll('#storeBtns .store-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const active = document.querySelectorAll('#storeBtns .store-btn.active');
-    if (active.length === 1 && btn.classList.contains('active')) return;
-    btn.classList.toggle('active');
-    updateGrid();
-  });
-});
+setupStoreFilter(updateGrid);
 setupFilterGroup('#libStatusBtns .filter-btn');
 setupFilterGroup('#tagBtns .tag-btn');
 setupFilterGroup('#playtimeBtns .filter-btn');
@@ -1448,9 +1473,6 @@ const allRows = Array.from(document.querySelectorAll('.feed-item'));
 __SHARED_JS__
 // --- Getters ---
 function getStatusFilter()    { return document.querySelector('#statusBtns .filter-btn.active').dataset.filter; }
-function getActiveStores()    { return new Set(Array.from(document.querySelectorAll('#storeBtns .store-btn.active')).map(b => b.dataset.store)); }
-function allStoresActive()    { const all = document.querySelectorAll('#storeBtns .store-btn'); return Array.from(all).every(b => b.classList.contains('active')); }
-function getLibStatusFilter() { return document.querySelector('#libStatusBtns .filter-btn.active').dataset.libStatus; }
 function getTagFilter()       { return document.querySelector('#tagBtns .tag-btn.active').dataset.tag; }
 function getPtFilter()        { return document.querySelector('#playtimeBtns .filter-btn.active').dataset.pt; }
 function getMcFilter()        { return document.querySelector('#mcBtns .filter-btn.active').dataset.mc; }
@@ -1520,12 +1542,7 @@ function loadStateFromHash() {
   if (!h) return;
   const p = new URLSearchParams(h);
   if (p.get('status')) { activateBtn('#statusBtns .filter-btn', 'filter', p.get('status')); }
-  if (p.get('stores')) {
-    const storeSet = new Set(p.get('stores').split(','));
-    document.querySelectorAll('#storeBtns .store-btn').forEach(b => {
-      b.classList.toggle('active', storeSet.has(b.dataset.store));
-    });
-  }
+  loadStoreHash(p);
   if (p.get('lib'))    { activateBtn('#libStatusBtns .filter-btn', 'libStatus', p.get('lib')); }
   if (p.get('tag'))    { activateBtn('#tagBtns .tag-btn', 'tag', p.get('tag')); }
   if (p.get('pt'))     { activateBtn('#playtimeBtns .filter-btn', 'pt', p.get('pt')); }
@@ -1593,15 +1610,7 @@ function setupFilterGroup(selector, callback) {
   });
 }
 setupFilterGroup('#statusBtns .filter-btn');
-// Store filter: multi-select toggle (OR logic; can't deactivate last active store)
-document.querySelectorAll('#storeBtns .store-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const active = document.querySelectorAll('#storeBtns .store-btn.active');
-    if (active.length === 1 && btn.classList.contains('active')) return;
-    btn.classList.toggle('active');
-    updateFeed();
-  });
-});
+setupStoreFilter(updateFeed);
 setupFilterGroup('#libStatusBtns .filter-btn');
 setupFilterGroup('#tagBtns .tag-btn');
 setupFilterGroup('#playtimeBtns .filter-btn');
