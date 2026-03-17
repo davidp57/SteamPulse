@@ -1,0 +1,10 @@
+# Normalize line endings: text files get LF in the repo; Windows checkouts may
+# receive CRLF for most files, but shell scripts and Docker files MUST stay LF
+# so they work correctly inside Linux containers.
+
+* text=auto
+
+# Force LF for files that run inside Linux containers
+docker/*.sh    text eol=lf
+docker/Dockerfile text eol=lf
+*.sh           text eol=lf
