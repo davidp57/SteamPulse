@@ -365,14 +365,20 @@ Press `Ctrl+C` — in-flight tasks are cancelled cleanly and already-collected d
 
 ## 12. Docker deployment
 
-SteamPulse ships a pre-built Docker image (`ghcr.io/davidp57/steampulse:latest`) that runs on any host with Docker — NAS, home server, VPS, or a local machine. It starts a periodic fetch loop and serves the generated HTML pages on port 80 via nginx.
+SteamPulse publishes a pre-built image on every release — no local build required:
+
+```
+ghcr.io/davidp57/steampulse:latest
+```
+
+The container runs a periodic fetch loop and serves the generated HTML dashboards on port 80 via nginx:
 
 ```
 Container
-├── nginx           → http://host:PORT  →  steam_library.html
-└── scheduler loop  → steampulse (every INTERVAL_HOURS)
+├── nginx           → http://host:PORT  →  steam_library.html / steam_news.html
+└── scheduler loop  → steampulse fetch (every INTERVAL_HOURS)
 
-/data  (named volume — persisted across restarts)
+/data  (persisted volume)
 ├── steam_library.db    ← SQLite database
 ├── steam_library.html  ← library dashboard
 └── steam_news.html     ← news feed
@@ -380,56 +386,71 @@ Container
 
 ### Prerequisites
 
-- Docker Engine 20.10+ and Docker Compose v2 (`docker compose`)
+- Docker Engine 20.10+
 - A Steam API key and your SteamID64 (see [Section 4](#4-steam-prerequisites))
 - *(optional)* Epic / Twitch credentials for multi-store support (see [Section 5](#5-epic-games-prerequisites))
 
-### Two ways to configure credentials
+### Quickstart — already using `steampulse.exe` on Windows?
 
-#### Option A — Environment variables (simple, Steam-only)
+If you already run SteamPulse on Windows, the wizard created your `config.toml` on first launch. It lives at:
 
-Suitable when you only need Steam. Set the required variables in a `.env` file; the container generates `config.toml` at startup.
-
-```bash
-# 1. Download the Compose file and the env template
-curl -O https://raw.githubusercontent.com/davidp57/SteamPulse/main/docker-compose.yml
-curl -O https://raw.githubusercontent.com/davidp57/SteamPulse/main/.env.example
-
-# 2. Create your .env
-cp .env.example .env
-# Edit .env: fill in STEAM_API_KEY and STEAM_ID at minimum
-
-# 3. Start
-docker compose up -d
+```
+%APPDATA%\steampulse\config.toml
 ```
 
-#### Option B — Mounted config file (recommended for Epic + Twitch)
+This single file holds all your credentials (Steam key, SteamID, Epic tokens, Twitch…). Mount it into the container and you're done — no re-entry needed:
 
-Use this when you have Epic Games or Twitch/IGDB credentials. Run the wizard once on your local machine; the resulting `config.toml` is then mounted read-only into the container.
-
-```bash
-# 1. On a machine with SteamPulse installed:
-steam-setup
-#   → follow the wizard; config.toml is written to:
-#     Windows : %APPDATA%\steampulse\config.toml
-#     Linux/macOS: ~/.config/steampulse/config.toml
-
-# 2. Copy it next to docker-compose.yml
-cp ~/.config/steampulse/config.toml ./config.toml    # Linux/macOS
-# copy %APPDATA%\steampulse\config.toml config.toml  # Windows
-
-# 3. In docker-compose.yml, uncomment:
-#     - ./config.toml:/config/config.toml:ro
-
-# 4. Start
-docker compose up -d
+```cmd
+REM 1. Copy your config next to the docker run command
+copy "%APPDATA%\steampulse\config.toml" config.toml
 ```
 
-When `/config/config.toml` is mounted, credential environment variables are ignored. `INTERVAL_HOURS` and `REFRESH` are always read from the environment.
+```bash
+# 2. Start the container
+docker run -d \
+  --name steampulse \
+  --restart unless-stopped \
+  -p 8080:80 \
+  -v steampulse_data:/data \
+  -v "$(pwd)/config.toml:/config/config.toml:ro" \
+  ghcr.io/davidp57/steampulse:latest
+```
 
-> **Why not run the wizard inside the container?** The wizard needs a browser and an interactive terminal for the Epic OAuth2 flow — neither is available in a headless container. Running it once on your machine produces a portable `config.toml` that mounts cleanly into Docker.
+Then open `http://localhost:8080` (or `http://<server-ip>:8080`) in your browser. The dashboards are regenerated every 4 hours by default.
 
-### `docker-compose.yml`
+> **On Windows PowerShell**, replace `$(pwd)` with `${PWD}`:
+> ```powershell
+> docker run -d --name steampulse --restart unless-stopped -p 8080:80 `
+>   -v steampulse_data:/data `
+>   -v "${PWD}/config.toml:/config/config.toml:ro" `
+>   ghcr.io/davidp57/steampulse:latest
+> ```
+
+If you have not run `steampulse.exe` yet, launch it once — the wizard starts automatically, saves the config, and exits. Your `config.toml` is then ready to mount.
+
+### Without a config file — Steam only (environment variables)
+
+If you only use Steam and don’t have a `config.toml`, you can pass credentials directly as environment variables. The container generates a `config.toml` at startup.
+
+```bash
+docker run -d \
+  --name steampulse \
+  --restart unless-stopped \
+  -p 8080:80 \
+  -v steampulse_data:/data \
+  -e STEAM_API_KEY=your_32_char_key \
+  -e STEAM_ID=76561198xxxxxxxxx \
+  -e INTERVAL_HOURS=4 \
+  ghcr.io/davidp57/steampulse:latest
+```
+
+See the [environment variables table](#environment-variables) below for all available options.
+
+> **Epic / Twitch credentials cannot be passed as environment variables for initial OAuth2 setup** — the wizard requires a browser. Run `steampulse.exe` once on your local machine to complete the Epic login flow, then mount the resulting `config.toml` as shown in the quickstart above. Once the refresh token is in `config.toml`, Epic re-authentication is fully automatic.
+
+### `docker-compose.yml` — for persistent / NAS deployments
+
+`docker compose` is convenient for NAS deployments, automatic restarts, and keeping all settings in a file.
 
 ```yaml
 services:
@@ -437,15 +458,25 @@ services:
     image: ghcr.io/davidp57/steampulse:latest
     restart: unless-stopped
     ports:
-      - "8080:80"      # open http://localhost:8080 in your browser
-    env_file: .env
+      - "8080:80"
     volumes:
       - steampulse_data:/data
-      # - ./config.toml:/config/config.toml:ro   # Option B: uncomment
+      - ./config.toml:/config/config.toml:ro   # mount your config here
+    environment:
+      - INTERVAL_HOURS=4
+      - SP_LANG=en
 
 volumes:
   steampulse_data:
 ```
+
+Start with:
+
+```bash
+docker compose up -d
+```
+
+If you prefer environment variables over a config file (Steam only), replace the `config.toml` volume line with `env_file: .env` and fill in a `.env` file based on `.env.example`.
 
 ### Environment variables
 
