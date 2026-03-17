@@ -519,7 +519,24 @@ docker compose up -d
 3. Click **Action** → **Build** — Container Manager pulls the new image and
    recreates the container automatically
 
+> **Note:** some DSM versions only restart the container without re-pulling.
+> If the steps below show an old date, open a SSH session on the NAS and run
+> `docker compose pull && docker compose up -d` from the project folder.
+
 **Portainer:**
 
 1. Go to **Stacks** → select `steampulse`
 2. Click **Pull and redeploy**
+
+**Verify that the new image is actually running:**
+
+```bash
+# Date the local image was built (compare with the release date)
+docker image inspect ghcr.io/davidp57/steampulse:latest --format='{{.Created}}'
+
+# List local images with their creation date
+docker images ghcr.io/davidp57/steampulse
+```
+
+If the date shown is older than the release, the old image is still cached.
+Run `docker compose pull && docker compose up -d` to force the update.
