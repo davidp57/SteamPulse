@@ -62,7 +62,7 @@ jobs:
       - name: Smoke test (PR only)
         if: github.event_name == 'pull_request'
         run: |
-          IMAGE=ghcr.io/${{ github.repository }}:pr-${{ github.event.number }}
+          IMAGE=$(echo "${{ steps.meta.outputs.tags }}" | head -1)
           # nginx config is valid
           docker run --rm "$IMAGE" nginx -t
           # steampulse is installed and reachable
