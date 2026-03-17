@@ -64,9 +64,9 @@ jobs:
         run: |
           IMAGE=$(echo "${{ steps.meta.outputs.tags }}" | head -1)
           # nginx config is valid
-          docker run --rm "$IMAGE" nginx -t
+          docker run --rm --entrypoint nginx "$IMAGE" -t
           # steampulse is installed and reachable
-          docker run --rm "$IMAGE" steampulse --help
+          docker run --rm --entrypoint steampulse "$IMAGE" --help
           # entrypoint script is syntactically correct
           docker run --rm --entrypoint bash "$IMAGE" -n /entrypoint.sh
           docker run --rm --entrypoint bash "$IMAGE" -n /scheduler.sh
