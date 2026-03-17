@@ -92,11 +92,15 @@ def _maybe_run_wizard(
             return config
         from .wizard import run_wizard
 
-        run_wizard(config_path=config_path or get_config_path())
-        if setup_requested:
-            # Explicit --setup / 'setup': wizard only, do not proceed to fetch.
-            sys.exit(0)
-        return load_config(config_path)
+        effective_path = config_path or get_config_path()
+        run_wizard(config_path=effective_path)
+        # Whether triggered explicitly (--setup) or automatically (no config),
+        # always stop here so the user can review the config before the first fetch.
+        from .i18n import detect_lang, get_translator
+
+        t = get_translator(detect_lang())
+        print(t("cli_wizard_done", path=effective_path))
+        sys.exit(0)
     return config
 
 
