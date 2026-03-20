@@ -11,6 +11,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+### Changed
+
+- **Card image** — now uses native Steam 460×215 aspect ratio (`aspect-ratio: 460 / 215`) instead of a fixed 80 px height; images are never cropped regardless of viewport width.
+- **Card metadata** — AppID (`#appid`) removed from the visible card body; it is still available as the `data-appid` HTML attribute.
+- **News section** — hidden entirely when a game has no recent news, reclaiming the footer space on the card.
+- **News overlay** — the news accordion now expands as a `position: absolute` overlay below the card, leaving the grid layout undisturbed; all other cards are dimmed (opacity 0.3) and blurred (blur 1.5 px, scale 0.975); only one card can be expanded at a time; clicking outside collapses it.
+- **Metacritic badge tooltip** — hovering the MC badge shows a popover with the score /100 and a quality label: *Favorable* (≥ 75), *Mixed* (50–74), *Negative* (< 50).
+- **Filter button tooltips** — hovering any non-trivial filter button shows a short explanatory tooltip via `data-tooltip` CSS; available in English and French.
+- **Mobile filter panel** — on screens ≤ 600 px, the filter panel opens as a full-screen fixed overlay (instead of a small dropdown) with a sticky "Filters ✕" close button.
+
+---
+
 ### Added
 
 - **Docker deployment** — single self-contained image bundling nginx (serves generated HTML pages) and a configurable scheduler loop (default interval: 4 hours). Infrastructure files:

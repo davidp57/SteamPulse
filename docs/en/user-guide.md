@@ -272,22 +272,27 @@ For each **Epic** game: the game is resolved to a Steam AppID when possible — 
 | **Metacritic** | All · No score · < 50 · 50–75 · > 75 | Single-select |
 | **Recent update** | All · 2 days · 5 days · 15 days · 30 days (based on last patch note date) | Single-select |
 
+> Hover any filter button to see a tooltip explaining what it filters.
+
 > The **Store** and **Collection** filters are combined with AND: only games matching an active store **and** the selected collection status are shown.
+
+> On mobile (narrow screens), the filter panel opens as a full-screen overlay with a close button at the top.
 
 All filter and sort state is persisted in the URL hash so you can bookmark or share a filtered view.
 
 **Cards:**
 
 Each card shows:
-- Game header image
+- Game header image (native 460×215 aspect ratio — never cropped)
 - Name + status badge (Early Access · Released 1.0 · Upcoming)
-- Metacritic score with colour coding (green ≥ 75 · orange ≥ 50 · red < 50)
+- Metacritic score with colour coding (green ≥ 75 · orange ≥ 50 · red < 50) — hover to see the score/100 and quality label tooltip
 - Platform icons (Windows / Mac / Linux)
-- Genres
+- Developer · Genres
 - 📅 Release date · 📰 Latest news date · 🕹 Playtime _(or 🎁 Wishlist / 👁 Followed / 🎮 Epic)_
-- `#appid` — click to open the Steam store page (or hover the card to see the store hint)
 
 Clicking anywhere on a card opens the Steam store page in a new tab.
+
+If a game has news, a **▼ N updates** bar appears at the bottom of the card. Clicking it expands the news list as a floating overlay on top of the cards below — the rest of the grid dims and blurs to focus attention. Only one card can be expanded at a time; click outside to close.
 
 ### News page (`steam_news.html`)
 
