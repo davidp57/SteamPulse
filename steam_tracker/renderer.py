@@ -511,7 +511,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     border-color: var(--accent) !important;
     box-shadow: 0 8px 40px rgba(0,0,0,.75), 0 0 0 1px var(--accent);
   }
-  .card.expanded .news-section {
+  .card.expanded .news-list {
+    display: block;
     position: absolute;
     left: -1px; right: -1px;
     top: calc(100% - 1px);
@@ -1991,10 +1992,12 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         f'        <div class="news-title">\U0001f5de {html.escape(toggle_lbl)}</div>\n'
         f'        <span class="news-toggle-icon">\u25bc</span>\n'
         f"      </div>\n"
-        f'      <div class="news-list">\n'
-        f"        {news_html}\n"
-        f"      </div>\n"
         f"    </div>\n"
+    ) if nc > 0 else ""
+    news_list_html = (
+        f'  <div class="news-list">\n'
+        f"    {news_html}\n"
+        f"  </div>\n"
     ) if nc > 0 else ""
 
     release_ts = _parse_release_ts(status.release_date)
@@ -2060,6 +2063,7 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         f"    </div>\n"
         f"{news_section_html}"
         f"  </div>\n"
+        f"{news_list_html}"
         f"</div>"
     )
 

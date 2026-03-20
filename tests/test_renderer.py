@@ -225,11 +225,15 @@ def test_make_card_no_news_section_when_empty() -> None:
 
 
 def test_make_card_news_section_present_when_has_news(sample_record: GameRecord) -> None:
-    """news-section must be present when the game has at least one news item."""
+    """news-section (toggle bar) and news-list (overlay) must both be present when
+    the game has news; news-list must appear *after* news-section (outside card-body)."""
     card = make_card(sample_record)
     assert len(sample_record.news) > 0
     assert "news-section" in card
     assert "news-toggle" in card
+    assert "news-list" in card
+    # news-list must be placed after news-section (not nested inside it)
+    assert card.index('"news-section"') < card.index('"news-list"')
 
 
 def test_make_card_appid_not_in_body_text(sample_record: GameRecord) -> None:
