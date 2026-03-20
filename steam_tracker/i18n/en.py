@@ -137,6 +137,7 @@ STRINGS: dict[str, str] = {
     "tt_badge_earlyaccess":  "Currently in Early Access — not yet v1.0",
     "tt_badge_released":     "Full release (v1.0 or later)",
     "tt_badge_unreleased":   "Not yet released",
+    "tt_badge_unknown":      "Release status unknown",
     "tt_developer":          "Developer",
     "tt_price":              "Current price on Steam",
     "tt_release_date":       "Release date",

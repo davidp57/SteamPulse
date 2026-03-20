@@ -727,6 +727,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   .grid.list-view .genre-tags  { margin-bottom: 0; }
   .grid.list-view .card-meta   { margin-bottom: 0; flex-wrap: wrap; gap: 6px; }
   .grid.list-view .news-section { display: none; }
+  .grid.list-view .news-list    { display: none; }
   .grid.list-view .card-ext-hint { display: none; }
   /* Table header row */
   .list-header {
