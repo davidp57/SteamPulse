@@ -379,7 +379,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
-    overflow: hidden;
     transition: transform .18s, border-color .18s, box-shadow .18s;
     cursor: pointer;
   }
@@ -394,6 +393,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     object-fit: cover;
     display: block;
     background: var(--surface2);
+    border-radius: 10px 10px 0 0;
   }
   .card-img-placeholder {
     width: 100%;
@@ -405,6 +405,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     color: var(--muted);
     font-size: 11px;
     font-family: 'IBM Plex Mono', monospace;
+    border-radius: 10px 10px 0 0;
   }
   .card-body { padding: 14px 16px; }
   .card-top {
@@ -1878,8 +1879,9 @@ def _price_html(details: object, t: Translator | None = None) -> str:
         from .i18n import get_translator  # noqa: PLC0415
         t = get_translator()
     price_free_lbl = t("price_free")
+    price_tip = html.escape(t("tt_price"))
     if details.is_free:
-        return f'<span class="price-free">{price_free_lbl}</span>'
+        return f'<span class="price-free" data-tooltip="{price_tip}">{price_free_lbl}</span>'
     if details.price_final <= 0:
         return ""
     currency = html.escape(details.price_currency)
@@ -1887,12 +1889,12 @@ def _price_html(details: object, t: Translator | None = None) -> str:
     if details.price_discount_pct > 0:
         original = f"{details.price_initial / 100:.2f} {currency}"
         return (
-            f'<span class="price-tag">'
+            f'<span class="price-tag" data-tooltip="{price_tip}">'
             f'<span class="price-discount">{original}</span>'
             f" {final} (-{details.price_discount_pct}%)"
             f"</span>"
         )
-    return f'<span class="price-tag">{final}</span>'
+    return f'<span class="price-tag" data-tooltip="{price_tip}">{final}</span>'
 
 
 def _platform_html(details: object) -> str:
@@ -1901,11 +1903,11 @@ def _platform_html(details: object) -> str:
         return ""
     icons = []
     if details.platform_windows:
-        icons.append("🪟")
+        icons.append('<span data-tooltip="Windows">🪟</span>')
     if details.platform_mac:
-        icons.append("🍎")
+        icons.append('<span data-tooltip="Mac">🍎</span>')
     if details.platform_linux:
-        icons.append("🐧")
+        icons.append('<span data-tooltip="Linux">🐧</span>')
     return f'<span class="platform-icons">{"".join(icons)}</span>' if icons else ""
 
 
@@ -1942,11 +1944,18 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         )
         genres_html = f'<div class="genre-tags">{tags}</div>\n'
 
+    # ── element tooltips ────────────────────────────────────────────────────
+    _tt_badge = html.escape(t(f"tt_badge_{status.badge}"))
+    _tt_dev = html.escape(t("tt_developer"))
+    _tt_rel = html.escape(t("tt_release_date"))
+    _tt_news = html.escape(t("tt_last_news"))
+    _tt_pt = html.escape(t("tt_playtime"))
+
     # ── developer / platform / metacritic / price row ──────────────────────
     detail_parts: list[str] = []
     if details and details.developers:
         detail_parts.append(
-            f'<span class="dev-name">{html.escape(details.developers[0])}</span>'
+            f'<span class="dev-name" data-tooltip="{_tt_dev}">{html.escape(details.developers[0])}</span>'
         )
     plat = _platform_html(details) if details else ""
     if plat:
@@ -2029,6 +2038,7 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         pt_display = f"🕹 {pt_fmt}"
     metacritic_score = details.metacritic_score if details else 0
     store_hint = "🎮 Epic" if game.source == "epic" else "↗ Steam"
+    _pt_attr = f' data-tooltip="{_tt_pt}"' if game.source == "owned" else ""
     return (
         f'<div class="card" data-appid="{appid}" data-status="{status.badge}" '
         f'data-store="{store_tag}" data-lib-status="{lib_status_tag}" data-name="{name.lower()}" '
@@ -2045,20 +2055,20 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         f'    <div class="col-title">\n'
         f'    <div class="card-top">\n'
         f'      <div class="card-title">{name}</div>\n'
-        f'      <span class="{html.escape(badge_cls)}">{html.escape(badge_label)}</span>\n'
+        f'      <span class="{html.escape(badge_cls)}" data-tooltip="{_tt_badge}">{html.escape(badge_label)}</span>\n'
         f"    </div>\n"
         f"    </div>\n"
         f'    <div class="col-detail">{detail_row}</div>\n'
         f'    <div class="col-genres">{genres_html}</div>\n'
         f'    <div class="col-meta">\n'
         f'    <div class="card-meta">\n'
-        f"      <span>📅 {rel_date}</span>\n"
-        f'      <span class="news-date-display"'
+        f'      <span data-tooltip="{_tt_rel}">📅 {rel_date}</span>\n'
+        f'      <span class="news-date-display" data-tooltip="{_tt_news}"'
         f' data-date-all="{html.escape(last_all_date)}"'
         f' data-date-patch="{html.escape(last_patch_date)}"'
         f' data-date-other="{html.escape(last_other_date)}">'
         f'\U0001f4f0 {html.escape(last_all_date) or "—"}</span>\n'
-        f"      <span>{pt_display}</span>\n"
+        f'      <span{_pt_attr}>{pt_display}</span>\n'
         f"    </div>\n"
         f"    </div>\n"
         f"{news_section_html}"

@@ -132,4 +132,14 @@ STRINGS: dict[str, str] = {
     "tt_filter_recent_5":    "Jeux avec une news dans les 5 derniers jours",
     "tt_filter_recent_15":   "Jeux avec une news dans les 15 derniers jours",
     "tt_filter_recent_30":   "Jeux avec une news dans les 30 derniers jours",
+
+    # ── Infobulles des éléments de tuile ───────────────────────────────────────
+    "tt_badge_earlyaccess":  "En accès anticipé — pas encore v1.0",
+    "tt_badge_released":     "Version finale (v1.0 ou ultérieure)",
+    "tt_badge_unreleased":   "Pas encore sorti",
+    "tt_developer":          "Développeur",
+    "tt_price":              "Prix actuel sur Steam",
+    "tt_release_date":       "Date de sortie",
+    "tt_last_news":          "Date de la dernière actualité ou mise à jour",
+    "tt_playtime":           "Temps de jeu total (depuis toujours)",
 }
