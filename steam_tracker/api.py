@@ -131,6 +131,9 @@ def get_app_details(
             metacritic_url=_str(mc.get("url")),
             achievement_count=_int(ach.get("total")),
             recommendation_count=_int(reco.get("total")),
+            dlc_appids=[_int(d_id) for d_id in d.get("dlc", []) if _int(d_id)],
+            controller_support=_str(d.get("controller_support")),
+            required_age=_int(d.get("required_age")),
         )
     except Exception:
         log.warning("appdetails failed for appid=%d", appid, exc_info=True)
@@ -162,6 +165,7 @@ def get_app_news(
                 date=datetime.fromtimestamp(float(item.get("date") or 0), tz=UTC),
                 url=_str(item.get("url")),
                 author=_str(item.get("author")),
+                contents=_str(item.get("contents")),
                 feedname=_str(item.get("feedname")),
                 feedlabel=_str(item.get("feedlabel")),
                 tags=_parse_tags(item.get("tags")),

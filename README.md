@@ -10,18 +10,18 @@
 
 ```
 steampulse.exe  →  Steam API  →  SQLite  →  steam_library.html
-                                          →  steam_news.html
+                                          →  steam_alerts.html
 ```
 
 ### Features
 
 - **Library + Wishlist** — owned games, wishlist and followed games in a single view
 - **Multi-store** — Epic Games library imported alongside Steam; games resolved to Steam AppIDs when possible
-- **Integrated news** — latest news in cards and a dedicated page, with patch note / news type filtering
+- **Configurable alerts** — rule-based alert system (price drop, major update, new DLC, review changes…) with read/unread tracking; replaces the old news page
 - **Smart cache** — app details only re-fetched for new games; news refreshed after 24 h (configurable)
 - **Static HTML** — filterable/sortable cards by source, status, genre, Metacritic, playtime; no server required
 - **Multilingual** — UI in English or French; auto-detected from system locale, or forced with `--lang`
-- **Quality** — ruff, strict mypy, pytest (168 tests)
+- **Quality** — ruff, strict mypy, pytest (264 tests)
 
 ### Quick start
 
@@ -81,18 +81,18 @@ See [docs/en/user-guide.md — Section 12](docs/en/user-guide.md#12-docker-deplo
 
 ```
 steampulse.exe  →  API Steam  →  SQLite  →  steam_library.html
-                                          →  steam_news.html
+                                          →  steam_alerts.html
 ```
 
 ### Fonctionnalités
 
 - **Bibliothèque + Wishlist** — jeux possédés, wishlist et jeux suivis regroupés dans une seule vue
 - **Multi-store** — bibliothèque Epic Games importée aux côtés de Steam ; jeux résolus vers des AppIDs Steam si possible
-- **News intégrées** — dernières actualités dans les cartes et une page dédiée, avec filtre patch notes / news
+- **Alertes configurables** — système d'alertes basé sur des règles (baisse de prix, mise à jour majeure, nouveau DLC, évolution des avis…) avec suivi lu/non lu ; remplace l'ancienne page news
 - **Cache intelligent** — app_details rechargées uniquement pour les nouveaux jeux ; news rafraîchies après 24 h (configurable)
 - **HTML statique** — cartes filtrables/triables par source, statut, genre, Metacritic, temps de jeu ; aucun serveur requis
 - **Multilingue** — interface en anglais ou en français ; détectée automatiquement ou forcée avec `--lang`
-- **Qualité** — ruff, mypy strict, pytest (168 tests)
+- **Qualité** — ruff, mypy strict, pytest (264 tests)
 
 ### Guide rapide
 
