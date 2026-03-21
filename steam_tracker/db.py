@@ -219,13 +219,18 @@ class Database:
     # ── Data cleanup ──────────────────────────────────────────────────────
 
     def run_cleanup(self) -> int:
-        """Run all data-cleanup rules and return the total number of affected rows.
+        """Run all data-cleanup rules and return the number of primary entries cleaned.
 
         Each rule is a private method named ``_cleanup_*``.  New rules should
         be added to the ``_CLEANUP_RULES`` list below.
 
+        Note:
+            The returned count reflects the number of primary rows (e.g. games)
+            cleaned.  Related rows (e.g. ``appid_mappings``) may also be
+            deleted but are not included in the count.
+
         Returns:
-            Total number of rows deleted or corrected across all rules.
+            Total number of primary entries deleted or corrected across all rules.
         """
         total = 0
         for rule in self._CLEANUP_RULES:

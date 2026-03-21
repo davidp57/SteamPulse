@@ -148,6 +148,18 @@ def _build_enrichment_queue(all_discovered: list[OwnedGame]) -> list[OwnedGame]:
     return games
 
 
+log = logging.getLogger(__name__)
+
+
+def _run_cleanup(db: Database, t: object) -> None:
+    """Run DB cleanup rules and print a message if any rows were cleaned."""
+    cleaned = db.run_cleanup()
+    if cleaned:
+        print(t("cli_cleanup_done", count=cleaned))  # type: ignore[operator]
+    else:
+        log.debug("cleanup: nothing to clean")
+
+
 def cmd_fetch() -> None:
     """Fetch Steam library data and persist it to a local SQLite database."""
     config_path, setup_requested = _pre_parse_config()
@@ -191,14 +203,7 @@ def cmd_fetch() -> None:
     )
 
     db = Database(Path(args.db))
-
-    # Clean up stale / broken data from previous runs before discovery.
-    log = logging.getLogger(__name__)
-    cleaned = db.run_cleanup()
-    if cleaned:
-        print(t("cli_cleanup_done", count=cleaned))
-    else:
-        log.debug("cleanup: nothing to clean")
+    _run_cleanup(db, t)
 
     from .alerts import AlertEngine  # noqa: PLC0415
 
@@ -362,13 +367,7 @@ def cmd_run() -> None:
     )
 
     db = Database(Path(args.db))
-    # Clean up stale / broken data from previous runs before discovery.
-    log = logging.getLogger(__name__)
-    cleaned = db.run_cleanup()
-    if cleaned:
-        print(t("cli_cleanup_done", count=cleaned))
-    else:
-        log.debug("cleanup: nothing to clean")
+    _run_cleanup(db, t)
     from .alerts import AlertEngine  # noqa: PLC0415
 
     engine_run = AlertEngine(rules=load_alert_rules(config_path), db=db)

@@ -419,6 +419,19 @@ def test_extract_title_empty_when_nothing() -> None:
     assert _extract_epic_title(item) == ""
 
 
+def test_extract_title_ignores_none_values() -> None:
+    """None values in title fields must not produce 'None' as title."""
+    from steam_tracker.sources.epic import _extract_epic_title
+
+    item: dict[str, object] = {
+        "appName": "InternalCode",
+        "catalogItem": {"title": None},
+        "productName": None,
+        "sandboxName": None,
+    }
+    assert _extract_epic_title(item) == ""
+
+
 @resp_mock.activate
 def test_discover_games_sandbox_name_live_uses_appname() -> None:
     """When sandboxName='Live' and no metadata, fall back to appName."""

@@ -298,11 +298,24 @@ def test_cleanup_removes_matching_appid_mappings(db: Database) -> None:
     db.upsert_game(OwnedGame(appid=2_000_000_001, name="Live", source="epic",
                               external_id="epic:cat1"))
     db.upsert_appid_mapping("epic", "epic:cat1", "Live", None)
-    assert db.get_appid_mapping("epic", "epic:cat1") is None  # exists but None
+
+    # The mapping row exists (even though steam_appid is NULL)
+    with db._connect() as con:
+        count = con.execute(
+            "SELECT COUNT(*) FROM appid_mappings"
+            " WHERE external_source = 'epic' AND external_id = 'epic:cat1'",
+        ).fetchone()[0]
+    assert count == 1
 
     db.run_cleanup()
-    # After cleanup, the mapping itself should be gone (not just its value)
-    assert db.get_appid_mapping("epic", "epic:cat1") is None
+
+    # After cleanup, the mapping row itself must be gone
+    with db._connect() as con:
+        count = con.execute(
+            "SELECT COUNT(*) FROM appid_mappings"
+            " WHERE external_source = 'epic' AND external_id = 'epic:cat1'",
+        ).fetchone()[0]
+    assert count == 0
     assert db.get_all_game_records() == []
 
 

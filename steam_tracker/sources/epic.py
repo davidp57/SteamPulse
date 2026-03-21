@@ -49,19 +49,25 @@ def _extract_epic_title(item: dict[str, object]) -> str:
     # catalogItem.title (most reliable when metadata is present)
     catalog_item = item.get("catalogItem")
     if isinstance(catalog_item, dict):
-        title = str(catalog_item.get("title", ""))
-        if title:
-            return title
+        raw_title = catalog_item.get("title")
+        if isinstance(raw_title, str):
+            title = raw_title.strip()
+            if title:
+                return title
 
     # productName (sometimes present at top level)
-    product_name = str(item.get("productName", ""))
-    if product_name:
-        return product_name
+    raw_product = item.get("productName")
+    if isinstance(raw_product, str):
+        product_name = raw_product.strip()
+        if product_name:
+            return product_name
 
     # sandboxName — but only when it is a real title, not "Live"/"Stage"/…
-    sandbox_name = str(item.get("sandboxName", ""))
-    if sandbox_name and sandbox_name not in _SANDBOX_LABELS:
-        return sandbox_name
+    raw_sandbox = item.get("sandboxName")
+    if isinstance(raw_sandbox, str):
+        sandbox_name = raw_sandbox.strip()
+        if sandbox_name and sandbox_name not in _SANDBOX_LABELS:
+            return sandbox_name
 
     return ""
 
