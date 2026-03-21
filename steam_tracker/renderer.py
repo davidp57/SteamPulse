@@ -2847,6 +2847,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .section-body{padding:20px}
 .stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
 .stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
+.stat-card[data-filter]{cursor:pointer;transition:border-color .2s,box-shadow .2s}
+.stat-card[data-filter]:hover{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.stat-card[data-filter].active{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent);background:rgba(88,166,255,.08)}
 .stat-value{font-size:28px;font-weight:700;color:var(--accent);font-family:var(--mono)}
 .stat-label{font-size:12px;color:var(--muted);margin-top:4px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px}
 .source-bar{display:flex;gap:8px;flex-wrap:wrap}
@@ -2931,20 +2934,34 @@ tr:hover td{background:rgba(88,166,255,.04)}
 <div class="gen-footer">__T_generated_at__ __GENERATED_AT__ · __T_footer__</div>
 
 <script>
+let activeFilter=null;
 function filterMappings(){
   const q=document.getElementById('mappingSearch').value.toLowerCase();
   document.querySelectorAll('#mappingTable tbody tr').forEach(r=>{
-    r.style.display=r.textContent.toLowerCase().includes(q)?'':'none';
+    const matchText=!q||r.textContent.toLowerCase().includes(q);
+    const matchFilter=!activeFilter||r.dataset.status===activeFilter;
+    r.style.display=(matchText&&matchFilter)?'':'none';
   });
 }
+function toggleFilter(el){
+  const f=el.dataset.filter;
+  document.querySelectorAll('.stat-card[data-filter]').forEach(c=>c.classList.remove('active'));
+  if(activeFilter===f||f==='all'){activeFilter=null;}else{activeFilter=f;el.classList.add('active');}
+  filterMappings();
+}
+document.querySelectorAll('.stat-card[data-filter]').forEach(c=>c.addEventListener('click',()=>toggleFilter(c)));
 </script>
 </body>
 </html>
 """
 
 
-def _make_stat_card(value: object, label: str) -> str:
-    return f'<div class="stat-card"><div class="stat-value">{value}</div><div class="stat-label">{html.escape(str(label))}</div></div>'
+def _make_stat_card(
+    value: object, label: str, *, data_filter: str | None = None,
+) -> str:
+    """Render a stat card.  Optionally clickable when *data_filter* is set."""
+    attr = f' data-filter="{html.escape(data_filter)}"' if data_filter else ""
+    return f'<div class="stat-card"{attr}><div class="stat-value">{value}</div><div class="stat-label">{html.escape(str(label))}</div></div>'
 
 
 def _make_mapping_row(m: dict[str, object], t: Translator) -> str:
@@ -2954,16 +2971,19 @@ def _make_mapping_row(m: dict[str, object], t: Translator) -> str:
     if is_manual:
         badge_cls = "badge-manual"
         status_text = t("diag_status_manual")
+        row_status = "manual"
     elif steam_appid is not None:
         badge_cls = "badge-resolved"
         status_text = t("diag_status_resolved")
+        row_status = "resolved"
     else:
         badge_cls = "badge-unresolved"
         status_text = t("diag_status_unresolved")
+        row_status = "unresolved"
     appid_display = str(steam_appid) if steam_appid is not None else "—"
     resolved_at = str(m.get("resolved_at", ""))[:10]
     return (
-        f"<tr><td>{html.escape(str(m['external_name']))}</td>"
+        f'<tr data-status="{row_status}"><td>{html.escape(str(m["external_name"]))}</td>'
         f"<td>{html.escape(str(m['external_source']))}</td>"
         f"<td>{html.escape(str(m['external_id']))}</td>"
         f"<td>{appid_display}</td>"
@@ -3060,10 +3080,10 @@ def generate_diagnostic_html(
 
     # ── Mappings ───────────────────────────────────────────────────────
     mapping_stats = "".join([
-        _make_stat_card(summary["total_mappings"], t("diag_total_mappings")),
-        _make_stat_card(summary["resolved_mappings"], t("diag_resolved")),
-        _make_stat_card(summary["unresolved_mappings"], t("diag_unresolved")),
-        _make_stat_card(summary["manual_mappings"], t("diag_manual")),
+        _make_stat_card(summary["total_mappings"], t("diag_total_mappings"), data_filter="all"),
+        _make_stat_card(summary["resolved_mappings"], t("diag_resolved"), data_filter="resolved"),
+        _make_stat_card(summary["unresolved_mappings"], t("diag_unresolved"), data_filter="unresolved"),
+        _make_stat_card(summary["manual_mappings"], t("diag_manual"), data_filter="manual"),
     ])
     mapping_rows = "".join(_make_mapping_row(m, t) for m in mappings)
 

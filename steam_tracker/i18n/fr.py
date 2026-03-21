@@ -57,6 +57,7 @@ STRINGS: dict[str, str] = {
     "cli_epic_auth_error":    "   ⚠ Authentification Epic échouée ({error})",
     "cli_epic_authenticated": "   ✅ Epic authentifié",
     "cli_epic_library_count": "   ✅ {count} jeu(x) dans la bibliothèque Epic",
+    "cli_epic_catalog_lookup": "   🔍 Recherche de {count} titre(s) via l'API Catalog Epic…",
     "cli_epic_library_error": "   ⚠ Bibliothèque Epic inaccessible ({error})",
     "cli_epic_resolving":     "🎮 Résolution des jeux Epic vers des AppIDs Steam...",
     "cli_epic_resolved_done": "   ✅ {resolved}/{total} résolus vers un AppID Steam ({unresolved} non résolus)",  # noqa: E501

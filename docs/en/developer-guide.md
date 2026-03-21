@@ -332,7 +332,7 @@ The HTML is built by string interpolation into `_HTML_TEMPLATE` and `_ALERTS_TEM
 | Symbol | Description |
 |---|---|
 | `AppIdResolver` | Protocol — any class with `resolve(name, session) → int \| None` satisfies it |
-| `SteamStoreResolver` | Resolves via Steam Store Search API with fuzzy name matching (SequenceMatcher ≥ 0.8) |
+| `SteamStoreResolver` | Resolves via Steam Store Search API with multi-strategy matching: (1) fuzzy similarity (SequenceMatcher ≥ 0.8), (2) word-prefix with sequel rejection, (3) normalized word-containment; retries with edition-suffix stripping and year normalization |
 | `IGDBResolver(twitch_client_id, twitch_client_secret)` | Resolves via IGDB: Twitch OAuth → game search → external_games lookup (category=Steam) |
 | `resolve_steam_appid(name, resolvers, session)` | Iterates resolvers in order; first successful result wins |
 
@@ -344,6 +344,7 @@ The HTML is built by string interpolation into `_HTML_TEMPLATE` and `_ALERTS_TEM
 | `epic_auth_with_refresh(refresh_token)` | Renew the session using a saved refresh token (valid 30 days, auto-renewed on each use) |
 | `epic_auth_with_device(device_id, account_id, secret)` | Authenticate using persistent device credentials (kept for advanced use) |
 | `epic_get_library(access_token)` | Fetch the user's Epic library with pagination |
+| `epic_get_catalog_titles(namespace, items, session)` | Batch-resolve catalog item IDs to human-readable titles via Epic's public catalog endpoint (batches of 50) |
 
 ### `i18n/__init__.py`
 

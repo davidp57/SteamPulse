@@ -171,7 +171,7 @@ For better Steam AppID resolution accuracy, provide Twitch API credentials (used
 1. Create an app at <https://dev.twitch.tv/console/apps>
 2. Pass `--twitch-client-id` and `--twitch-client-secret`
 
-Without IGDB, SteamPulse falls back to fuzzy matching against the Steam Store search API.
+Without IGDB, SteamPulse falls back to multi-strategy matching against the Steam Store search API (fuzzy similarity, word-prefix, word-containment, edition stripping, year normalization).
 
 ---
 
@@ -365,9 +365,9 @@ A technical page generated alongside the library and alerts pages. It provides:
 
 - **Database summary** — total games, enriched/unenriched counts, alerts and news counts
 - **Per-source breakdown** — number of games from each source (Steam, Epic)
-- **AppID mappings table** — all external-to-Steam AppID resolutions with status (resolved, unresolved, manual); includes a search field
+- **AppID mappings table** — all external-to-Steam AppID resolutions with status (resolved, unresolved, manual); includes a search field; stat cards are clickable to filter the table by status
 - **Epic discovery statistics** — total API items, accepted, resolved, unresolved, and skipped counts (only shown when Epic source was used during fetch)
-- **Skipped items table** — items filtered out during Epic discovery, with reason (no title, hex ID, sandbox label)
+- **Skipped items table** — items filtered out during Epic discovery, with reason (no title, hex ID, sandbox label, duplicate)
 
 This page is useful for diagnosing data quality issues, checking which Epic games were resolved to Steam AppIDs, and identifying items that were filtered out.
 

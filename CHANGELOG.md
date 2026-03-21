@@ -12,7 +12,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 
 - **Diagnostic page** — new `steam_diagnostic.html` page generated alongside library and alerts pages; provides database summary stats, per-source game counts, AppID mapping table with search, Epic discovery statistics, and skipped items table with skip reasons
+- **Diagnostic interactive filters** — stat cards on the diagnostic page are now clickable; clicking a card filters the mapping table to the corresponding status (resolved / unresolved / manual); combined with the existing text search
 - **Epic hex-ID filtering** — games whose only name is a long hex catalog ID (e.g. `91eac4ac00304bcc…`) are now automatically filtered out during Epic library discovery; tracked as `SkippedItem(reason="hex_id")` and visible on the diagnostic page
+- **Epic Catalog API enrichment** — batch title resolution via Epic's public catalog endpoint (`catalog-public-service-prod06.ol.epicgames.com`); items lacking a human-readable name are looked up in bulk (batches of 50) to retrieve their catalog title before falling back to the existing title chain
+- **Epic library deduplication** — `discover_games()` now tracks seen game names and skips duplicates (e.g. multiple "Death Stranding" entries); tracked as `SkippedItem(reason="duplicate")`
+- **Resolver word-prefix matching** — new `_is_word_prefix()` strategy in `_best_match()`: matches when the Epic name is a word-boundary prefix of the Steam name (e.g. "Control" → "Control Ultimate Edition"); includes sequel rejection to avoid false positives (e.g. "Arma 2" ≠ "Arma 3")
+- **Resolver word-containment matching** — new `_is_word_contained()` strategy after prefix: matches when the Epic name is fully contained within the Steam name with word-boundary checks (e.g. "Ghost Recon Breakpoint" inside "Tom Clancy's Ghost Recon® Breakpoint")
+- **Resolver edition-suffix stripping** — `_strip_edition()` removes common edition suffixes (GOTY, Definitive, Ultimate, Director's Cut…) and retries Steam search when the original name returns no suitable match
+- **Resolver year normalization** — `_shorten_year()` converts 4-digit years to 2-digit (e.g. "Farming Simulator 2022" → "Farming Simulator 22") and retries search as a last resort
 
 ### Fixed
 

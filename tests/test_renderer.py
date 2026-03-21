@@ -705,3 +705,37 @@ def test_write_diagnostic_html_creates_file(tmp_path: Path) -> None:
     content = out.read_text(encoding="utf-8")
     assert "SteamPulse" in content
 
+
+def test_generate_diagnostic_html_mapping_cards_have_data_filter() -> None:
+    """Mapping stat cards should have data-filter attributes for click filtering."""
+    summary = {**_EMPTY_SUMMARY, "total_mappings": 3, "resolved_mappings": 2,
+               "unresolved_mappings": 1, "manual_mappings": 0}
+    html = generate_diagnostic_html(summary, [], [])
+    assert 'data-filter="all"' in html
+    assert 'data-filter="resolved"' in html
+    assert 'data-filter="unresolved"' in html
+    assert 'data-filter="manual"' in html
+
+
+def test_generate_diagnostic_html_mapping_rows_have_data_status() -> None:
+    """Mapping table rows should have data-status for JS filtering."""
+    mappings: list[dict[str, object]] = [
+        {"external_source": "epic", "external_id": "c1", "external_name": "Hades",
+         "steam_appid": 1145360, "resolved_at": "2025-01-01", "manual": 0},
+        {"external_source": "epic", "external_id": "c2", "external_name": "Unknown",
+         "steam_appid": None, "resolved_at": "", "manual": 0},
+        {"external_source": "epic", "external_id": "c3", "external_name": "Custom",
+         "steam_appid": 999, "resolved_at": "2025-01-01", "manual": 1},
+    ]
+    html = generate_diagnostic_html(_EMPTY_SUMMARY, mappings, [])
+    assert 'data-status="resolved"' in html
+    assert 'data-status="unresolved"' in html
+    assert 'data-status="manual"' in html
+
+
+def test_generate_diagnostic_html_contains_toggle_script() -> None:
+    """The diagnostic page should include the toggleFilter JS function."""
+    html = generate_diagnostic_html(_EMPTY_SUMMARY, [], [])
+    assert "toggleFilter" in html
+    assert "activeFilter" in html
+
