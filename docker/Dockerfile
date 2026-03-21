@@ -12,6 +12,9 @@
 
 FROM python:3.13-slim
 
+# -- Unbuffered Python output (real-time logs in Docker) -----------------------
+ENV PYTHONUNBUFFERED=1
+
 # -- System dependencies -------------------------------------------------------
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
