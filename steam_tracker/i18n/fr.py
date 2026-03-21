@@ -22,6 +22,7 @@ STRINGS: dict[str, str] = {
     "cli_render_library":    "✅ {count} jeux · bibliothèque → {path}",
     "cli_render_alerts":     "   {count} alertes → {path}",
     "cli_backfill_alerts":   "   ↩ {count} alertes reconstituées depuis l'historique",
+    "cli_cleanup_done":      "   🧹 {count} entrée(s) obsolète(s) nettoyée(s) dans la base",
 
     # ── HTML – page alertes ───────────────────────────────────────────────────
     "link_alerts":           "Alertes",
@@ -29,9 +30,12 @@ STRINGS: dict[str, str] = {
     "alert_view_by_rule":    "Par règle",
     "alert_view_by_game":    "Par jeu",
     "alert_view_combined":   "Combiné",
+    "alert_view_by_rule_game": "Règle / Jeu",
     "alert_expand_all":      "Tout ouvrir",
     "alert_collapse_all":    "Tout fermer",
     "alert_group_search":    "Chercher un groupe\u2026",
+    "alert_font_smaller":    "Réduire la taille du texte",
+    "alert_font_larger":     "Agrandir la taille du texte",
     "btn_mark_all_read":     "Tout marquer comme lu",
     "btn_mark_rule_read":    "Marquer la règle comme lue",
     "btn_mark_read":         "Marquer comme lu",

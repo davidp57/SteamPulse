@@ -260,6 +260,25 @@ Les erreurs HTTP 403/404 sur les endpoints news/details sont loguées en DEBUG (
 | `get_all_game_records()` | Liste dénormalisée complète pour le renderer |
 | `get_appid_mapping(source, external_id)` | AppID Steam en cache pour un jeu externe, ou `None` |
 | `upsert_appid_mapping(source, external_id, name, steam_appid, manual)` | Insère/met à jour un mapping AppID ; les mappings manuels sont protégés contre l'écrasement automatique |
+| `run_cleanup()` | Exécute toutes les règles de nettoyage enregistrées ; retourne le nombre total de lignes affectées |
+
+#### Système de nettoyage de données
+
+`Database.run_cleanup()` exécute une liste de règles de nettoyage stockées dans l'attribut de classe `_CLEANUP_RULES`. Chaque règle est une méthode `_cleanup_*(self) -> int` qui corrige ou supprime les données obsolètes ou cassées issues de précédentes exécutions. La méthode retourne le nombre total de lignes affectées, toutes règles confondues.
+
+Le nettoyage s'exécute **automatiquement** au début de chaque invocation `cmd_fetch` / `cmd_run`, avant la découverte des jeux. Si des lignes sont nettoyées, un message est affiché à l'utilisateur.
+
+**Ajouter une nouvelle règle de nettoyage :**
+
+1. Ajouter une méthode privée `_cleanup_<description>(self) -> int` à la classe `Database`
+2. La méthode doit corriger ou supprimer les données problématiques et retourner le nombre de lignes affectées
+3. Ajouter la référence de la méthode à `_CLEANUP_RULES`
+
+**Règles actuelles :**
+
+| Règle | Objectif |
+|---|---|
+| `_cleanup_epic_live_name` | Supprime les jeux Epic nommés `"Live"` (causé par un bug qui utilisait le champ `sandboxName` — le label d'environnement de déploiement — au lieu du vrai titre du jeu). Supprime aussi les entrées `appid_mappings` correspondantes pour que le resolver re-tente une découverte propre au prochain fetch. |
 
 ### `fetcher.py — SteamFetcher`
 

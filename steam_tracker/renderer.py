@@ -101,11 +101,19 @@ if (_filterClose) {
   });
 }
 
-// Scroll-to-top
+// Scroll-to-top + auto-hide toolbar on mobile
 const scrollBtn = document.getElementById('scrollTop');
+const _toolbar = document.querySelector('.toolbar');
+let _lastY = window.scrollY;
 if (scrollBtn) {
   window.addEventListener('scroll', () => {
-    scrollBtn.classList.toggle('visible', window.scrollY > 400);
+    const y = window.scrollY;
+    scrollBtn.classList.toggle('visible', y > 400);
+    if (_toolbar && window.innerWidth <= 600) {
+      if (y > _lastY && y > 80) _toolbar.classList.add('toolbar-hidden');
+      else _toolbar.classList.remove('toolbar-hidden');
+    }
+    _lastY = y;
   }, {passive: true});
   scrollBtn.addEventListener('click', () => {
     window.scrollTo({top: 0, behavior: 'smooth'});
@@ -344,7 +352,9 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     position: sticky;
     top: 0;
     z-index: 100;
+    transition: transform .3s ease;
   }
+  .toolbar.toolbar-hidden { transform: translateY(-100%); }
   .toolbar-main {
     padding: 11px 40px;
     display: flex;
@@ -1013,11 +1023,18 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   }
   @media (max-width: 600px) {
     header, .toolbar-main, .toolbar-filters, .grid { padding-left: 16px; padding-right: 16px; }
-    .header-stats { gap: 10px; flex-wrap: wrap; justify-content: center; }
-    .stat-val { font-size: 20px; }
+    header { padding: 16px 16px 12px; gap: 12px; }
+    header svg { display: none; }
+    .header-text h1 { font-size: 22px; letter-spacing: 1px; }
+    .header-stats { gap: 8px 16px; flex-wrap: wrap; justify-content: center; }
+    .stat-val { font-size: 18px; }
+    .stat-lbl { font-size: 9px; }
+    .toolbar-main { gap: 6px; padding-top: 8px; padding-bottom: 8px; }
+    .search-wrap { max-width: 100%; min-width: 0; flex: 1 1 100%; }
+    select { font-size: 12px; padding: 6px 8px; }
+    .view-toggle, .filter-toggle-btn, .nav-link { font-size: 11px; padding: 5px 10px; }
+    .count-label { font-size: 10px; }
     .grid { grid-template-columns: 1fr; }
-    .toolbar-main { gap: 8px; }
-    .search-wrap { max-width: 100%; }
     .grid.list-view .card-img { width: 80px; }
     .scroll-top { bottom: 16px; right: 16px; }
     .theme-toggle { bottom: 16px; left: 16px; }
@@ -1448,7 +1465,7 @@ document.querySelectorAll('.card').forEach(card => {
   card.addEventListener('click', e => {
     if (e.target.closest('.news-toggle') || e.target.closest('.news-list')) return;
     const appid = card.dataset.appid;
-    if (appid) window.open('https://store.steampowered.com/app/' + appid, '_blank');
+    if (appid) { var w = window.open('https://store.steampowered.com/app/' + appid, '_blank', 'noopener,noreferrer'); if (w) w.opener = null; }
   });
 });
 
@@ -1881,6 +1898,8 @@ def make_alert_card(
         )
         if news_item and any(t.lower() == "patchnotes" for t in news_item.tags):
             tag_val = "patchnotes"
+    store_url = f"https://store.steampowered.com/app/{alert.appid}"
+    news_url_attr = f' data-news-url="{html.escape(alert.url)}"' if alert.url else ""
     return (
         f'<div class="alert-card" data-id="{html.escape(alert.id)}" '
         f'data-rule="{html.escape(alert.rule_name)}" '
@@ -1891,13 +1910,15 @@ def make_alert_card(
         f'data-store="{store_tag}" data-lib-status="{collection_tag}" '
         f'data-status="{status_tag}" data-playtime="{playtime_val}" '
         f'data-metacritic="{metacritic_val}" data-last-patch-ts="{last_patch_ts}" '
-        f'data-tag="{tag_val}">\n'
-        f'  <img class="alert-thumb" src="{html.escape(img_url)}" alt="" loading="lazy">\n'
+        f'data-tag="{tag_val}" data-store-url="{html.escape(store_url)}"'
+        f'{news_url_attr}>\n'
+        f'  <a class="alert-thumb-link" href="{html.escape(store_url)}" target="_blank" rel="noopener">'
+        f'<img class="alert-thumb" src="{html.escape(img_url)}" alt="" loading="lazy"></a>\n'
         f'  <div class="alert-body">\n'
         f'    <div class="alert-meta">\n'
         f'      <span class="alert-icon">{html.escape(alert.rule_icon)}</span>'
         f'      <span class="alert-rule">{html.escape(alert.rule_name)}</span>'
-        f'      <span class="alert-game">{html.escape(alert.game_name)}</span>'
+        f'      <a class="alert-game" href="{html.escape(store_url)}" target="_blank" rel="noopener">{html.escape(alert.game_name)}</a>'
         f'      <span class="alert-date">{date_str}</span>\n'
         f"{buildid_html}"
         f"    </div>\n"
@@ -1936,7 +1957,8 @@ _ALERTS_TEMPLATE = """\
   .header-text p { color:var(--muted); font-size:12px; margin-top:2px; font-family:'IBM Plex Mono',monospace; }
   .nav-link { padding:6px 14px; border-radius:20px; border:1px solid var(--border); color:var(--muted); font-size:12px; text-decoration:none; transition:all .2s; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px; }
   .nav-link:hover { border-color:var(--accent); color:var(--accent); }
-  .toolbar { border-bottom:1px solid var(--border); background:var(--surface); position:sticky; top:0; z-index:100; }
+  .toolbar { border-bottom:1px solid var(--border); background:var(--surface); position:sticky; top:0; z-index:100; transition:transform .3s ease; }
+  .toolbar.toolbar-hidden { transform:translateY(-100%); }
   .toolbar-main { padding:11px 40px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
   .view-btn { padding:5px 14px; border-radius:16px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:12px; cursor:pointer; transition:all .2s; font-family:'IBM Plex Mono',monospace; }
   .view-btn:hover, .view-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(29,185,255,.07); }
@@ -1956,24 +1978,44 @@ _ALERTS_TEMPLATE = """\
   .group-controls { display:none; align-items:center; gap:8px; }
   .group-controls.visible { display:flex; }
   .section-badge { background:rgba(29,185,255,.12); border:1px solid rgba(29,185,255,.3); color:var(--accent); border-radius:12px; padding:1px 8px; font-size:11px; font-family:'IBM Plex Mono',monospace; }
-  .alert-card { display:flex; align-items:flex-start; gap:12px; padding:12px 16px; border:1px solid var(--border); border-radius:8px; background:var(--surface); margin-bottom:8px; transition:border-color .2s, opacity .2s; cursor:pointer; }
+  .section-header .section-thumb { width:64px; height:30px; object-fit:cover; border-radius:4px; flex-shrink:0; }
+  .sub-section-header { font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:500; color:var(--muted); padding:8px 0 4px 18px; border-bottom:1px solid rgba(31,45,69,.5); margin-bottom:8px; margin-top:12px; display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none; transition:color .2s; }
+  .sub-section-header:hover { color:var(--accent); }
+  .sub-section-header.collapsed { margin-bottom:0; }
+  .sub-section-cards { margin-bottom:0; padding-left:18px; }
+  .sub-section-cards.collapsed { display:none; }
+  .alert-card { display:flex; align-items:flex-start; gap:12px; padding:12px 16px; border:1px solid var(--border); border-radius:8px; background:var(--surface); margin-bottom:8px; transition:border-color .2s, opacity .2s; }
   .alert-card:hover { border-color:rgba(29,185,255,.35); }
   .alert-card.read { opacity:var(--read-op); }
   .alert-card.hidden { display:none; }
-  .alert-thumb { width:48px; height:28px; object-fit:cover; border-radius:4px; flex-shrink:0; }
-  .alert-body { flex:1; min-width:0; }
+  .alert-thumb-link { flex-shrink:0; line-height:0; }
+  .alert-thumb { width:120px; height:56px; object-fit:cover; border-radius:4px; flex-shrink:0; transition:width .2s, height .2s; }
+  .grouped-by-game .alert-thumb-link { display:none; }
+  .grouped-by-game .alert-game { display:none; }
+  .alert-body { flex:1; min-width:0; cursor:default; }
   .alert-meta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px; }
   .alert-icon { font-size:14px; }
   .alert-rule { font-size:11px; color:var(--accent); font-family:'IBM Plex Mono',monospace; }
-  .alert-game { font-size:11px; color:var(--muted); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .alert-date { font-size:11px; color:var(--muted); font-family:'IBM Plex Mono',monospace; white-space:nowrap; }
-  .alert-title { font-size:13px; color:var(--text); line-height:1.4; }
+  .alert-game { font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-decoration:none; }
+  .alert-game:hover { color:var(--accent); text-decoration:underline; }
+  .alert-date { font-size:11px; color:var(--muted); font-family:'IBM Plex Mono',monospace; white-space:nowrap; margin-left:auto; }
+  .alert-title { font-size:13px; color:var(--text); line-height:1.4; cursor:pointer; }
   .alert-title a { color:var(--text); text-decoration:none; }
   .alert-title a:hover { color:var(--accent); text-decoration:underline; }
-  .alert-details { font-size:12px; color:var(--muted); margin-top:4px; line-height:1.5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .alert-details { font-size:12px; color:var(--muted); margin-top:4px; line-height:1.5; cursor:pointer; }
   .mark-read-btn { flex-shrink:0; background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:50%; width:22px; height:22px; font-size:11px; cursor:pointer; line-height:1; display:flex; align-items:center; justify-content:center; transition:all .2s; }
   .mark-read-btn:hover { border-color:#3dd68c; color:#3dd68c; }
   .alert-buildid { font-size:10px; color:var(--muted); font-family:'IBM Plex Mono',monospace; background:rgba(29,185,255,.08); border:1px solid rgba(29,185,255,.2); border-radius:8px; padding:1px 6px; white-space:nowrap; }
+  .search-clear { position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--muted); font-size:14px; cursor:pointer; padding:2px 4px; line-height:1; display:none; }
+  .search-clear:hover { color:var(--text); }
+  .search-wrap input:not(:placeholder-shown) ~ .search-clear { display:block; }
+  .search-wrap .autocomplete-list { position:absolute; top:100%; left:0; right:0; background:var(--surface); border:1px solid var(--border); border-top:none; border-radius:0 0 6px 6px; max-height:220px; overflow-y:auto; z-index:200; display:none; }
+  .search-wrap .autocomplete-list.open { display:block; }
+  .search-wrap .autocomplete-item { padding:6px 12px 6px 36px; font-size:13px; color:var(--text); cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .search-wrap .autocomplete-item:hover, .search-wrap .autocomplete-item.selected { background:rgba(29,185,255,.1); color:var(--accent); }
+  .font-controls { display:flex; align-items:center; gap:2px; }
+  .font-btn { width:26px; height:26px; border-radius:50%; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; transition:all .2s; }
+  .font-btn:hover { border-color:var(--accent); color:var(--accent); }
 __SHARED_FILTER_CSS__
   .scroll-top { position:fixed; bottom:28px; right:28px; z-index:200; width:42px; height:42px; border-radius:50%; background:var(--accent); color:#000; border:none; font-size:20px; cursor:pointer; opacity:0; pointer-events:none; transition:opacity .3s, transform .3s; transform:translateY(10px); box-shadow:0 4px 16px rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center; }
   .scroll-top.visible { opacity:1; pointer-events:auto; transform:translateY(0); }
@@ -1988,7 +2030,16 @@ __SHARED_FILTER_CSS__
   footer { border-top:1px solid var(--border); padding:16px 40px; font-size:11px; color:var(--muted); text-align:center; font-family:'IBM Plex Mono',monospace; }
   @media (max-width:600px) {
     header { padding:16px 16px 12px; }
-    .toolbar { padding:10px 16px; }
+    .header-text h1 { font-size:22px; letter-spacing:1px; }
+    .toolbar-main { gap:6px; padding:8px 16px; }
+    .search-wrap { max-width:100%; min-width:0; flex:1 1 100%; }
+    .view-btn { padding:4px 10px; font-size:11px; }
+    .action-btn { padding:4px 10px; font-size:11px; }
+    .group-controls { flex:1 1 100%; }
+    .group-controls .search-wrap { flex:1 1 auto; }
+    .font-btn { width:28px; height:28px; font-size:12px; }
+    .filter-toggle-btn, .nav-link { font-size:11px; padding:5px 10px; }
+    .count-label { font-size:10px; }
     main { padding:16px; }
     .scroll-top { bottom:16px; right:16px; }
     .theme-toggle { bottom:16px; left:16px; }
@@ -2009,6 +2060,8 @@ __SHARED_FILTER_CSS__
     <div class="search-wrap">
       <span class="icon">⌕</span>
       <input type="text" id="search" placeholder="__T_search_placeholder__">
+      <button class="search-clear" id="searchClear" type="button">&times;</button>
+      <div class="autocomplete-list" id="autocompleteList"></div>
     </div>
     <select id="sortBy">
       <option value="date">__T_sort_lastupdate__</option>
@@ -2020,10 +2073,12 @@ __SHARED_FILTER_CSS__
     <button class="view-btn active" data-view="combined">__T_alert_view_combined__</button>
     <button class="view-btn" data-view="by-rule">__T_alert_view_by_rule__</button>
     <button class="view-btn" data-view="by-game">__T_alert_view_by_game__</button>
+    <button class="view-btn" data-view="by-rule-game">__T_alert_view_by_rule_game__</button>
     <div class="group-controls" id="groupControls">
       <div class="search-wrap">
         <span class="icon">⌕</span>
         <input type="text" id="groupSearch" placeholder="__T_alert_group_search__">
+        <button class="search-clear" id="groupSearchClear" type="button">&times;</button>
       </div>
       <button class="action-btn" id="toggleAllBtn">__T_alert_expand_all__</button>
     </div>
@@ -2032,6 +2087,10 @@ __SHARED_FILTER_CSS__
     <div class="spacer"></div>
     <button class="action-btn" id="unreadToggle">__T_btn_show_unread_only__</button>
     <button class="action-btn" id="markAllBtn">__T_btn_mark_all_read__</button>
+    <div class="font-controls">
+      <button class="font-btn" id="fontMinus" title="__T_alert_font_smaller__">A−</button>
+      <button class="font-btn" id="fontPlus" title="__T_alert_font_larger__">A+</button>
+    </div>
     <span class="count-label" id="countLabel"></span>
     <a class="nav-link" href="__LIB_HREF__">📚 __T_link_library__</a>
   </div>
@@ -2113,6 +2172,7 @@ __SHARED_FILTER_CSS__
 __SHARED_JS__
 (function() {
   var READ_KEY = 'steampulse_read_alerts';
+  var FONT_KEY = 'steampulse_font_size';
   var I18N = {
     count1: '__I18N_COUNT1__',
     countN: '__I18N_COUNTN__',
@@ -2134,6 +2194,22 @@ __SHARED_JS__
   var unreadOnly = false;
   var currentView = 'combined';
 
+  /* ── Font size ─────────────────────────────────────────────── */
+  var fontSize = 14;
+  try { var sf = parseInt(localStorage.getItem(FONT_KEY)); if (sf >= 10 && sf <= 22) fontSize = sf; } catch(e) {}
+  function applyFontSize() {
+    document.querySelector('main').style.fontSize = fontSize + 'px';
+    try { localStorage.setItem(FONT_KEY, fontSize); } catch(e) {}
+  }
+  applyFontSize();
+  document.getElementById('fontPlus').addEventListener('click', function() {
+    if (fontSize < 22) { fontSize += 1; applyFontSize(); }
+  });
+  document.getElementById('fontMinus').addEventListener('click', function() {
+    if (fontSize > 10) { fontSize -= 1; applyFontSize(); }
+  });
+
+  /* ── Read/unread ───────────────────────────────────────────── */
   function applyRead() {
     document.querySelectorAll('.alert-card').forEach(function(c) {
       var id = c.getAttribute('data-id');
@@ -2151,6 +2227,7 @@ __SHARED_JS__
     applyFilters();
   }
 
+  /* ── Search helpers ────────────────────────────────────────── */
   function getSearch() { var el = document.getElementById('search'); return el ? el.value.toLowerCase().trim() : ''; }
   function getSort()   { var el = document.getElementById('sortBy'); return el ? el.value : 'date'; }
   function getGroupSearch() { var el = document.getElementById('groupSearch'); return el ? el.value.toLowerCase().trim() : ''; }
@@ -2179,6 +2256,84 @@ __SHARED_JS__
   }
   window.updateFilterBadge = updateFilterBadge;
 
+  /* ── Search clear buttons ──────────────────────────────────── */
+  var searchEl = document.getElementById('search');
+  var searchClearBtn = document.getElementById('searchClear');
+  if (searchClearBtn && searchEl) {
+    searchClearBtn.addEventListener('click', function() {
+      searchEl.value = '';
+      searchClearBtn.style.display = 'none';
+      closeAutocomplete();
+      applyFilters();
+      searchEl.focus();
+    });
+    searchEl.addEventListener('input', function() {
+      searchClearBtn.style.display = searchEl.value ? 'block' : 'none';
+    });
+  }
+  var groupSearchEl = document.getElementById('groupSearch');
+  var groupSearchClearBtn = document.getElementById('groupSearchClear');
+  if (groupSearchClearBtn && groupSearchEl) {
+    groupSearchClearBtn.addEventListener('click', function() {
+      groupSearchEl.value = '';
+      groupSearchClearBtn.style.display = 'none';
+      updateSections(); updateCount(); updateResetBtn();
+      groupSearchEl.focus();
+    });
+    groupSearchEl.addEventListener('input', function() {
+      groupSearchClearBtn.style.display = groupSearchEl.value ? 'block' : 'none';
+    });
+  }
+
+  /* ── Autocomplete ──────────────────────────────────────────── */
+  var acList = document.getElementById('autocompleteList');
+  var acIndex = -1;
+  function getVisibleGameNames() {
+    var names = new Set();
+    document.querySelectorAll('.alert-card:not(.hidden)').forEach(function(c) {
+      var g = c.getAttribute('data-game');
+      if (g) names.add(g);
+    });
+    return Array.from(names).sort();
+  }
+  function showAutocomplete(query) {
+    if (!acList || !query) { closeAutocomplete(); return; }
+    var names = getVisibleGameNames().filter(function(n) { return n.toLowerCase().indexOf(query) !== -1; });
+    if (names.length === 0 || (names.length === 1 && names[0].toLowerCase() === query)) { closeAutocomplete(); return; }
+    acList.innerHTML = '';
+    names.slice(0, 12).forEach(function(n) {
+      var item = document.createElement('div');
+      item.className = 'autocomplete-item';
+      item.textContent = n;
+      item.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        searchEl.value = n;
+        if (searchClearBtn) searchClearBtn.style.display = 'block';
+        closeAutocomplete();
+        applyFilters();
+      });
+      acList.appendChild(item);
+    });
+    acList.classList.add('open');
+    acIndex = -1;
+  }
+  function closeAutocomplete() { if (acList) { acList.classList.remove('open'); acList.innerHTML = ''; acIndex = -1; } }
+  if (searchEl) {
+    searchEl.addEventListener('input', function() { showAutocomplete(getSearch()); });
+    searchEl.addEventListener('blur', function() { setTimeout(closeAutocomplete, 150); });
+    searchEl.addEventListener('keydown', function(e) {
+      var items = acList ? acList.querySelectorAll('.autocomplete-item') : [];
+      if (!items.length) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); acIndex = Math.min(acIndex + 1, items.length - 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); acIndex = Math.max(acIndex - 1, 0); }
+      else if (e.key === 'Enter' && acIndex >= 0) { e.preventDefault(); items[acIndex].dispatchEvent(new Event('mousedown')); return; }
+      else if (e.key === 'Escape') { closeAutocomplete(); return; }
+      else return;
+      items.forEach(function(it, i) { it.classList.toggle('selected', i === acIndex); });
+    });
+  }
+
+  /* ── Main filter logic ─────────────────────────────────────── */
   function applyFilters() {
     var stores = getActiveStores();
     var lib = getLibStatusFilter();
@@ -2203,9 +2358,8 @@ __SHARED_JS__
       var shouldHide = (unreadOnly && isRead) || !storeOk || !collectionOk || !statusOk || !tagOk || !ptOk || !mcOk || !recentOk || !searchOk;
       c.classList.toggle('hidden', shouldHide);
     });
-    // Sort visible cards
-    var container = document.getElementById('alertsContainer');
     if (currentView === 'combined') {
+      var container = document.getElementById('alertsContainer');
       allCards.sort(function(a, b) {
         if (sort === 'name')       return (a.getAttribute('data-game') || '').localeCompare(b.getAttribute('data-game') || '');
         if (sort === 'name_desc')  return (b.getAttribute('data-game') || '').localeCompare(a.getAttribute('data-game') || '');
@@ -2219,7 +2373,6 @@ __SHARED_JS__
     updateCount();
     updateResetBtn();
     saveFilterState();
-    // Update nav link to carry filters back to library page
     var navLink = document.querySelector('.nav-link[href^="steam_library"]');
     if (navLink) {
       var nf = {};
@@ -2235,6 +2388,7 @@ __SHARED_JS__
     }
   }
 
+  /* ── Section visibility ────────────────────────────────────── */
   function updateSections() {
     var groupQuery = getGroupSearch();
     document.querySelectorAll('.section-header').forEach(function(h) {
@@ -2255,6 +2409,23 @@ __SHARED_JS__
         cardsDiv.style.display = h.classList.contains('collapsed') ? 'none' : '';
       }
     });
+    // Sub-sections
+    document.querySelectorAll('.sub-section-header').forEach(function(h) {
+      var cardsDiv = h.nextElementSibling;
+      if (!cardsDiv || !cardsDiv.classList.contains('sub-section-cards')) return;
+      var visible = 0;
+      cardsDiv.querySelectorAll('.alert-card').forEach(function(c) {
+        if (!c.classList.contains('hidden')) visible++;
+      });
+      var badge = h.querySelector('.section-badge');
+      if (badge) badge.textContent = visible;
+      h.style.display = visible === 0 ? 'none' : '';
+      if (visible === 0) {
+        cardsDiv.style.display = 'none';
+      } else {
+        cardsDiv.style.display = h.classList.contains('collapsed') ? 'none' : '';
+      }
+    });
   }
 
   function updateCount() {
@@ -2265,25 +2436,27 @@ __SHARED_JS__
       if (!readSet.has(c.getAttribute('data-id'))) unread++;
     });
     var lbl = visible === 1 ? I18N.count1 : I18N.countN.replace('{n}', visible);
-    if (unread > 0 && !unreadOnly) lbl += '  ·  ' + I18N.unreadBadge.replace('{n}', unread);
+    if (unread > 0 && !unreadOnly) lbl += '  \\u00b7  ' + I18N.unreadBadge.replace('{n}', unread);
     document.getElementById('countLabel').textContent = lbl;
     var noMsg = document.getElementById('noAlertsMsg');
     if (noMsg) noMsg.style.display = all.length === 0 ? '' : 'none';
   }
 
+  /* ── Section collapse ──────────────────────────────────────── */
   function toggleSection(header) {
     var cardsDiv = header.nextElementSibling;
-    if (!cardsDiv || !cardsDiv.classList.contains('section-cards')) return;
+    var cls = cardsDiv && cardsDiv.classList.contains('section-cards') ? 'section-cards' : 'sub-section-cards';
+    if (!cardsDiv || !cardsDiv.classList.contains(cls)) return;
     var collapsed = header.classList.toggle('collapsed');
     cardsDiv.classList.toggle('collapsed', collapsed);
     cardsDiv.style.display = collapsed ? 'none' : '';
   }
 
   function toggleAllSections(expand) {
-    document.querySelectorAll('.section-header').forEach(function(h) {
+    document.querySelectorAll('.section-header, .sub-section-header').forEach(function(h) {
       if (h.style.display === 'none') return;
       var cardsDiv = h.nextElementSibling;
-      if (!cardsDiv || !cardsDiv.classList.contains('section-cards')) return;
+      if (!cardsDiv) return;
       h.classList.toggle('collapsed', !expand);
       cardsDiv.classList.toggle('collapsed', !expand);
       cardsDiv.style.display = expand ? '' : 'none';
@@ -2292,12 +2465,14 @@ __SHARED_JS__
     if (btn) btn.textContent = expand ? I18N.collapseAll : I18N.expandAll;
   }
 
+  /* ── Build grouping views ──────────────────────────────────── */
   function buildView(view) {
     var container = document.getElementById('alertsContainer');
     var allCards = Array.from(container.querySelectorAll('.alert-card'));
-    container.querySelectorAll('.section-header').forEach(function(h) { h.remove(); });
-    container.querySelectorAll('.section-cards').forEach(function(d) { d.remove(); });
+    container.querySelectorAll('.section-header, .sub-section-header').forEach(function(h) { h.remove(); });
+    container.querySelectorAll('.section-cards, .sub-section-cards').forEach(function(d) { d.remove(); });
     allCards.forEach(function(c) { c.remove(); });
+    container.classList.remove('grouped-by-game');
     var gc = document.getElementById('groupControls');
     if (gc) gc.classList.toggle('visible', view !== 'combined');
     var toggleBtn = document.getElementById('toggleAllBtn');
@@ -2308,7 +2483,8 @@ __SHARED_JS__
     if (view === 'combined') {
       allCards.sort(function(a, b) { return parseInt(b.getAttribute('data-ts') || 0) - parseInt(a.getAttribute('data-ts') || 0); });
       allCards.forEach(function(c) { container.appendChild(c); });
-    } else {
+    } else if (view === 'by-rule' || view === 'by-game') {
+      if (view === 'by-game') container.classList.add('grouped-by-game');
       var key = view === 'by-rule' ? 'data-rule' : 'data-game';
       var groups = {};
       var order = [];
@@ -2322,14 +2498,33 @@ __SHARED_JS__
         h.className = 'section-header collapsed';
         var chevron = document.createElement('span');
         chevron.className = 'section-chevron';
-        chevron.textContent = '\u25B8';
+        chevron.textContent = '\\u25B8';
         h.appendChild(chevron);
+        // In by-game view, add the game thumbnail in the header
+        if (view === 'by-game' && groups[k].length > 0) {
+          var firstCard = groups[k][0];
+          var thumbLink = firstCard.querySelector('.alert-thumb-link');
+          if (thumbLink) {
+            var headerThumb = document.createElement('a');
+            headerThumb.href = thumbLink.href;
+            headerThumb.target = '_blank';
+            headerThumb.rel = 'noopener';
+            headerThumb.style.lineHeight = '0';
+            var img = document.createElement('img');
+            img.className = 'section-thumb';
+            img.src = thumbLink.querySelector('img').src;
+            img.alt = '';
+            img.loading = 'lazy';
+            headerThumb.appendChild(img);
+            h.appendChild(headerThumb);
+          }
+        }
         h.appendChild(document.createTextNode(' ' + k + ' '));
         var badge = document.createElement('span');
         badge.className = 'section-badge';
         badge.textContent = groups[k].length;
         h.appendChild(badge);
-        h.addEventListener('click', function() { toggleSection(h); });
+        h.addEventListener('click', function(e) { if (!e.target.closest('a')) toggleSection(h); });
         container.appendChild(h);
         var wrapper = document.createElement('div');
         wrapper.className = 'section-cards collapsed';
@@ -2338,11 +2533,81 @@ __SHARED_JS__
         groups[k].forEach(function(c) { wrapper.appendChild(c); });
         container.appendChild(wrapper);
       });
+    } else if (view === 'by-rule-game') {
+      /* Two-level grouping: by rule, then by game */
+      var ruleGroups = {};
+      var ruleOrder = [];
+      allCards.forEach(function(c) {
+        var r = c.getAttribute('data-rule') || '';
+        if (!ruleGroups[r]) { ruleGroups[r] = []; ruleOrder.push(r); }
+        ruleGroups[r].push(c);
+      });
+      ruleOrder.forEach(function(rule) {
+        var h = document.createElement('div');
+        h.className = 'section-header collapsed';
+        var chevron = document.createElement('span');
+        chevron.className = 'section-chevron';
+        chevron.textContent = '\\u25B8';
+        h.appendChild(chevron);
+        h.appendChild(document.createTextNode(' ' + rule + ' '));
+        var badge = document.createElement('span');
+        badge.className = 'section-badge';
+        badge.textContent = ruleGroups[rule].length;
+        h.appendChild(badge);
+        h.addEventListener('click', function() { toggleSection(h); });
+        container.appendChild(h);
+        var ruleWrapper = document.createElement('div');
+        ruleWrapper.className = 'section-cards collapsed';
+        ruleWrapper.style.display = 'none';
+        /* Sub-group by game */
+        var gameGroups = {};
+        var gameOrder = [];
+        ruleGroups[rule].forEach(function(c) {
+          var g = c.getAttribute('data-game') || '';
+          if (!gameGroups[g]) { gameGroups[g] = []; gameOrder.push(g); }
+          gameGroups[g].push(c);
+        });
+        gameOrder.forEach(function(game) {
+          var sh = document.createElement('div');
+          sh.className = 'sub-section-header collapsed';
+          var sc = document.createElement('span');
+          sc.className = 'section-chevron';
+          sc.textContent = '\\u25B8';
+          sh.appendChild(sc);
+          /* Add game thumbnail */
+          if (gameGroups[game].length > 0) {
+            var firstCard = gameGroups[game][0];
+            var thumbLink = firstCard.querySelector('.alert-thumb-link');
+            if (thumbLink) {
+              var subImg = document.createElement('img');
+              subImg.className = 'section-thumb';
+              subImg.src = thumbLink.querySelector('img').src;
+              subImg.alt = '';
+              subImg.loading = 'lazy';
+              sh.appendChild(subImg);
+            }
+          }
+          sh.appendChild(document.createTextNode(' ' + game + ' '));
+          var sbadge = document.createElement('span');
+          sbadge.className = 'section-badge';
+          sbadge.textContent = gameGroups[game].length;
+          sh.appendChild(sbadge);
+          sh.addEventListener('click', function() { toggleSection(sh); });
+          ruleWrapper.appendChild(sh);
+          var subWrapper = document.createElement('div');
+          subWrapper.className = 'sub-section-cards collapsed';
+          subWrapper.style.display = 'none';
+          gameGroups[game].sort(function(a, b) { return parseInt(b.getAttribute('data-ts') || 0) - parseInt(a.getAttribute('data-ts') || 0); });
+          gameGroups[game].forEach(function(c) { subWrapper.appendChild(c); });
+          ruleWrapper.appendChild(subWrapper);
+        });
+        container.appendChild(ruleWrapper);
+      });
     }
     applyFilters();
   }
 
-  // View mode buttons
+  /* ── View mode buttons ─────────────────────────────────────── */
   document.querySelectorAll('.view-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
       document.querySelectorAll('.view-btn').forEach(function(b) { b.classList.remove('active'); });
@@ -2369,9 +2634,8 @@ __SHARED_JS__
     applyFilters();
   });
 
-  // Store & all shared filters (reuse shared helpers)
+  // Store & all shared filters
   setupStoreFilter(applyFilters);
-  // Generic click handler for all single-select filter groups
   ['#filterBtns', '#libStatusBtns', '#playtimeBtns', '#mcBtns', '#recentBtns'].forEach(function(sel) {
     document.querySelectorAll(sel + ' .filter-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
@@ -2381,7 +2645,6 @@ __SHARED_JS__
       });
     });
   });
-  // Tag buttons (news type)
   document.querySelectorAll('#tagBtns .tag-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
       document.querySelectorAll('#tagBtns .tag-btn').forEach(function(b) { b.classList.remove('active'); });
@@ -2390,19 +2653,17 @@ __SHARED_JS__
     });
   });
   // Search
-  var searchEl = document.getElementById('search');
   if (searchEl) { searchEl.addEventListener('input', function() { applyFilters(); }); }
   // Sort
   var sortEl = document.getElementById('sortBy');
   if (sortEl) { sortEl.addEventListener('change', function() { applyFilters(); }); }
   // Group search
-  var groupSearchEl = document.getElementById('groupSearch');
   if (groupSearchEl) { groupSearchEl.addEventListener('input', function() { updateSections(); updateCount(); updateResetBtn(); }); }
   // Toggle all sections
   var toggleAllBtnEl = document.getElementById('toggleAllBtn');
   if (toggleAllBtnEl) {
     toggleAllBtnEl.addEventListener('click', function() {
-      var anyCollapsed = document.querySelector('.section-header.collapsed:not([style*="display: none"])');
+      var anyCollapsed = document.querySelector('.section-header.collapsed:not([style*="display: none"]), .sub-section-header.collapsed:not([style*="display: none"])');
       toggleAllSections(!!anyCollapsed);
     });
   }
@@ -2419,30 +2680,43 @@ __SHARED_JS__
     var firstTag = document.querySelector('#tagBtns .tag-btn');
     if (firstTag) firstTag.classList.add('active');
     if (searchEl) searchEl.value = '';
+    if (searchClearBtn) searchClearBtn.style.display = 'none';
     if (sortEl) sortEl.value = 'date';
     var gSearchEl = document.getElementById('groupSearch');
     if (gSearchEl) gSearchEl.value = '';
+    if (groupSearchClearBtn) groupSearchClearBtn.style.display = 'none';
     unreadOnly = false;
     document.getElementById('unreadToggle').textContent = I18N.showUnread;
+    closeAutocomplete();
     applyFilters();
   });
 
-  // Mark-read on individual cards
+  /* ── Click handlers — differentiated zones ─────────────────── */
+  // Only the checkmark button marks as read
   document.querySelectorAll('.mark-read-btn').forEach(function(btn) {
     btn.addEventListener('click', function(e) {
       e.stopPropagation();
       markCard(this.getAttribute('data-id'));
     });
   });
+  // Clicking the news body (title/details) opens the news URL
   document.querySelectorAll('.alert-card').forEach(function(c) {
-    c.addEventListener('click', function(e) {
-      if (!e.target.classList.contains('mark-read-btn')) {
-        markCard(this.getAttribute('data-id'));
-      }
-    });
+    var body = c.querySelector('.alert-body');
+    if (!body) return;
+    var titleEl = body.querySelector('.alert-title');
+    var detailsEl = body.querySelector('.alert-details');
+    function openNews(e) {
+      e.stopPropagation();
+      // Don't intercept clicks on links (they handle themselves)
+      if (e.target.closest('a')) return;
+      var url = c.getAttribute('data-news-url');
+      if (url) { var w = window.open(url, '_blank', 'noopener,noreferrer'); if (w) w.opener = null; }
+    }
+    if (titleEl) titleEl.addEventListener('click', openNews);
+    if (detailsEl) detailsEl.addEventListener('click', openNews);
   });
 
-  // Initialise: load filters from URL hash (from library nav link) or window.name
+  // Initialise: load filters from URL hash or window.name
   var h = location.hash.slice(1);
   if (h) {
     var p = new URLSearchParams(h);

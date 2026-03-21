@@ -22,6 +22,7 @@ STRINGS: dict[str, str] = {
     "cli_render_library":    "✅ {count} games · library → {path}",
     "cli_render_alerts":     "   {count} alerts → {path}",
     "cli_backfill_alerts":   "   ↩ {count} alerts backfilled from history",
+    "cli_cleanup_done":      "   🧹 Cleaned up {count} stale entry/entries from database",
 
     # ── HTML – alerts page ────────────────────────────────────────────────────
     "link_alerts":           "Alerts",
@@ -29,9 +30,12 @@ STRINGS: dict[str, str] = {
     "alert_view_by_rule":    "By Rule",
     "alert_view_by_game":    "By Game",
     "alert_view_combined":   "Combined",
+    "alert_view_by_rule_game": "Rule / Game",
     "alert_expand_all":      "Expand all",
     "alert_collapse_all":    "Collapse all",
     "alert_group_search":    "Search groups\u2026",
+    "alert_font_smaller":    "Decrease font size",
+    "alert_font_larger":     "Increase font size",
     "btn_mark_all_read":     "Mark all read",
     "btn_mark_rule_read":    "Mark rule read",
     "btn_mark_read":         "Mark as read",
