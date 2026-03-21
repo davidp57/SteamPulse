@@ -108,6 +108,13 @@ class EpicSource:
             return []
 
         access_token: str = str(token_data["access_token"])
+        # Persist the renewed refresh token so save_cli_credentials() picks it up.
+        new_refresh = token_data.get("refresh_token")
+        if new_refresh:
+            args.epic_refresh_token = str(new_refresh)
+        new_account = token_data.get("account_id")
+        if new_account:
+            args.epic_account_id = str(new_account)
         print(t("cli_epic_authenticated"))
 
         # ── Library fetch ──────────────────────────────────────────────

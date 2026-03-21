@@ -24,6 +24,9 @@ while true; do
         && echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Fetch complete." \
         || echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] WARNING: fetch exited with an error."
 
+    # Persist updated config (Epic refresh tokens may have been rotated).
+    cp /run/steampulse/config.toml /data/.config_persisted.toml 2>/dev/null || true
+
     echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Next run in ${_RAW_INTERVAL}h (${INTERVAL_SECONDS}s)."
     sleep "$INTERVAL_SECONDS"
 done

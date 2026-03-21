@@ -104,6 +104,44 @@ print("[SteamPulse] config.toml generated from environment variables.")
 PYEOF
 fi
 
+# ── Restore Epic credentials from a previous run (tokens rotate on each use) ─
+if [ -f /data/.config_persisted.toml ]; then
+    python3 - << 'MERGE_EOF'
+import re
+import sys
+import tomllib
+
+with open("/data/.config_persisted.toml", "rb") as f:
+    saved = tomllib.load(f)
+epic = saved.get("epic", {})
+rt = epic.get("refresh_token", "")
+aid = epic.get("account_id", "")
+if not rt:
+    sys.exit(0)
+
+
+def q(v: str) -> str:
+    v = v.replace("\\", "\\\\")
+    v = v.replace('"', '\\"')
+    return v
+
+
+with open("/run/steampulse/config.toml") as f:
+    content = f.read()
+
+if "[epic]" in content:
+    content = re.sub(r'(refresh_token\s*=\s*)"[^"]*"', rf'\1"{q(rt)}"', content)
+    content = re.sub(r'(account_id\s*=\s*)"[^"]*"', rf'\1"{q(aid)}"', content)
+else:
+    content += f'\n[epic]\nrefresh_token = "{q(rt)}"\naccount_id    = "{q(aid)}"\n'
+
+with open("/run/steampulse/config.toml", "w") as f:
+    f.write(content)
+
+print("[SteamPulse] Restored Epic credentials from previous run.")
+MERGE_EOF
+fi
+
 # ── Create a placeholder page so nginx returns 200 before the first fetch ───
 if [ ! -f /data/steam_library.html ]; then
     cat > /data/steam_library.html << 'HTMLEOF'

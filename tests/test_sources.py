@@ -494,3 +494,33 @@ def test_epic_discover_games_empty_library_returns_empty() -> None:
 
     games = EpicSource().discover_games(_epic_args(epic_auth_code="code1"))
     assert games == []
+
+
+@resp_mock.activate
+def test_epic_discover_games_persists_refreshed_token() -> None:
+    """discover_games() must update args with the new refresh token."""
+    token_resp = {
+        "access_token": "tok_new",
+        "refresh_token": "rt_rotated",
+        "account_id": "acc_456",
+    }
+    resp_mock.add(resp_mock.POST, _EPIC_TOKEN_URL, json=token_resp)
+    resp_mock.add(resp_mock.GET, _EPIC_LIBRARY_URL, json=_library_response([]))
+
+    args = _epic_args(epic_refresh_token="rt_old", epic_account_id="acc_old")
+    EpicSource().discover_games(args)
+
+    assert args.epic_refresh_token == "rt_rotated"
+    assert args.epic_account_id == "acc_456"
+
+
+@resp_mock.activate
+def test_epic_discover_games_keeps_token_when_response_omits_it() -> None:
+    """If token response lacks refresh_token, args must stay unchanged."""
+    resp_mock.add(resp_mock.POST, _EPIC_TOKEN_URL, json=_token_response())
+    resp_mock.add(resp_mock.GET, _EPIC_LIBRARY_URL, json=_library_response([]))
+
+    args = _epic_args(epic_refresh_token="rt_original")
+    EpicSource().discover_games(args)
+
+    assert args.epic_refresh_token == "rt_original"
