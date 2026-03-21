@@ -279,9 +279,9 @@ SteamFetcher(
 
 ### `renderer.py`
 
-Deux fonctions publiques : `write_html` et `write_news_html`. Elles acceptent une `list[GameRecord]`, un `steam_id` pour l'en-tête, un `Path` de sortie, optionnellement un href de lien croisé, et un code `lang` optionnel.
+Fonctions publiques : `write_html` (page bibliothèque) et `write_alerts_html` (page alertes). Les deux acceptent un `steam_id` pour l'en-tête, un `Path` de sortie, optionnellement un href de lien croisé, et un code `lang` optionnel. `write_html` prend une `list[GameRecord]`, tandis que `write_alerts_html` prend une `list[Alert]` et un `dict[int, GameRecord]`.
 
-Le HTML est construit par interpolation de chaînes dans les raw strings `_HTML_TEMPLATE` et `_NEWS_TEMPLATE`. Aucune bibliothèque de templating externe n'est utilisée. Les libellés visibles utilisent des placeholders `__T_key__` remplacés au moment du rendu via `_apply_html_t()` ; les chaînes JavaScript sont injectées sous forme d'un bloc `const I18N = {...}` via `_build_i18n_js()`.
+Le HTML est construit par interpolation de chaînes dans les raw strings `_HTML_TEMPLATE` et `_ALERTS_TEMPLATE`. Aucune bibliothèque de templating externe n'est utilisée. Les libellés visibles utilisent des placeholders `__T_key__` remplacés au moment du rendu via `_apply_html_t()` ; les chaînes JavaScript sont injectées sous forme d'un bloc `const I18N = {...}` via `_build_i18n_js()`.
 
 ### `sources/__init__.py — GameSource`
 

@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from .models import AppDetails, GameRecord, GameStatus, NewsItem, OwnedGame
+from .models import Alert, AppDetails, FieldChange, GameRecord, GameStatus, NewsItem, OwnedGame
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS games (
@@ -79,6 +79,38 @@ CREATE TABLE IF NOT EXISTS appid_mappings (
     manual          INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (external_source, external_id)
 );
+
+CREATE TABLE IF NOT EXISTS field_history (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    appid      INTEGER NOT NULL,
+    field_name TEXT    NOT NULL,
+    old_value  TEXT,
+    new_value  TEXT    NOT NULL,
+    timestamp  TEXT    NOT NULL,
+    FOREIGN KEY (appid) REFERENCES games(appid) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_fh_appid ON field_history(appid);
+CREATE INDEX IF NOT EXISTS idx_fh_field ON field_history(field_name);
+CREATE INDEX IF NOT EXISTS idx_fh_ts    ON field_history(timestamp);
+
+CREATE TABLE IF NOT EXISTS alerts (
+    id          TEXT    PRIMARY KEY,
+    rule_name   TEXT    NOT NULL,
+    rule_icon   TEXT    NOT NULL DEFAULT '📰',
+    appid       INTEGER NOT NULL,
+    timestamp   TEXT    NOT NULL,
+    title       TEXT    NOT NULL,
+    details     TEXT    NOT NULL DEFAULT '',
+    url         TEXT    NOT NULL DEFAULT '',
+    source_type TEXT    NOT NULL,
+    source_id   TEXT    NOT NULL DEFAULT '',
+    FOREIGN KEY (appid) REFERENCES games(appid) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_alerts_rule ON alerts(rule_name);
+CREATE INDEX IF NOT EXISTS idx_alerts_appid ON alerts(appid);
+CREATE INDEX IF NOT EXISTS idx_alerts_ts    ON alerts(timestamp);
 """
 
 # Columns added after initial release — added via ALTER TABLE for existing DBs.
@@ -114,6 +146,14 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("games", "details_fetched_at", "TEXT"),
     ("games", "news_fetched_at", "TEXT"),
     ("games", "external_id", "TEXT NOT NULL DEFAULT ''"),
+    # Extended app_details columns (added in v1.3.0)
+    ("app_details", "dlc_appids", "TEXT NOT NULL DEFAULT '[]'"),
+    ("app_details", "controller_support", "TEXT NOT NULL DEFAULT ''"),
+    ("app_details", "required_age", "INTEGER NOT NULL DEFAULT 0"),
+    ("app_details", "buildid", "INTEGER NOT NULL DEFAULT 0"),
+    ("app_details", "build_timeupdated", "INTEGER NOT NULL DEFAULT 0"),
+    ("app_details", "depot_size_bytes", "INTEGER NOT NULL DEFAULT 0"),
+    ("app_details", "branch_names", "TEXT NOT NULL DEFAULT '[]'"),
 ]
 
 
@@ -222,7 +262,21 @@ class Database:
                 ),
             )
 
-    def upsert_app_details(self, details: AppDetails) -> None:
+    def upsert_app_details(self, details: AppDetails) -> list[FieldChange]:
+        """Insert or update app details and return a list of changed fields.
+
+        Computes a diff against the previously stored row so that callers
+        can pass the returned :class:`~steam_tracker.models.FieldChange`
+        objects to the alert engine.
+
+        Args:
+            details: The new :class:`~steam_tracker.models.AppDetails` to persist.
+
+        Returns:
+            List of :class:`~steam_tracker.models.FieldChange` objects for
+            every field whose value changed (empty on first insert).
+        """
+        now = _now()
         with self._connect() as con:
             # Back-fill games.name for followed/wishlist games that arrived without one
             if details.name:
@@ -230,6 +284,114 @@ class Database:
                     "UPDATE games SET name = ? WHERE appid = ? AND name = ''",
                     (details.name, details.appid),
                 )
+
+            # Read the old row to compute a diff
+            old_row = con.execute(
+                "SELECT name, app_type, short_description, supported_languages, "
+                "website, header_image, background_image, "
+                "early_access, coming_soon, release_date_str, "
+                "developers, publishers, genres, categories, "
+                "is_free, price_initial, price_final, price_discount_pct, price_currency, "
+                "platform_windows, platform_mac, platform_linux, "
+                "metacritic_score, metacritic_url, achievement_count, recommendation_count, "
+                "dlc_appids, controller_support, required_age, "
+                "buildid, build_timeupdated, depot_size_bytes, branch_names "
+                "FROM app_details WHERE appid = ?",
+                (details.appid,),
+            ).fetchone()
+
+            new_values: dict[str, str] = {
+                "name":                 details.name,
+                "app_type":             details.app_type,
+                "short_description":    details.short_description,
+                "supported_languages":  details.supported_languages,
+                "website":              details.website,
+                "header_image":         details.header_image,
+                "background_image":     details.background_image,
+                "early_access":         str(int(details.early_access)),
+                "coming_soon":          str(int(details.coming_soon)),
+                "release_date_str":     details.release_date_str,
+                "developers":           json.dumps(details.developers),
+                "publishers":           json.dumps(details.publishers),
+                "genres":               json.dumps(details.genres),
+                "categories":           json.dumps(details.categories),
+                "is_free":              str(int(details.is_free)),
+                "price_initial":        str(details.price_initial),
+                "price_final":          str(details.price_final),
+                "price_discount_pct":   str(details.price_discount_pct),
+                "price_currency":       details.price_currency,
+                "platform_windows":     str(int(details.platform_windows)),
+                "platform_mac":         str(int(details.platform_mac)),
+                "platform_linux":       str(int(details.platform_linux)),
+                "metacritic_score":     str(details.metacritic_score),
+                "metacritic_url":       details.metacritic_url,
+                "achievement_count":    str(details.achievement_count),
+                "recommendation_count": str(details.recommendation_count),
+                "dlc_appids":           json.dumps(details.dlc_appids),
+                "controller_support":   details.controller_support,
+                "required_age":         str(details.required_age),
+                "buildid":              str(details.buildid),
+                "build_timeupdated":    str(details.build_timeupdated),
+                "depot_size_bytes":     str(details.depot_size_bytes),
+                "branch_names":         json.dumps(details.branch_names),
+            }
+
+            # Ordered list that matches the SELECT columns above
+            field_names = [
+                "name", "app_type", "short_description", "supported_languages",
+                "website", "header_image", "background_image",
+                "early_access", "coming_soon", "release_date_str",
+                "developers", "publishers", "genres", "categories",
+                "is_free", "price_initial", "price_final", "price_discount_pct",
+                "price_currency",
+                "platform_windows", "platform_mac", "platform_linux",
+                "metacritic_score", "metacritic_url",
+                "achievement_count", "recommendation_count",
+                "dlc_appids", "controller_support", "required_age",
+                "buildid", "build_timeupdated", "depot_size_bytes", "branch_names",
+            ]
+
+            changes: list[FieldChange] = []
+            ts = datetime.now(tz=UTC)
+            if old_row is not None:
+                for i, field_name in enumerate(field_names):
+                    old_val = str(old_row[i]) if old_row[i] is not None else None
+                    new_val = new_values[field_name]
+                    if old_val != new_val:
+                        changes.append(FieldChange(
+                            appid=details.appid,
+                            field_name=field_name,
+                            old_value=old_val,
+                            new_value=new_val,
+                            timestamp=ts,
+                        ))
+
+            if old_row is None:
+                # First insert: record each non-default field as "appeared"
+                for field_name, new_val in new_values.items():
+                    changes.append(FieldChange(
+                        appid=details.appid,
+                        field_name=field_name,
+                        old_value=None,
+                        new_value=new_val,
+                        timestamp=ts,
+                    ))
+
+            # Persist the changes into field_history
+            for change in changes:
+                con.execute(
+                    "INSERT INTO field_history"
+                    " (appid, field_name, old_value, new_value, timestamp)"
+                    " VALUES (?, ?, ?, ?, ?)",
+                    (
+                        change.appid,
+                        change.field_name,
+                        change.old_value,
+                        change.new_value,
+                        change.timestamp.isoformat(),
+                    ),
+                )
+
             con.execute(
                 """
                 INSERT INTO app_details
@@ -241,8 +403,11 @@ class Database:
                      platform_windows, platform_mac, platform_linux,
                      metacritic_score, metacritic_url,
                      achievement_count, recommendation_count,
+                     dlc_appids, controller_support, required_age,
+                     buildid, build_timeupdated, depot_size_bytes, branch_names,
                      fetched_at)
-                VALUES (?,?,?,?,?, ?,?,?, ?,?,?, ?,?,?,?, ?,?,?,?,?, ?,?,?, ?,?, ?,?, ?)
+                VALUES (?,?,?,?,?, ?,?,?, ?,?,?, ?,?,?,?, ?,?,?,?,?, ?,?,?, ?,?, ?,?,
+                        ?,?,?, ?,?,?,?, ?)
                 ON CONFLICT(appid) DO UPDATE SET
                     name                 = excluded.name,
                     app_type             = excluded.app_type,
@@ -270,6 +435,13 @@ class Database:
                     metacritic_url       = excluded.metacritic_url,
                     achievement_count    = excluded.achievement_count,
                     recommendation_count = excluded.recommendation_count,
+                    dlc_appids           = excluded.dlc_appids,
+                    controller_support   = excluded.controller_support,
+                    required_age         = excluded.required_age,
+                    buildid              = excluded.buildid,
+                    build_timeupdated    = excluded.build_timeupdated,
+                    depot_size_bytes     = excluded.depot_size_bytes,
+                    branch_names         = excluded.branch_names,
                     fetched_at           = excluded.fetched_at
                 """,
                 (
@@ -300,9 +472,18 @@ class Database:
                     details.metacritic_url,
                     details.achievement_count,
                     details.recommendation_count,
-                    _now(),
+                    json.dumps(details.dlc_appids),
+                    details.controller_support,
+                    details.required_age,
+                    details.buildid,
+                    details.build_timeupdated,
+                    details.depot_size_bytes,
+                    json.dumps(details.branch_names),
+                    now,
                 ),
             )
+
+        return changes
 
     def mark_fetched(
         self, appids: set[int], *, details: bool = False, news: bool = False
@@ -425,7 +606,9 @@ class Database:
                     "developers, publishers, genres, categories, "
                     "is_free, price_initial, price_final, price_discount_pct, price_currency, "
                     "platform_windows, platform_mac, platform_linux, "
-                    "metacritic_score, metacritic_url, achievement_count, recommendation_count "
+                    "metacritic_score, metacritic_url, achievement_count, recommendation_count, "
+                    "dlc_appids, controller_support, required_age, "
+                    "buildid, build_timeupdated, depot_size_bytes, branch_names "
                     "FROM app_details WHERE appid = ?",
                     (appid,),
                 ).fetchone()
@@ -460,6 +643,13 @@ class Database:
                         metacritic_url=str(det[23]),
                         achievement_count=int(det[24]),
                         recommendation_count=int(det[25]),
+                        dlc_appids=json.loads(str(det[26])) if det[26] else [],
+                        controller_support=str(det[27]) if det[27] is not None else "",
+                        required_age=int(det[28]) if det[28] is not None else 0,
+                        buildid=int(det[29]) if det[29] is not None else 0,
+                        build_timeupdated=int(det[30]) if det[30] is not None else 0,
+                        depot_size_bytes=int(det[31]) if det[31] is not None else 0,
+                        branch_names=json.loads(str(det[32])) if det[32] else [],
                     )
 
                 news_rows = con.execute(
@@ -536,3 +726,149 @@ class Database:
                 """,
                 (source, external_id, name, steam_appid, _now(), int(manual)),
             )
+
+    # ── Alerts ─────────────────────────────────────────────────────────────
+
+    def upsert_alert(self, alert: Alert) -> None:
+        """Insert an alert, silently ignoring duplicates (same deterministic ``id``).
+
+        Args:
+            alert: The :class:`~steam_tracker.models.Alert` to persist.
+        """
+        with self._connect() as con:
+            con.execute(
+                """
+                INSERT OR IGNORE INTO alerts
+                    (id, rule_name, rule_icon, appid, timestamp,
+                     title, details, url, source_type, source_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    alert.id,
+                    alert.rule_name,
+                    alert.rule_icon,
+                    alert.appid,
+                    alert.timestamp.isoformat(),
+                    alert.title,
+                    alert.details,
+                    alert.url,
+                    alert.source_type,
+                    alert.source_id,
+                ),
+            )
+
+    def get_alerts(
+        self,
+        *,
+        rule_name: str | None = None,
+        appid: int | None = None,
+        since: datetime | None = None,
+        limit: int = 1000,
+    ) -> list[Alert]:
+        """Return alerts, optionally filtered, ordered by timestamp descending.
+
+        Args:
+            rule_name: Restrict to a specific rule name.
+            appid: Restrict to a specific app.
+            since: Return only alerts newer than this timestamp.
+            limit: Maximum number of results.
+
+        Returns:
+            List of :class:`~steam_tracker.models.Alert` objects.
+        """
+        query = (
+            "SELECT a.id, a.rule_name, a.rule_icon, a.appid, g.name, "
+            "a.timestamp, a.title, a.details, a.url, a.source_type, a.source_id "
+            "FROM alerts a "
+            "LEFT JOIN games g ON g.appid = a.appid "
+            "WHERE 1=1"
+        )
+        params: list[object] = []
+        if rule_name is not None:
+            query += " AND a.rule_name = ?"
+            params.append(rule_name)
+        if appid is not None:
+            query += " AND a.appid = ?"
+            params.append(appid)
+        if since is not None:
+            query += " AND a.timestamp > ?"
+            params.append(since.isoformat())
+        query += f" ORDER BY a.timestamp DESC LIMIT {limit}"  # noqa: S608
+
+        with self._connect() as con:
+            rows = con.execute(query, params).fetchall()
+        return [
+            Alert(
+                id=str(r[0]),
+                rule_name=str(r[1]),
+                rule_icon=str(r[2]),
+                appid=int(r[3]),
+                game_name=str(r[4]) if r[4] is not None else "",
+                timestamp=datetime.fromisoformat(str(r[5])),
+                title=str(r[6]),
+                details=str(r[7]),
+                url=str(r[8]),
+                source_type=str(r[9]),
+                source_id=str(r[10]),
+            )
+            for r in rows
+        ]
+
+    def get_alert_count_by_rule(self) -> dict[str, int]:
+        """Return a mapping of ``rule_name → alert count``.
+
+        Returns:
+            Dict mapping each rule name to the number of stored alerts.
+        """
+        with self._connect() as con:
+            rows = con.execute(
+                "SELECT rule_name, COUNT(*) FROM alerts GROUP BY rule_name"
+            ).fetchall()
+        return {str(r[0]): int(r[1]) for r in rows}
+
+    def get_field_history(
+        self,
+        *,
+        appid: int | None = None,
+        field_name: str | None = None,
+        since: datetime | None = None,
+    ) -> list[FieldChange]:
+        """Return field history entries, optionally filtered.
+
+        Args:
+            appid: Restrict to a specific app.
+            field_name: Restrict to a specific field.
+            since: Return only changes newer than this timestamp.
+
+        Returns:
+            List of :class:`~steam_tracker.models.FieldChange` objects,
+            ordered by timestamp descending.
+        """
+        query = (  # noqa: S608
+            "SELECT appid, field_name, old_value, new_value, timestamp"
+            " FROM field_history WHERE 1=1"
+        )
+        params: list[object] = []
+        if appid is not None:
+            query += " AND appid = ?"
+            params.append(appid)
+        if field_name is not None:
+            query += " AND field_name = ?"
+            params.append(field_name)
+        if since is not None:
+            query += " AND timestamp > ?"
+            params.append(since.isoformat())
+        query += " ORDER BY timestamp DESC"
+
+        with self._connect() as con:
+            rows = con.execute(query, params).fetchall()
+        return [
+            FieldChange(
+                appid=int(r[0]),
+                field_name=str(r[1]),
+                old_value=str(r[2]) if r[2] is not None else None,
+                new_value=str(r[3]),
+                timestamp=datetime.fromisoformat(str(r[4])),
+            )
+            for r in rows
+        ]

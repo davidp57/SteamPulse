@@ -5,6 +5,10 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
 # AppIDs >= this value are synthetic (hash-based) placeholders assigned to
 # Epic games that could not be resolved to a real Steam AppID.  Real Steam
 # AppIDs never exceed a few hundred million, so 2 billion is a safe sentinel.
@@ -60,6 +64,68 @@ class AppDetails(BaseModel):
     metacritic_url: str = ""
     achievement_count: int = 0
     recommendation_count: int = 0
+    # Extended Store API fields
+    dlc_appids: list[int] = Field(default_factory=list)
+    controller_support: str = ""
+    required_age: int = 0
+    # SteamCMD fields (build / depot info)
+    buildid: int = 0
+    build_timeupdated: int = 0
+    depot_size_bytes: int = 0
+    branch_names: list[str] = Field(default_factory=list)
+
+
+class SteamCmdInfo(BaseModel):
+    """Build / depot information fetched from the SteamCMD API."""
+
+    appid: int
+    buildid: int = 0
+    build_timeupdated: int = 0
+    depot_size_bytes: int = 0
+    branch_names: list[str] = Field(default_factory=list)
+
+
+class FieldChange(BaseModel):
+    """A single field change recorded for a game's ``app_details`` row."""
+
+    appid: int
+    field_name: str
+    old_value: str | None
+    new_value: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(tz=UTC))
+
+
+class AlertRule(BaseModel):
+    """A user-configured rule that produces alerts when matched."""
+
+    name: str
+    rule_type: str                           # "news_keyword" | "state_change"
+    icon: str = "📰"
+    enabled: bool = True
+    # news_keyword rule fields
+    keywords: list[str] = Field(default_factory=list)
+    match: str = "any"                       # "title" | "content" | "any"
+    # state_change rule fields
+    field: str = ""
+    condition: str = ""                      # "changed" | "increased" | "decreased" | "appeared"
+    # Internal flag for the built-in "All News" rule
+    builtin: bool = False
+
+
+class Alert(BaseModel):
+    """A triggered alert stored in the database."""
+
+    id: str                                  # deterministic SHA-256 prefix
+    rule_name: str
+    rule_icon: str
+    appid: int
+    game_name: str = ""
+    timestamp: datetime
+    title: str
+    details: str = ""
+    url: str = ""
+    source_type: str                         # "news" | "field_change"
+    source_id: str = ""
 
 
 class NewsItem(BaseModel):
@@ -68,6 +134,7 @@ class NewsItem(BaseModel):
     date: datetime
     url: str
     author: str = ""
+    contents: str = ""               # news body text (may be truncated)
     feedname: str = ""
     feedlabel: str = ""
     tags: list[str] = Field(default_factory=list)

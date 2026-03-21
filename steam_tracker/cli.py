@@ -6,12 +6,12 @@ import logging
 import sys
 from pathlib import Path
 
-from .config import get_config_path, load_config, save_cli_credentials
+from .config import get_config_path, load_alert_rules, load_config, save_cli_credentials
 from .db import Database
 from .fetcher import SteamFetcher
 from .i18n import get_translator
-from .models import SYNTHETIC_APPID_BASE, AppDetails, NewsItem, OwnedGame
-from .renderer import write_html, write_news_html
+from .models import SYNTHETIC_APPID_BASE, AppDetails, FieldChange, NewsItem, OwnedGame
+from .renderer import write_alerts_html, write_html
 from .sources import get_all_sources
 
 # ---------------------------------------------------------------------------
@@ -191,8 +191,11 @@ def cmd_fetch() -> None:
     )
 
     db = Database(Path(args.db))
+    from .alerts import AlertEngine  # noqa: PLC0415
 
-    # ── Game discovery (all sources) ───────────────────────────────────────
+    engine = AlertEngine(rules=load_alert_rules(config_path), db=db)
+
+    # ── Game discovery (all sources) ─────────────────────────────────────────────
     all_discovered: list[OwnedGame] = []
     for source in get_all_sources():
         if source.is_enabled(args):
@@ -221,6 +224,7 @@ def cmd_fetch() -> None:
             cached=len(skip) - pending_news))
 
     width = len(str(pending_details + pending_news)) if (pending_details + pending_news) else 1
+    name_map: dict[int, str] = {g.appid: g.name for g in games}
 
     def on_progress(done: int, total: int, name: str) -> None:
         print(f"\r[{done:>{width}}/{total}] {name[:52]:<52}", end="", flush=True)
@@ -229,12 +233,18 @@ def cmd_fetch() -> None:
     news_fetched: set[int] = set()
 
     def on_result(appid: int, details: AppDetails | None, news: list[NewsItem]) -> None:
+        changes: list[FieldChange] = []
         if details:
-            db.upsert_app_details(details)
+            changes = db.upsert_app_details(details)
         elif appid not in skip:
             failed_details.add(appid)
         db.upsert_news(appid, news)
         news_fetched.add(appid)
+        game_name = name_map.get(appid, str(appid))
+        for alert in engine.evaluate_field_changes(appid, game_name, changes):
+            db.upsert_alert(alert)
+        for alert in engine.evaluate_news(appid, game_name, news):
+            db.upsert_alert(alert)
 
     fetcher = SteamFetcher(max_workers=args.workers, on_progress=on_progress, on_result=on_result)
     try:
@@ -249,6 +259,11 @@ def cmd_fetch() -> None:
     db.mark_fetched(news_fetched, news=True)
 
     print(t("cli_fetch_done", count=len(results), db=args.db))
+
+    if getattr(args, "backfill_alerts", False):
+        n_backfilled = engine.backfill()
+        print(t("cli_backfill_alerts", count=n_backfilled))
+
     save_cli_credentials(
         vars(args), existing=config, path=config_path, _explicit_keys=_get_explicit_cli_keys()
     )
@@ -285,11 +300,13 @@ def cmd_render() -> None:
     db = Database(Path(args.db))
     records = db.get_all_game_records()
     out = Path(args.output)
-    news_out = out.parent / "steam_news.html"
-    write_html(records, args.steamid, out, news_href=news_out.name, lang=args.lang)
-    write_news_html(records, args.steamid, news_out, library_href=out.name, lang=args.lang)
+    alerts_out = out.parent / "steam_alerts.html"
+    all_alerts = db.get_alerts()
+    write_html(records, args.steamid, out, alerts_href=alerts_out.name, lang=args.lang)
+    write_alerts_html(all_alerts, records, args.steamid, alerts_out,
+                      library_href=out.name, lang=args.lang)
     print(t("cli_render_library", count=len(records), path=out.resolve()))
-    print(t("cli_render_news", count=sum(len(r.news) for r in records), path=news_out.resolve()))
+    print(t("cli_render_alerts", count=len(all_alerts), path=alerts_out.resolve()))
 
 
 def cmd_run() -> None:
@@ -336,6 +353,9 @@ def cmd_run() -> None:
     )
 
     db = Database(Path(args.db))
+    from .alerts import AlertEngine  # noqa: PLC0415
+
+    engine_run = AlertEngine(rules=load_alert_rules(config_path), db=db)
 
     # ── Game discovery (all sources) ───────────────────────────────────────
     all_discovered: list[OwnedGame] = []
@@ -366,6 +386,7 @@ def cmd_run() -> None:
             cached=len(skip) - pending_news))
 
     width = len(str(pending_details + pending_news)) if (pending_details + pending_news) else 1
+    name_map_run: dict[int, str] = {g.appid: g.name for g in games}
 
     def on_progress(done: int, total: int, name: str) -> None:
         print(f"\r[{done:>{width}}/{total}] {name[:52]:<52}", end="", flush=True)
@@ -374,12 +395,18 @@ def cmd_run() -> None:
     news_fetched: set[int] = set()
 
     def on_result(appid: int, details: AppDetails | None, news: list[NewsItem]) -> None:
+        changes: list[FieldChange] = []
         if details:
-            db.upsert_app_details(details)
+            changes = db.upsert_app_details(details)
         elif appid not in skip:
             failed_details.add(appid)
         db.upsert_news(appid, news)
         news_fetched.add(appid)
+        game_name = name_map_run.get(appid, str(appid))
+        for alert in engine_run.evaluate_field_changes(appid, game_name, changes):
+            db.upsert_alert(alert)
+        for alert in engine_run.evaluate_news(appid, game_name, news):
+            db.upsert_alert(alert)
 
     fetcher = SteamFetcher(max_workers=args.workers, on_progress=on_progress, on_result=on_result)
     try:
@@ -399,11 +426,13 @@ def cmd_run() -> None:
     print(t("cli_rendering"))
     records = db.get_all_game_records()
     out = Path(args.output)
-    news_out = out.parent / "steam_news.html"
-    write_html(records, args.steamid, out, news_href=news_out.name, lang=args.lang)
-    write_news_html(records, args.steamid, news_out, library_href=out.name, lang=args.lang)
+    alerts_out = out.parent / "steam_alerts.html"
+    all_alerts = db.get_alerts()
+    write_html(records, args.steamid, out, alerts_href=alerts_out.name, lang=args.lang)
+    write_alerts_html(all_alerts, records, args.steamid, alerts_out,
+                      library_href=out.name, lang=args.lang)
     print(t("cli_render_library", count=len(records), path=out.resolve()))
-    print(t("cli_render_news", count=sum(len(r.news) for r in records), path=news_out.resolve()))
+    print(t("cli_render_alerts", count=len(all_alerts), path=alerts_out.resolve()))
     save_cli_credentials(
         vars(args), existing=config, path=config_path, _explicit_keys=_get_explicit_cli_keys()
     )

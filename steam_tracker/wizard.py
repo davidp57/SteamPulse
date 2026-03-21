@@ -5,10 +5,13 @@ Twitch/IGDB credentials, and optional settings, then writes a TOML config file.
 """
 from __future__ import annotations
 
+import contextlib
+import tomllib
 import webbrowser
 from pathlib import Path
 from typing import Any
 
+from .alerts import DEFAULT_ALERT_RULES
 from .config import get_config_path, load_config, write_config
 from .epic_api import epic_auth_with_code
 
@@ -225,4 +228,13 @@ def run_wizard(config_path: Path | None = None) -> None:
         print("Cancelled. No file was written.")
         return
 
-    write_config(data, path=target)
+    # Preserve existing alert rules; inject defaults on first setup.
+    _existing_alerts = False
+    if target.exists():
+        with contextlib.suppress(Exception):
+            with target.open("rb") as f:
+                _raw = tomllib.load(f)
+            _existing_alerts = bool(_raw.get("alerts"))
+    from .models import AlertRule as _AlertRule
+    _alert_rules: list[_AlertRule] | None = None if _existing_alerts else DEFAULT_ALERT_RULES
+    write_config(data, alert_rules=_alert_rules, path=target)

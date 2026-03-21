@@ -11,6 +11,7 @@ import requests
 
 from .api import get_app_details, get_app_news
 from .models import AppDetails, NewsItem, OwnedGame
+from .steamcmd_api import get_steamcmd_info
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +70,15 @@ class SteamFetcher:
         if fetch_details:
             self._limiter.acquire()
             details = get_app_details(game.appid, session=session)
+            if details is not None:
+                cmd_info = get_steamcmd_info(game.appid, session=session)
+                if cmd_info is not None:
+                    details = details.model_copy(update={
+                        "buildid": cmd_info.buildid,
+                        "build_timeupdated": cmd_info.build_timeupdated,
+                        "depot_size_bytes": cmd_info.depot_size_bytes,
+                        "branch_names": cmd_info.branch_names,
+                    })
         news = get_app_news(game.appid, count=self._news_per_game, session=session)
         return game.appid, details, news
 

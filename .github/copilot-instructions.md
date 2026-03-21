@@ -5,7 +5,7 @@
 **SteamPulse** is a CLI tool that fetches a user's Steam library, wishlist, and followed games via the Steam Web API and Store API, persists the data to a local SQLite database, and renders two self-contained, offline HTML dashboards:
 
 - `steam_library.html` — filterable/sortable card grid of all games (owned, wishlist, followed)
-- `steam_news.html` — chronological news feed across all games
+- `steam_alerts.html` — configurable alert dashboard (price drops, updates, reviews, DLC, news…)
 
 Core features: smart cache (re-fetch only new games), multilingual UI (EN/FR), static HTML output (no server required), multi-threaded fetching, graceful Ctrl+C handling.
 

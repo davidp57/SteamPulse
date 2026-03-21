@@ -38,25 +38,20 @@
 - **i18n** — 28 new tooltip keys (EN + FR)
 - 226 tests total
 
+### v1.4.0 — SteamCMD, Alerts & Field History
+- **SteamCMD API** (`steamcmd_api.py`) — fetches `buildid`, `timeupdated`, depot sizes, branch names from `api.steamcmd.net` (free, no auth); detects silent updates
+- **New Store API fields** — `contents`, `dlc_appids`, `controller_support`, `required_age` parsed and stored
+- **Field history** — `field_history` DB table tracking all `app_details` changes across fetches; enables retroactive alert creation
+- **Configurable alert rules engine** (`alerts.py`) — `[[alerts]]` rules in TOML; two types: `news_keyword` (match news titles/tags by keywords) and `state_change` (detect field diffs: `buildid` changed, `price_final` decreased, `metacritic_score` appeared, `dlc_appids` changed)
+- **6 default rules** shipped via `steam-setup`: All News, Price Drop, Release 1.0, Review Bomb, Major Update, New DLC
+- **`steam_alerts.html` replaces `steam_news.html`** — 3 view modes (by rule / by game / combined); read/unread via `localStorage`; mark individual, per-rule, or all
+- **`--backfill-alerts`** CLI flag to retroactively generate alerts from existing field history
+- Navigation: Library ↔ Alerts (2 pages)
+- 257 tests total
+
 ---
 
 ## 🔵 Planned / Not yet started
-
-### SteamCMD API integration
-- **SteamCMD API** (`steamcmd_api.py`) — fetch `buildid`, `timeupdated`, depot sizes, branch names from `api.steamcmd.net` (free, no auth); detect silent updates and version branches
-- **New Store API fields** — parse `dlc` list, `controller_support`, `required_age` (already in response, currently ignored)
-- **Field history** — `field_history` DB table tracking ALL `app_details` changes across fetches; enables retroactive alert creation
-- New columns in `app_details` via additive migrations; all changes tracked automatically
-
-### Configurable Alerts
-- **Alert rules engine** (`alerts.py`) — configurable rules in TOML (`[[alerts]]`); two types:
-  - `news_keyword`: match news titles/tags by keywords (e.g. "1.0 Release", "Version Update")
-  - `state_change`: detect field diffs (e.g. `buildid` changed, `price_final` decreased, `metacritic_score` appeared, `dlc_appids` changed)
-- **Default rules** shipped in TOML via `steam-setup`; "All News" is the only hardcoded builtin rule
-- **`steam_alerts.html` replaces `steam_news.html`** — news page becomes the "All News" rule; 3 view modes (by rule / by game / combined); filter by rule, status, store
-- **Read/unread** via `localStorage` (no server needed); mark individual, per-rule, or all; unread badge in nav
-- **Backfill** — `--backfill-alerts` CLI flag to retroactively generate alerts from existing `field_history`
-- Navigation: Library ↔ Alerts (2 pages)
 
 ### Manual AppID mappings CLI
 - Interface to add/edit manual `appid_mappings` entries (e.g. `steam-fetch --add-mapping epic:Flier 1234567`)
