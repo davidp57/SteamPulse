@@ -16,7 +16,7 @@
 - Multilingual support (EN / FR) — `--lang` flag
 - URL hash persistence for all filters
 
-### v1.2.0 — Multi-store (Epic Games) — *in `develop`, not yet released*
+### v1.2.0 — Multi-store (Epic Games)
 - **`GameSource` plugin architecture** — `sources/` package, runtime-checkable Protocol, `get_all_sources()` registry; new stores can be added without touching `cli.py`
 - **Epic Games Store source** (`EpicSource`) — OAuth2 auth (authorization code on first login, device credentials for subsequent headless runs)
 - **Steam AppID resolver chain** (`resolver.py`) — `SteamStoreResolver` (Steam Store Search + fuzzy matching) → `IGDBResolver` (Twitch OAuth + IGDB); first hit wins; results cached in `appid_mappings` DB table
@@ -25,7 +25,18 @@
 - **Epic display in HTML dashboards** — "🎮 Epic" filter button, store badge on cards, context-aware playtime label
 - **New CLI flags**: `--epic-auth-code`, `--epic-device-id`, `--epic-account-id`, `--epic-device-secret`, `--twitch-client-id`, `--twitch-client-secret`
 - **UX**: per-game progress indicator during Epic AppID resolution + resolved/unresolved summary
-- 168 tests total
+
+### v1.3.0 — Config file, wizard & UI polish
+- **TOML config file** — stdlib `tomllib`; platform-specific path (`%APPDATA%\steampulse\config.toml` / `~/.config/steampulse/config.toml`); CLI flags override config
+- **Interactive setup wizard** (`steam-setup`) — step-by-step credential setup; OAuth2 Epic flow built-in; auto-saves config
+- **Card image aspect ratio** — native Steam 460×215 (`aspect-ratio: 460 / 215`); never stretched or squashed
+- **News overlay** — `position:absolute` overlay below the card; single-open; outside-click closes; grid dims/blurs
+- **Metacritic badge tooltip** — score/100 + quality label (Favorable/Mixed/Negative), localized EN/FR
+- **Hover tooltips on all card elements** — badge, developer, platform icons, release date, news date, playtime, price; all via `data-tooltip` CSS
+- **Filter button tooltips** — 20 keys × EN + FR
+- **Mobile filter panel** — full-screen overlay on ≤ 600 px with close button
+- **i18n** — 28 new tooltip keys (EN + FR)
+- 226 tests total
 
 ---
 

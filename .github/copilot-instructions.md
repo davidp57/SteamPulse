@@ -149,10 +149,11 @@ When the user asks to prepare a PR, follow these steps in order:
 
 1. **Tests** — verify existing tests still pass; add or complete tests for all new/changed behavior.
 2. **Documentation** — verify and update all relevant docs (user guides EN + FR, README, docstrings).
-3. **Quality checks** — run `ruff check`, `mypy`, and `pytest`; fix all issues before proceeding.
-4. **Changelog** — edit `CHANGELOG.md`: move/add entries under `## [Unreleased]`. **Never create a new version section or bump the version number** — that is the user's decision.
-5. **Temporary PR description** — create a temporary markdown file in English (e.g. `.github/pull_request_description.md`) to help the user fill in the PR on GitHub. This file must **not** be committed.
-6. **Commit** — commit all the above changes (tests, docs, changelog) in one clean commit. Do **not** commit the PR description file.
+3. **Roadmap** — update `ROADMAP.md`: move completed features from "Planned" to a new "Done" section with the version label; keep the "Planned" and "Ideas" sections accurate.
+4. **Quality checks** — run `ruff check`, `mypy`, and `pytest`; fix all issues before proceeding.
+5. **Changelog** — edit `CHANGELOG.md`: move/add entries under `## [Unreleased]`. **Never create a new version section or bump the version number** — that is the user's decision.
+6. **Temporary PR description** — create a temporary markdown file in English (e.g. `.github/pull_request_description.md`) to help the user fill in the PR on GitHub. This file must **not** be committed.
+7. **Commit** — commit all the above changes (tests, docs, changelog, roadmap) in one clean commit. Do **not** commit the PR description file.
 
 ### Commands
 
