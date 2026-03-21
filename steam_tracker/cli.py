@@ -191,11 +191,17 @@ def cmd_fetch() -> None:
     )
 
     db = Database(Path(args.db))
+
+    # Clean up stale / broken data from previous runs before discovery.
+    cleaned = db.run_cleanup()
+    if cleaned:
+        print(t("cli_cleanup_done", count=cleaned))
+
     from .alerts import AlertEngine  # noqa: PLC0415
 
     engine = AlertEngine(rules=load_alert_rules(config_path), db=db)
 
-    # ── Game discovery (all sources) ─────────────────────────────────────────────
+    # ── Game discovery (all sources) ─────────────────────────────────────────
     all_discovered: list[OwnedGame] = []
     for source in get_all_sources():
         if source.is_enabled(args):
@@ -353,6 +359,10 @@ def cmd_run() -> None:
     )
 
     db = Database(Path(args.db))
+    # Clean up stale / broken data from previous runs before discovery.
+    cleaned = db.run_cleanup()
+    if cleaned:
+        print(t("cli_cleanup_done", count=cleaned))
     from .alerts import AlertEngine  # noqa: PLC0415
 
     engine_run = AlertEngine(rules=load_alert_rules(config_path), db=db)

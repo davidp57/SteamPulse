@@ -22,6 +22,7 @@ STRINGS: dict[str, str] = {
     "cli_render_library":    "✅ {count} jeux · bibliothèque → {path}",
     "cli_render_alerts":     "   {count} alertes → {path}",
     "cli_backfill_alerts":   "   ↩ {count} alertes reconstituées depuis l'historique",
+    "cli_cleanup_done":      "   🧹 {count} entrée(s) obsolète(s) nettoyée(s) dans la base",
 
     # ── HTML – page alertes ───────────────────────────────────────────────────
     "link_alerts":           "Alertes",

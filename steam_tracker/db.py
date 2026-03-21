@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from .models import Alert, AppDetails, FieldChange, GameRecord, GameStatus, NewsItem, OwnedGame
+
+log = logging.getLogger(__name__)
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS games (
@@ -212,6 +215,55 @@ class Database:
                 if col not in existing[table]:
                     con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_def}")  # noqa: S608
                     existing[table].add(col)
+
+    # ── Data cleanup ──────────────────────────────────────────────────────
+
+    def run_cleanup(self) -> int:
+        """Run all data-cleanup rules and return the total number of affected rows.
+
+        Each rule is a private method named ``_cleanup_*``.  New rules should
+        be added to the ``_CLEANUP_RULES`` list below.
+
+        Returns:
+            Total number of rows deleted or corrected across all rules.
+        """
+        total = 0
+        for rule in self._CLEANUP_RULES:
+            total += rule(self)
+        return total
+
+    def _cleanup_epic_live_name(self) -> int:
+        """Remove Epic games named 'Live' (incorrect sandboxName) and their mappings.
+
+        These entries were created by a bug that used the sandbox environment
+        label instead of the real game title.  Removing them forces a clean
+        re-discovery on the next fetch.
+
+        Returns:
+            Number of games deleted.
+        """
+        with self._connect() as con:
+            rows = con.execute(
+                "SELECT appid, external_id FROM games "
+                "WHERE source = 'epic' AND name = 'Live'",
+            ).fetchall()
+            if not rows:
+                return 0
+            appids = [int(r[0]) for r in rows]
+            ext_ids = [str(r[1]) for r in rows if r[1]]
+            # Delete games (cascades to app_details, news, alerts, field_history)
+            con.executemany("DELETE FROM games WHERE appid = ?", [(a,) for a in appids])
+            # Invalidate cached appid_mappings so the resolver retries
+            if ext_ids:
+                con.executemany(
+                    "DELETE FROM appid_mappings "
+                    "WHERE external_source = 'epic' AND external_id = ?",
+                    [(e,) for e in ext_ids],
+                )
+            log.info("cleanup: removed %d Epic game(s) named 'Live'", len(appids))
+            return len(appids)
+
+    _CLEANUP_RULES: list[Callable[[Database], int]] = [_cleanup_epic_live_name]
 
     def upsert_game(self, game: OwnedGame) -> None:
         with self._connect() as con:

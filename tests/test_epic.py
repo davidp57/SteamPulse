@@ -62,11 +62,22 @@ def _library_item(
     catalog_item_id: str,
     title: str,
     namespace: str = "ns1",
+    *,
+    app_name: str | None = None,
+    sandbox_name: str | None = None,
 ) -> dict[str, object]:
+    """Build a realistic Epic library record.
+
+    By default the human-readable *title* goes into
+    ``catalogItem.title`` (as returned when ``includeMetadata=true``).
+    ``appName`` defaults to an internal-looking codename.
+    """
     return {
         "catalogItemId": catalog_item_id,
         "namespace": namespace,
-        "appName": title,
+        "appName": app_name or f"internal_{catalog_item_id}",
+        "sandboxName": sandbox_name or "Live",
+        "catalogItem": {"title": title},
     }
 
 
@@ -301,7 +312,9 @@ def test_epic_get_library() -> None:
     items = epic_get_library("tok123")
     assert len(items) == 2
     assert items[0]["catalogItemId"] == "c1"
-    assert items[1]["appName"] == "Game Two"
+    catalog = items[1]["catalogItem"]
+    assert isinstance(catalog, dict)
+    assert catalog["title"] == "Game Two"
 
 
 @resp_mock.activate
@@ -336,3 +349,98 @@ def test_epic_get_library_empty() -> None:
     resp_mock.add(resp_mock.GET, _EPIC_LIBRARY, json=_library_response([]))
     items = epic_get_library("tok123")
     assert items == []
+
+
+# -- _extract_epic_title unit tests ------------------------------------------
+
+
+def test_extract_title_from_catalog_item() -> None:
+    """catalogItem.title is the preferred source for the game title."""
+    from steam_tracker.sources.epic import _extract_epic_title
+
+    item: dict[str, object] = {
+        "appName": "InternalCode",
+        "sandboxName": "Live",
+        "catalogItem": {"title": "Gone Home"},
+    }
+    assert _extract_epic_title(item) == "Gone Home"
+
+
+def test_extract_title_falls_back_to_product_name() -> None:
+    """When catalogItem.title is absent, use productName."""
+    from steam_tracker.sources.epic import _extract_epic_title
+
+    item: dict[str, object] = {
+        "appName": "InternalCode",
+        "sandboxName": "Live",
+        "productName": "Control",
+    }
+    assert _extract_epic_title(item) == "Control"
+
+
+def test_extract_title_sandbox_name_if_not_label() -> None:
+    """When sandboxName is a real title (not 'Live'), use it."""
+    from steam_tracker.sources.epic import _extract_epic_title
+
+    item: dict[str, object] = {
+        "appName": "InternalCode",
+        "sandboxName": "Factorio",
+    }
+    assert _extract_epic_title(item) == "Factorio"
+
+
+def test_extract_title_ignores_live_sandbox() -> None:
+    """sandboxName='Live' must NOT be used as the game title."""
+    from steam_tracker.sources.epic import _extract_epic_title
+
+    item: dict[str, object] = {
+        "appName": "InternalCode",
+        "sandboxName": "Live",
+    }
+    assert _extract_epic_title(item) == ""
+
+
+def test_extract_title_ignores_stage_sandbox() -> None:
+    """sandboxName='Stage' must NOT be used as the game title."""
+    from steam_tracker.sources.epic import _extract_epic_title
+
+    item: dict[str, object] = {
+        "appName": "InternalCode",
+        "sandboxName": "Stage",
+    }
+    assert _extract_epic_title(item) == ""
+
+
+def test_extract_title_empty_when_nothing() -> None:
+    """Returns empty string when no usable title field exists."""
+    from steam_tracker.sources.epic import _extract_epic_title
+
+    item: dict[str, object] = {"appName": "InternalCode"}
+    assert _extract_epic_title(item) == ""
+
+
+@resp_mock.activate
+def test_discover_games_sandbox_name_live_uses_appname() -> None:
+    """When sandboxName='Live' and no metadata, fall back to appName."""
+    from steam_tracker.sources.epic import EpicSource
+
+    resp_mock.add(resp_mock.POST, _EPIC_OAUTH, json=_oauth_token_response())
+    resp_mock.add(
+        resp_mock.GET,
+        _EPIC_LIBRARY,
+        json=_library_response([{
+            "catalogItemId": "cat_x",
+            "namespace": "ns1",
+            "appName": "GoneHomeFallback",
+            "sandboxName": "Live",
+        }]),
+    )
+
+    args = _make_args(epic_auth_code="code123")
+    with patch(
+        "steam_tracker.sources.epic.resolve_steam_appid", return_value=None
+    ):
+        games = EpicSource().discover_games(args)
+
+    assert len(games) == 1
+    assert games[0].name == "GoneHomeFallback"
