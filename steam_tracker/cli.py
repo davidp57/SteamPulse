@@ -193,9 +193,12 @@ def cmd_fetch() -> None:
     db = Database(Path(args.db))
 
     # Clean up stale / broken data from previous runs before discovery.
+    log = logging.getLogger(__name__)
     cleaned = db.run_cleanup()
     if cleaned:
         print(t("cli_cleanup_done", count=cleaned))
+    else:
+        log.debug("cleanup: nothing to clean")
 
     from .alerts import AlertEngine  # noqa: PLC0415
 
@@ -360,9 +363,12 @@ def cmd_run() -> None:
 
     db = Database(Path(args.db))
     # Clean up stale / broken data from previous runs before discovery.
+    log = logging.getLogger(__name__)
     cleaned = db.run_cleanup()
     if cleaned:
         print(t("cli_cleanup_done", count=cleaned))
+    else:
+        log.debug("cleanup: nothing to clean")
     from .alerts import AlertEngine  # noqa: PLC0415
 
     engine_run = AlertEngine(rules=load_alert_rules(config_path), db=db)

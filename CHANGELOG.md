@@ -14,7 +14,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Alerts page UX redesign** — differentiated click zones (game image/name → store page, news title/body → news URL, checkmark → mark read), "Rule / Game" dual-grouping view with two levels of collapsible sections, autocomplete search filtered to visible games, search-clear buttons (×), font size controls (A−/A+, persisted in localStorage), larger game thumbnails (120×56), responsive card sizing
 - **Mobile UX improvements** — auto-hide toolbar (slides up on scroll down, reappears on scroll up), compact header (hidden logo, smaller stats), full-width search, smaller buttons/controls on both library and alerts pages
 - **Automatic DB cleanup on fetch** — extensible rule-based cleanup system (`Database.run_cleanup()`); runs before game discovery to purge stale data. First rule: remove Epic games incorrectly named "Live" and their `appid_mappings`
-- 18 new tests (294 passed, 2 skipped)
+- 18 new tests (294 passed, 2 skipped — POSIX-only config-path tests on Windows)
 
 ### Fixed
 
