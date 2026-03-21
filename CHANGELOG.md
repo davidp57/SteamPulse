@@ -9,6 +9,48 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Configurable alerts system** (`steam_tracker/alerts.py`) — replaces the standalone news page with a rule-based alert engine. Six default rules shipped via `steam-setup`:
+  - `all_news` — all news items (replaces the old news page)
+  - `price_drop` — price decreased
+  - `release_1_0` — game left Early Access (`release_date_is_early_access` went from `True` to `False`)
+  - `review_bomb` — Metacritic score dropped by ≥ 10 points
+  - `major_update` — `buildid` changed (silent update detected via SteamCMD)
+  - `new_dlc` — `dlc_appids` list changed (new DLC released)
+- **`steam_alerts.html` replaces `steam_news.html`** — new self-contained HTML dashboard with dark CSS, 3 view modes (by rule / by game / combined), read/unread tracking via `localStorage`, mark individual or mark-all-read
+- **Alert rules in TOML** — `[[alerts]]` sections in `config.toml`; two rule types: `news_keyword` (match news titles/tags) and `state_change` (detect field diffs)
+- **SteamCMD API** (`steam_tracker/steamcmd_api.py`) — fetches `buildid`, `timeupdated`, depot sizes, branch names from `api.steamcmd.net` (free, no auth); enables detection of silent updates
+- **Field history** — `field_history` DB table tracking all `app_details` changes across fetches; enables retroactive alert creation and change-based rules
+- **Automatic backfill** — after each fetch, new or changed alert rules are automatically evaluated against the full field history; no manual CLI flag needed
+- **New Store API fields** — `contents` (full article body), `dlc_appids`, `controller_support`, `required_age` now parsed and stored
+- **New DB tables** — `field_history` and `alerts` with additive migrations; `upsert_app_details()` now returns `list[FieldChange]` for downstream alert evaluation
+- **30 new tests** — 21 in `test_alerts.py`, 9 in `test_steamcmd_api.py`
+- **Accordion sections** — in "By rule" and "By game" views, alerts are grouped under collapsible section headers with animated chevron (❯); all sections start collapsed by default
+- **Toggle all button** — "Expand all / Collapse all" button to open or close every accordion group at once
+- **Group search** — real-time search field in the toolbar to filter section headers by name (visible only in grouped views)
+- **Alerts toolbar redesign** — search box, sort dropdown (date, name, playtime, Metacritic), view-mode buttons (combined/by-rule/by-game), group controls, filter toggle with badge, reset button, mark-all-read
+- **Full filter panel on alerts page** — 7 filter groups (Status, Store, Collection, News type, Playtime, Metacritic, Recent update) shared with the library page
+- **Cross-page filter persistence** — Store and Collection filter state is carried between Library ↔ Alerts via URL hash, `window.name`, and `localStorage`
+- **Build ID badge** — alert cards display a `build XXXXX` badge when the game has a non-zero `buildid` (useful for silent update detection)
+
+### Changed
+
+- **Navigation**: Library ↔ Alerts (2 pages) — the 🗞 News nav link is replaced by 🔔 Alerts
+- **`cmd_fetch` / `cmd_run`** — `AlertEngine` is wired into the fetch pipeline; alerts are generated on each game result based on configured rules
+- **`cmd_render`** — outputs `steam_alerts.html` instead of `steam_news.html`
+- **`SteamFetcher`** — merges SteamCMD metadata (`buildid`, `timeupdated`, `depot_sizes`, `branches`) via `model_copy(update={...})`
+- **Wizard** — writes `DEFAULT_ALERT_RULES` to `config.toml` on first setup
+
+### Fixed
+
+- **Alert rules lost on credential save** — `save_cli_credentials()` now preserves existing `[[alerts]]` rules when rewriting `config.toml` (previously, updating a credential erased the alerts section)
+
+### Removed
+
+- **`steam_news.html`** — replaced by `steam_alerts.html`
+- **`make_news_row()`, `generate_news_html()`, `write_news_html()`** — removed from `renderer.py`; replaced by `make_alert_card()`, `generate_alerts_html()`, `write_alerts_html()`
+
 ---
 
 ### Changed

@@ -210,7 +210,7 @@ For each **Epic** game: the game is resolved to a Steam AppID when possible — 
 ✅ Fetch done — 399 entry/entries updated in steam_library.db
 🖥  Generating HTML pages...
 ✅ 2244 games · library → C:\...\steam_library.html
-   11220 news → C:\...\steam_news.html
+   42 alerts → C:\...\steam_alerts.html
 ```
 
 ---
@@ -258,7 +258,7 @@ For each **Epic** game: the game is resolved to a Steam AppID when possible — 
 - **⚙ Filters** — expands/collapses the filter panel; a badge shows the number of active filters
 - **Reset** — clears all filters and search (only appears when something is active)
 - **☰ Liste / ⊞ Grille** — toggle between card grid and table list view
-- **🗞 News** — opens the news feed page (carries compatible filters via URL hash)
+- **🔔 Alerts** — opens the alerts dashboard; carries over compatible filters (store, collection) via URL hash
 
 **Filter panel (collapsible):**
 
@@ -294,13 +294,60 @@ Clicking anywhere on a card opens the Steam store page in a new tab.
 
 If a game has news, a **▼ N updates** bar appears at the bottom of the card. Clicking it expands the news list as a floating overlay on top of the cards below — the rest of the grid dims and blurs to focus attention. Only one card can be expanded at a time; click outside to close.
 
-### News page (`steam_news.html`)
+### Alerts page (`steam_alerts.html`)
 
-- All news from all games, sorted by descending date
-- Same two-layer toolbar: search in the main row, Status, Store, Collection and Type news filters in the collapsible panel
-- Type badge on each row (green for `patchnotes`, grey for others)
-- Live result counter
-- Click a row to open the news item on Steam
+**Toolbar — main row (always visible):**
+- **Search** — filters alerts by game name in real time
+- **Sort** — by date (newest/oldest), name (A–Z / Z–A), playtime, Metacritic score
+- **View mode** — three togglable views:
+  - **Combined** — all alert cards in a single flat list
+  - **By rule** — cards grouped under collapsible section headers (one per alert rule)
+  - **By game** — cards grouped by game name
+- **Group controls** (visible only in grouped views):
+  - **Group search** — filters section headers by name in real time
+  - **Expand all / Collapse all** — toggle button to open or close every group at once
+- **⚙ Filters** — expands/collapses the filter panel; a badge shows the number of active filters
+- **Reset** — clears all filters, search and sort to defaults
+- **Mark all as read** — marks every visible alert as read
+
+**Filter panel (collapsible):**
+
+| Group | Options | Behaviour |
+|---|---|---|
+| **Status** | All · Early Access · Released · Upcoming | Single-select |
+| **Store** | 🎮 Steam · ⚡ Epic | Multi-select (OR) — both active by default |
+| **Collection** | All · Owned · 🎁 Wishlist · 👁 Followed | Single-select |
+| **News type** | All types · 📋 Patch notes · 📰 News | Single-select |
+| **Playtime** | All · Never played · < 1 h · 1–10 h · > 10 h | Single-select |
+| **Metacritic** | All · No score · < 50 · 50–75 · > 75 | Single-select |
+| **Recent update** | All · 2 days · 5 days · 15 days · 30 days | Single-select |
+
+> The filter panel is shared between the library and alerts pages. **Store** and **Collection** filters selected on one page are carried over when navigating to the other.
+
+**Accordion sections (grouped views):**
+
+In "By rule" and "By game" views, alerts are grouped under collapsible sections:
+- Click a section header (or its chevron ❯) to expand or collapse it
+- All sections start collapsed by default
+- Use the **Expand all / Collapse all** button to toggle every section at once
+- The **group search** field filters sections by header name — non-matching sections are hidden
+
+**Alert cards:**
+
+Each card shows:
+- Rule icon + rule name
+- Game header image
+- Game name (clickable → opens the Steam store page)
+- Alert date + read/unread status (click to toggle)
+- News snippet (title + source) for news-based alerts
+- Build ID badge when relevant (e.g. `build 12345` for silent update detection)
+
+**Read/unread tracking:**
+- State is stored locally in `localStorage` — no server needed
+- Click an individual card to toggle read/unread
+- Use "Mark all as read" to mark everything at once
+
+Alert rules are configured in `config.toml` under `[[alerts]]` sections. Run `steam-setup` to see and edit the default rules.
 
 ---
 
@@ -429,7 +476,7 @@ your-folder/
 └── data/                ← created automatically by Docker
     ├── steam_library.db
     ├── steam_library.html
-    └── steam_news.html
+    └── steam_alerts.html
 ```
 
 Create the data folder then start the container:

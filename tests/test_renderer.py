@@ -4,19 +4,19 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from steam_tracker.models import AppDetails, GameRecord, GameStatus, NewsItem, OwnedGame
+from steam_tracker.models import Alert, AppDetails, GameRecord, GameStatus, NewsItem, OwnedGame
 from steam_tracker.renderer import (
     _metacritic_html,
     _parse_release_ts,
     _platform_html,
     _price_html,
     format_playtime,
+    generate_alerts_html,
     generate_html,
-    generate_news_html,
+    make_alert_card,
     make_card,
-    make_news_row,
+    write_alerts_html,
     write_html,
-    write_news_html,
 )
 
 
@@ -324,97 +324,12 @@ def test_make_card_other_news_sets_last_other_ts() -> None:
     assert 'data-last-patch-ts="0"' in card
 
 
-# ── make_news_row ─────────────────────────────────────────────────────────────
+# ── write_html ────────────────────────────────────────────────────────────────
 
-def test_make_news_row_contains_game_name(sample_record: GameRecord) -> None:
-    row = make_news_row(sample_record, sample_record.news[0])
-    assert "Half-Life 2" in row
-
-
-def test_make_news_row_marks_patchnotes_tag(sample_record: GameRecord) -> None:
-    row = make_news_row(sample_record, sample_record.news[0])
-    assert 'data-tag="patchnotes"' in row
-    assert "feed-tag-patchnotes" in row
-
-
-def test_make_news_row_marks_other_tag() -> None:
-    news_item = NewsItem(
-        gid="1",
-        title="Big news",
-        date=datetime(2024, 5, 1, tzinfo=UTC),
-        url="https://example.com/news",
-        author="Dev",
-        feedname="f",
-        feedlabel="F",
-        tags=["announcement"],
-    )
-    record = GameRecord(
-        game=OwnedGame(appid=1, name="MyGame"),
-        status=GameStatus(label="Sorti", badge="released", release_date="\u2014"),
-    )
-    row = make_news_row(record, news_item)
-    assert 'data-tag="other"' in row
-    assert "feed-tag-other" in row
-
-
-def test_make_news_row_escapes_xss_in_title() -> None:
-    news_item = NewsItem(
-        gid="2",
-        title="<script>alert('xss')</script>",
-        date=datetime(2024, 5, 2, tzinfo=UTC),
-        url="https://example.com/news2",
-        author="Dev",
-        feedname="f",
-        feedlabel="F",
-        tags=[],
-    )
-    record = GameRecord(
-        game=OwnedGame(appid=1, name="Game"),
-        status=GameStatus(label="Sorti", badge="released", release_date="\u2014"),
-    )
-    row = make_news_row(record, news_item)
-    assert "<script>" not in row
-    assert "&lt;script&gt;" in row
-
-
-# ── generate_news_html ────────────────────────────────────────────────────────
-
-def test_generate_news_html_replaces_all_placeholders(sample_record: GameRecord) -> None:
-    page = generate_news_html([sample_record], "76561198000000000")
-    for ph in ["__SHARED_JS__", "__GENERATED_AT__", "__STEAM_ID__", "__ROWS__", "__LIB_HREF__"]:
-        assert ph not in page, f"Placeholder {ph} not replaced"
-
-
-def test_generate_news_html_sorts_by_date_descending() -> None:
-    older = NewsItem(
-        gid="old", title="Old news", date=datetime(2024, 1, 1, tzinfo=UTC),
-        url="https://example.com/old", author="A", feedname="f", feedlabel="F", tags=[],
-    )
-    newer = NewsItem(
-        gid="new", title="Newest news", date=datetime(2024, 6, 1, tzinfo=UTC),
-        url="https://example.com/new", author="A", feedname="f", feedlabel="F", tags=[],
-    )
-    record = GameRecord(
-        game=OwnedGame(appid=1, name="SortGame"),
-        status=GameStatus(label="Sorti", badge="released", release_date="\u2014"),
-        news=[older, newer],
-    )
-    page = generate_news_html([record], "0")
-    assert page.index("Newest news") < page.index("Old news")
-
-
-# ── write_html / write_news_html ──────────────────────────────────────────────
 
 def test_write_html_creates_file(sample_record: GameRecord, tmp_path: Path) -> None:
     out = tmp_path / "lib.html"
     write_html([sample_record], "76561198000000000", out)
-    assert out.exists()
-    assert "Half-Life 2" in out.read_text(encoding="utf-8")
-
-
-def test_write_news_html_creates_file(sample_record: GameRecord, tmp_path: Path) -> None:
-    out = tmp_path / "news.html"
-    write_news_html([sample_record], "76561198000000000", out)
     assert out.exists()
     assert "Half-Life 2" in out.read_text(encoding="utf-8")
 
@@ -492,33 +407,8 @@ def test_make_card_followed_has_data_lib_status_followed() -> None:
     assert 'data-lib-status="followed"' in card
 
 
-def test_make_news_row_has_data_store_and_lib_status() -> None:
-    news_item = NewsItem(
-        gid="1",
-        title="Big patch",
-        date=datetime(2024, 5, 1, tzinfo=UTC),
-        url="https://example.com/news",
-        author="Dev",
-        feedname="f",
-        feedlabel="F",
-        tags=["patchnotes"],
-    )
-    record = GameRecord(
-        game=OwnedGame(appid=420, name="HL2", source="owned"),
-        status=GameStatus(label="—", badge="released", release_date="—"),
-    )
-    row = make_news_row(record, news_item)
-    assert 'data-store="steam"' in row
-    assert 'data-lib-status="owned"' in row
-
-
 def test_generate_html_has_steam_store_filter_button() -> None:
     page = generate_html([_epic_record()], "0")
-    assert 'class="store-btn active" data-store="steam"' in page
-
-
-def test_generate_news_html_has_steam_store_filter_button() -> None:
-    page = generate_news_html([_epic_record()], "0")
     assert 'class="store-btn active" data-store="steam"' in page
 
 
@@ -532,7 +422,167 @@ def test_generate_html_has_followed_collection_filter_button() -> None:
     assert 'class="filter-btn" data-lib-status="followed"' in page
 
 
-def test_generate_news_html_has_epic_store_filter_button() -> None:
-    page = generate_news_html([_epic_record()], "0")
-    assert 'class="store-btn active" data-store="epic"' in page
+# ── make_alert_card ──────────────────────────────────────────────────────────
+
+
+def _sample_alert() -> Alert:
+    return Alert(
+        id="abc123def456abcd",
+        rule_name="Version Update",
+        rule_icon="🔧",
+        appid=420,
+        game_name="Half-Life 2",
+        timestamp=datetime(2024, 6, 1, tzinfo=UTC),
+        title="Build 12345 deployed",
+        details="buildid changed: 11111 → 12345",
+        url="",
+        source_type="field_change",
+        source_id="420:buildid:2024-06-01",
+    )
+
+
+def test_make_alert_card_contains_game_name(sample_record: GameRecord) -> None:
+    card = make_alert_card(_sample_alert(), sample_record)
+    assert "Half-Life 2" in card
+
+
+def test_make_alert_card_contains_rule_name() -> None:
+    card = make_alert_card(_sample_alert())
+    assert "Version Update" in card
+
+
+def test_make_alert_card_contains_icon() -> None:
+    card = make_alert_card(_sample_alert())
+    assert "🔧" in card
+
+
+def test_make_alert_card_has_data_id() -> None:
+    alert = _sample_alert()
+    card = make_alert_card(alert)
+    assert f'data-id="{alert.id}"' in card
+
+
+def test_make_alert_card_escapes_xss_in_game_name() -> None:
+    alert = Alert(
+        id="xss123456789012",
+        rule_name="Test",
+        rule_icon="✓",
+        appid=1,
+        game_name='<script>alert("xss")</script>',
+        timestamp=datetime(2024, 1, 1, tzinfo=UTC),
+        title="<script>xss</script>",
+        details="",
+        url="",
+        source_type="news",
+        source_id="1",
+    )
+    card = make_alert_card(alert)
+    assert "<script>" not in card
+    assert "&lt;script&gt;" in card
+
+
+def test_make_alert_card_has_store_and_collection_attrs(sample_record: GameRecord) -> None:
+    """Cards carry data-store / data-lib-status for JS filtering."""
+    card = make_alert_card(_sample_alert(), sample_record)
+    assert 'data-store="steam"' in card
+    assert 'data-lib-status="owned"' in card
+
+
+def test_make_alert_card_epic_store_tag() -> None:
+    """An Epic game should produce data-store='epic'."""
+    epic_game = OwnedGame(appid=999, name="Epic Game", source="epic")
+    record = GameRecord(
+        game=epic_game,
+        details=None,
+        news=[],
+        status=GameStatus(label="Released", badge="released", release_date="2024"),
+    )
+    card = make_alert_card(_sample_alert(), record)
+    assert 'data-store="epic"' in card
+    assert 'data-lib-status="owned"' in card
+
+
+def test_make_alert_card_wishlist_collection_tag() -> None:
+    """A wishlist game should produce data-lib-status='wishlist'."""
+    wl_game = OwnedGame(appid=420, name="Half-Life 2", source="wishlist")
+    record = GameRecord(
+        game=wl_game,
+        details=None,
+        news=[],
+        status=GameStatus(label="Released", badge="released", release_date="2024"),
+    )
+    card = make_alert_card(_sample_alert(), record)
+    assert 'data-lib-status="wishlist"' in card
+
+
+def test_make_alert_card_shows_buildid(sample_record: GameRecord) -> None:
+    """When the game has a non-zero buildid, a badge is displayed."""
+    assert sample_record.details is not None
+    sample_record.details.buildid = 12345
+    card = make_alert_card(_sample_alert(), sample_record)
+    assert "build 12345" in card
+
+
+def test_make_alert_card_no_buildid_when_zero(sample_record: GameRecord) -> None:
+    """No buildid badge when buildid is 0."""
+    assert sample_record.details is not None
+    sample_record.details.buildid = 0
+    card = make_alert_card(_sample_alert(), sample_record)
+    assert "alert-buildid" not in card
+
+
+def test_generate_alerts_html_has_nav_in_toolbar(sample_record: GameRecord) -> None:
+    """Nav link to library must be in the toolbar, not in the header."""
+    page = generate_alerts_html([_sample_alert()], [sample_record], "76561198000000000")
+    # The link should be inside the toolbar <div class="toolbar">...</div>
+    import re
+    toolbar = re.search(r'<div class="toolbar">.*?</div>\s*<main>', page, re.DOTALL)
+    assert toolbar is not None
+    assert "steam_library.html" in toolbar.group()
+
+
+def test_generate_alerts_html_has_store_filter_buttons(sample_record: GameRecord) -> None:
+    """Alerts page should have store filter buttons."""
+    page = generate_alerts_html([_sample_alert()], [sample_record], "76561198000000000")
+    assert 'data-store="steam"' in page
+    assert 'data-store="epic"' in page
+    assert "store-btn" in page
+
+
+def test_generate_alerts_html_has_collection_filter_buttons(sample_record: GameRecord) -> None:
+    """Alerts page should have lib-status filter buttons."""
+    page = generate_alerts_html([_sample_alert()], [sample_record], "76561198000000000")
+    assert 'data-lib-status="all"' in page
+    assert 'data-lib-status="owned"' in page
+    assert 'data-lib-status="wishlist"' in page
+    assert 'data-lib-status="followed"' in page
+
+
+# ── generate_alerts_html ──────────────────────────────────────────────────────
+
+
+def test_generate_alerts_html_replaces_all_placeholders(sample_record: GameRecord) -> None:
+    page = generate_alerts_html([_sample_alert()], [sample_record], "76561198000000000")
+    for ph in ["__GENERATED_AT__", "__STEAM_ID__", "__LIB_HREF__", "__ALERTS__",
+               "__T_", "__I18N_"]:
+        assert ph not in page, f"Placeholder {ph!r} still present in output"
+
+
+def test_generate_alerts_html_contains_alert_title(sample_record: GameRecord) -> None:
+    page = generate_alerts_html([_sample_alert()], [sample_record], "76561198000000000")
+    assert "Build 12345 deployed" in page
+
+
+def test_generate_alerts_html_empty_list(sample_record: GameRecord) -> None:
+    page = generate_alerts_html([], [sample_record], "76561198000000000")
+    assert "__ALERTS__" not in page
+
+
+def test_write_alerts_html_creates_file(sample_record: GameRecord, tmp_path: Path) -> None:
+    out = tmp_path / "alerts.html"
+    write_alerts_html([_sample_alert()], [sample_record], "76561198000000000", out)
+    assert out.exists()
+    content = out.read_text(encoding="utf-8")
+    assert "Half-Life 2" in content
+    assert "Build 12345 deployed" in content
 

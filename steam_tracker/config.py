@@ -12,10 +12,13 @@ CLI flags always take precedence over config file values.
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import tomllib
 from pathlib import Path
 from typing import Any
+
+from steam_tracker.models import AlertRule
 
 # ---------------------------------------------------------------------------
 # Key mapping  (TOML section, TOML key) → argparse dest
@@ -112,7 +115,11 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
     return result
 
 
-def write_config(data: dict[str, Any], path: Path | None = None) -> None:
+def write_config(
+    data: dict[str, Any],
+    path: Path | None = None,
+    alert_rules: list[AlertRule] | None = None,
+) -> None:
     """Write config data to a TOML file, creating parent directories as needed.
 
     Only keys that map to known TOML fields are written; unknown/transient
@@ -122,15 +129,43 @@ def write_config(data: dict[str, Any], path: Path | None = None) -> None:
         data: Flat dict of argparse ``dest`` → value (same format as
             :func:`load_config`).
         path: Destination path.  Defaults to :func:`get_config_path`.
+        alert_rules: Optional list of alert rules to append as ``[[alerts]]``
+            entries.  If ``None``, no ``[[alerts]]`` section is written.
     """
     p = path or get_config_path()
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(_build_toml(data), encoding="utf-8")
+    p.write_text(_build_toml(data, alert_rules), encoding="utf-8")
     print(f"  ✔ Config written to {p}")
 
 
-def save_cli_credentials(
-    args_dict: dict[str, Any],
+def load_alert_rules(path: Path | None = None) -> list[AlertRule]:
+    """Load ``[[alerts]]`` entries from the TOML config and inject the builtin rule.
+
+    The builtin "All News" rule (which matches every news item) is always
+    prepended so it appears first in the rendered alerts page, regardless of
+    TOML ordering.
+
+    Args:
+        path: Path to the config file.  Defaults to :func:`get_config_path`.
+
+    Returns:
+        A list of :class:`~steam_tracker.models.AlertRule` objects, with the
+        builtin "All News" rule first, followed by user-defined rules.
+    """
+    from steam_tracker.alerts import ALL_NEWS_RULE  # local import avoids circularity
+
+    p = path or get_config_path()
+    user_rules: list[AlertRule] = []
+    if p.exists():
+        with p.open("rb") as f:
+            raw = tomllib.load(f)
+        for entry in raw.get("alerts", []):
+            with contextlib.suppress(Exception):
+                user_rules.append(AlertRule.model_validate(entry))
+    return [ALL_NEWS_RULE, *user_rules]
+
+
+def save_cli_credentials(    args_dict: dict[str, Any],
     existing: dict[str, Any],
     path: Path | None = None,
     _explicit_keys: set[str] | None = None,
@@ -168,7 +203,9 @@ def save_cli_credentials(
             changed = True
 
     if changed:
-        write_config(updates, path)
+        # Preserve existing [[alerts]] rules when rewriting the config.
+        existing_rules = load_alert_rules(path)[1:]  # strip builtin ALL_NEWS_RULE
+        write_config(updates, path=path, alert_rules=existing_rules or None)
 
 
 # ---------------------------------------------------------------------------
@@ -197,11 +234,13 @@ _SECTION_KEYS: list[tuple[str, list[tuple[str, str]]]] = [
 ]
 
 
-def _build_toml(data: dict[str, Any]) -> str:
+def _build_toml(data: dict[str, Any], alert_rules: list[AlertRule] | None = None) -> str:
     """Build a well-commented TOML string from a flat argparse-key dict.
 
     Args:
         data: Flat dict of argparse dest → value.
+        alert_rules: Optional list of :class:`~steam_tracker.models.AlertRule` objects
+            to append as ``[[alerts]]`` array tables.
 
     Returns:
         TOML-formatted string ready to write to disk.
@@ -226,6 +265,24 @@ def _build_toml(data: dict[str, Any]) -> str:
                 lines.append(f'{toml_key} = "{_toml_escape(value)}"')
             else:
                 lines.append(f"{toml_key} = {value}")
+        lines.append("")
+    for rule in (alert_rules or []):
+        lines.append("[[alerts]]")
+        lines.append(f'name = "{_toml_escape(rule.name)}"')
+        lines.append(f'rule_type = "{rule.rule_type}"')
+        if rule.icon:
+            lines.append(f'icon = "{_toml_escape(rule.icon)}"')
+        if not rule.enabled:
+            lines.append("enabled = false")
+        if rule.keywords:
+            kws = ", ".join(f'"{_toml_escape(kw)}"' for kw in rule.keywords)
+            lines.append(f"keywords = [{kws}]")
+        if rule.match and rule.match != "any":
+            lines.append(f'match = "{rule.match}"')
+        if rule.field:
+            lines.append(f'field = "{rule.field}"')
+        if rule.condition:
+            lines.append(f'condition = "{rule.condition}"')
         lines.append("")
     return "\n".join(lines)
 

@@ -39,6 +39,28 @@ def test_upsert_app_details(
     assert records[0].details.release_date_str == sample_details.release_date_str
 
 
+def test_upsert_app_details_first_insert_returns_no_changes(
+    db: Database, sample_game: OwnedGame, sample_details: AppDetails
+) -> None:
+    """First insert must not return field changes (avoids spurious alerts)."""
+    db.upsert_game(sample_game)
+    changes = db.upsert_app_details(sample_details)
+    assert changes == []
+
+
+def test_upsert_app_details_update_returns_changes(
+    db: Database, sample_game: OwnedGame
+) -> None:
+    """Subsequent updates must return only the changed fields."""
+    db.upsert_game(OwnedGame(appid=420, name="Half-Life 2"))
+    db.upsert_app_details(AppDetails(appid=420, buildid=1000))
+    changes = db.upsert_app_details(AppDetails(appid=420, buildid=1001))
+    buildid_changes = [c for c in changes if c.field_name == "buildid"]
+    assert len(buildid_changes) == 1
+    assert buildid_changes[0].old_value == "1000"
+    assert buildid_changes[0].new_value == "1001"
+
+
 def test_upsert_app_details_json_list_roundtrip(
     db: Database, sample_game: OwnedGame, sample_details: AppDetails
 ) -> None:

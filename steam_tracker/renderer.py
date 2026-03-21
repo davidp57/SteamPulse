@@ -9,10 +9,47 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .models import GameRecord, NewsItem
+from .models import Alert, GameRecord
 
 if TYPE_CHECKING:
     from .i18n import Translator
+
+# ─── Shared Filter CSS (injected into both HTML templates) ───────────────────
+_SHARED_FILTER_CSS = """\
+  .toolbar-filters { display:none; gap:16px 28px; flex-wrap:wrap; padding:14px 40px 18px; border-top:1px solid var(--border); background:rgba(0,0,0,.14); }
+  .toolbar-filters.open { display:flex; }
+  .filter-group { display:flex; flex-direction:column; gap:6px; }
+  .filter-group-label { font-size:10px; font-family:'IBM Plex Mono',monospace; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+  .filter-btns { display:flex; gap:6px; flex-wrap:wrap; }
+  .filter-btn { padding:6px 14px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:12px; cursor:pointer; transition:all .2s; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px; }
+  .filter-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .filter-btn.active { background:var(--accent); border-color:var(--accent); color:#000; font-weight:500; }
+  .store-btn { padding:6px 14px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:12px; cursor:pointer; transition:all .2s; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px; }
+  .store-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .store-btn.active { background:var(--accent); border-color:var(--accent); color:#000; font-weight:500; }
+  .tag-btn { padding:6px 14px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:12px; cursor:pointer; transition:all .2s; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px; }
+  .tag-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .tag-btn.active { background:var(--accent); border-color:var(--accent); color:#000; font-weight:500; }
+  .filter-toggle-btn { padding:6px 14px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:12px; cursor:pointer; transition:all .2s; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px; display:inline-flex; align-items:center; gap:5px; }
+  .filter-toggle-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .filter-toggle-btn.has-active { border-color:var(--accent); color:var(--accent); background:rgba(29,185,255,.1); }
+  .filter-badge { display:none; align-items:center; justify-content:center; min-width:16px; height:16px; border-radius:8px; background:var(--accent); color:#000; font-size:10px; font-weight:700; padding:0 4px; }
+  .filter-badge.show { display:inline-flex; }
+  .reset-btn { padding:6px 12px; border-radius:20px; border:1px solid rgba(255,80,80,.3); background:transparent; color:#ff6b6b; font-size:12px; cursor:pointer; transition:all .2s; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px; display:none; }
+  .reset-btn.show { display:inline-flex; align-items:center; gap:4px; }
+  .reset-btn:hover { background:rgba(255,80,80,.12); border-color:#ff6b6b; }
+  .filter-panel-close { display:none; align-items:center; justify-content:space-between; position:sticky; top:0; background:var(--bg); border:none; border-bottom:1px solid var(--border); padding:16px 0 12px; font-size:14px; font-weight:600; color:var(--text); cursor:pointer; width:100%; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px; }
+  .filter-panel-close:hover { color:var(--accent); }
+  [data-tooltip] { position:relative; }
+  [data-tooltip]::after { content:attr(data-tooltip); position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%); background:rgba(10,14,20,.97); border:1px solid var(--border); border-radius:5px; padding:5px 10px; font-size:11px; white-space:nowrap; color:var(--text); pointer-events:none; z-index:300; font-family:'IBM Plex Mono',monospace; box-shadow:0 3px 10px rgba(0,0,0,.3); opacity:0; transition:opacity .15s; }
+  [data-tooltip]:hover::after { opacity:1; }
+  .search-wrap { position:relative; flex:1; min-width:200px; max-width:340px; }
+  .search-wrap input { width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:8px 12px 8px 36px; border-radius:6px; font-size:13px; outline:none; transition:border-color .2s; font-family:inherit; }
+  .search-wrap input:focus { border-color:var(--accent); }
+  .search-wrap .icon { position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none; }
+  select { background:var(--bg); border:1px solid var(--border); color:var(--text); padding:8px 12px; border-radius:6px; font-size:13px; outline:none; cursor:pointer; font-family:inherit; }
+  select:focus { border-color:var(--accent); }
+"""
 
 # ─── Shared JavaScript (injected into both HTML templates) ───────────────────
 _SHARED_JS = """\
@@ -46,8 +83,10 @@ function activateBtn(selector, dataAttr, value) {
 }
 
 function updateResetBtn() {
-  document.getElementById('resetBtn').classList.toggle('show', !isDefaultState());
-  updateFilterBadge();
+  if (typeof isDefaultState === 'function') {
+    document.getElementById('resetBtn').classList.toggle('show', !isDefaultState());
+  }
+  if (typeof updateFilterBadge === 'function') updateFilterBadge();
 }
 
 // Filter panel toggle
@@ -64,23 +103,27 @@ if (_filterClose) {
 
 // Scroll-to-top
 const scrollBtn = document.getElementById('scrollTop');
-window.addEventListener('scroll', () => {
-  scrollBtn.classList.toggle('visible', window.scrollY > 400);
-}, {passive: true});
-scrollBtn.addEventListener('click', () => {
-  window.scrollTo({top: 0, behavior: 'smooth'});
-});
+if (scrollBtn) {
+  window.addEventListener('scroll', () => {
+    scrollBtn.classList.toggle('visible', window.scrollY > 400);
+  }, {passive: true});
+  scrollBtn.addEventListener('click', () => {
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  });
+}
 
 // Theme toggle
 const themeBtn = document.getElementById('themeToggle');
 function applyTheme(light) {
   document.documentElement.classList.toggle('light', light);
-  themeBtn.textContent = light ? '🌙' : '☀️';
+  if (themeBtn) themeBtn.textContent = light ? '🌙' : '☀️';
   try { localStorage.setItem('sp-theme', light ? 'light' : 'dark'); } catch(e) {}
 }
-themeBtn.addEventListener('click', () => {
-  applyTheme(!document.documentElement.classList.contains('light'));
-});
+if (themeBtn) {
+  themeBtn.addEventListener('click', () => {
+    applyTheme(!document.documentElement.classList.contains('light'));
+  });
+}
 try { if (localStorage.getItem('sp-theme') === 'light') applyTheme(true); } catch(e) {}
 
 // Keyboard shortcuts
@@ -89,16 +132,17 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { e.target.blur(); document.getElementById('resetBtn').click(); }
     return;
   }
-  if (e.key === '/' || (e.ctrlKey && e.key === 'k')) {
+  const searchBox = document.getElementById('search');
+  if (searchBox && (e.key === '/' || (e.ctrlKey && e.key === 'k'))) {
     e.preventDefault();
-    document.getElementById('search').focus();
+    searchBox.focus();
   }
   if (e.key === 'Escape') {
     document.getElementById('resetBtn').click();
   }
 });
 
-// --- Store + collection filter helpers (shared by library and news pages) ---
+// --- Store + collection filter helpers (shared by library and alerts pages) ---
 function getActiveStores() {
   const active = Array.from(document.querySelectorAll('#storeBtns .store-btn.active')).map(b => b.dataset.store);
   // Fallback: if crafted URL produced no active store, treat all as active
@@ -109,6 +153,21 @@ function getActiveStores() {
 }
 function allStoresActive() { const all = document.querySelectorAll('#storeBtns .store-btn'); return Array.from(all).every(b => b.classList.contains('active')); }
 function getLibStatusFilter() { return document.querySelector('#libStatusBtns .filter-btn.active').dataset.libStatus; }
+// Safe getters for filter groups (return 'all' when element is absent)
+function getStatusFilter() { var b = document.querySelector('#filterBtns .filter-btn.active'); return b ? b.dataset.filter : 'all'; }
+function getTagFilter()    { var b = document.querySelector('#tagBtns .tag-btn.active'); return b ? b.dataset.tag : 'all'; }
+function getPtFilter()     { var b = document.querySelector('#playtimeBtns .filter-btn.active'); return b ? b.dataset.pt : 'all'; }
+function getMcFilter()     { var b = document.querySelector('#mcBtns .filter-btn.active'); return b ? b.dataset.mc : 'all'; }
+function getRecentFilter() { var b = document.querySelector('#recentBtns .filter-btn.active'); return b ? b.dataset.recent : 'all'; }
+function checkMcFilter(mc, card) {
+  if (mc === 'all') return true;
+  var s = parseInt(card.dataset.metacritic) || 0;
+  if (mc === 'none') return s <= 0;
+  if (mc === 'bad')  return s > 0 && s < 50;
+  if (mc === 'mid')  return s >= 50 && s <= 75;
+  if (mc === 'good') return s > 75;
+  return true;
+}
 function setupStoreFilter(updateFn) {
   document.querySelectorAll('#storeBtns .store-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -137,6 +196,66 @@ function loadStoreHash(p) {
       activateBtn('#libStatusBtns .filter-btn', 'libStatus', src);
     }
   }
+}
+
+// --- Cross-page filter persistence ---
+// window.name persists across same-tab navigations (works with file://)
+// localStorage is a fallback for HTTP contexts (shared across tabs)
+var SP_FILTER_KEY = 'sp-filters';
+var SP_WIN_PREFIX = 'sp:';
+function saveFilterState() {
+  try {
+    var state = {};
+    if (!allStoresActive()) {
+      state.stores = Array.from(getActiveStores()).join(',');
+    }
+    if (getLibStatusFilter() !== 'all') state.lib = getLibStatusFilter();
+    if (getStatusFilter() !== 'all') state.status = getStatusFilter();
+    if (getPtFilter() !== 'all') state.pt = getPtFilter();
+    if (getMcFilter() !== 'all') state.mc = getMcFilter();
+    if (getRecentFilter() !== 'all') state.recent = getRecentFilter();
+    if (getTagFilter() !== 'all') state.tag = getTagFilter();
+    var json = JSON.stringify(state);
+    window.name = SP_WIN_PREFIX + json;
+    try { localStorage.setItem(SP_FILTER_KEY, json); } catch(e2) {}
+  } catch(e) {}
+}
+function loadFilterState() {
+  try {
+    var raw = null;
+    if (window.name && window.name.indexOf(SP_WIN_PREFIX) === 0) {
+      raw = window.name.substring(SP_WIN_PREFIX.length);
+    }
+    if (!raw) {
+      try { raw = localStorage.getItem(SP_FILTER_KEY); } catch(e2) {}
+    }
+    if (!raw) return;
+    var state = JSON.parse(raw);
+    if (state.stores) {
+      var storeSet = new Set(state.stores.split(',').filter(Boolean));
+      document.querySelectorAll('#storeBtns .store-btn').forEach(function(b) {
+        b.classList.toggle('active', storeSet.has(b.dataset.store));
+      });
+    }
+    if (state.lib) {
+      activateBtn('#libStatusBtns .filter-btn', 'libStatus', state.lib);
+    }
+    if (state.status) {
+      activateBtn('#filterBtns .filter-btn', 'filter', state.status);
+    }
+    if (state.pt) {
+      activateBtn('#playtimeBtns .filter-btn', 'pt', state.pt);
+    }
+    if (state.mc) {
+      activateBtn('#mcBtns .filter-btn', 'mc', state.mc);
+    }
+    if (state.recent) {
+      activateBtn('#recentBtns .filter-btn', 'recent', state.recent);
+    }
+    if (state.tag) {
+      activateBtn('#tagBtns .tag-btn', 'tag', state.tag);
+    }
+  } catch(e) {}
 }"""
 
 # ─── HTML Template ────────────────────────────────────────────────────────────
@@ -976,7 +1095,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     <button class="reset-btn" id="resetBtn" title="__T_title_btn_reset__">✕ __T_btn_reset__</button>
     <button class="view-toggle" id="viewToggle" title="__T_title_view_toggle__">☰ __T_btn_list_view__</button>
     <span class="count-label" id="countLabel"></span>
-    <a class="nav-link" href="__NEWS_HREF__">🗞 __T_link_news__</a>
+    <a class="nav-link" href="__ALERTS_HREF__">🔔 __T_link_alerts__</a>
   </div>
   <div class="toolbar-filters" id="toolbarFilters">
     <button type="button" class="filter-panel-close" id="filterPanelClose">__T_btn_filters__ <span>✕</span></button>
@@ -1066,33 +1185,18 @@ __CARDS__
 __I18N_JS__
 const allCards = Array.from(document.querySelectorAll('.card'));
 __SHARED_JS__
-function getFilter()    { return document.querySelector('#filterBtns .filter-btn.active').dataset.filter; }
-function getTagFilter() { return document.querySelector('#tagBtns .tag-btn.active').dataset.tag; }
-function getPtFilter()  { return document.querySelector('#playtimeBtns .filter-btn.active').dataset.pt; }
-function getMcFilter()  { return document.querySelector('#mcBtns .filter-btn.active').dataset.mc; }
-function getRecentFilter() { return document.querySelector('#recentBtns .filter-btn.active').dataset.recent; }
 function getSearch()    { return document.getElementById('search').value.toLowerCase().trim(); }
 function getSort()      { return document.getElementById('sortBy').value; }
 
-function checkMcFilter(mc, card) {
-  if (mc === 'all') return true;
-  const s = parseInt(card.dataset.metacritic) || 0;
-  if (mc === 'none') return s <= 0;
-  if (mc === 'bad')  return s > 0 && s < 50;
-  if (mc === 'mid')  return s >= 50 && s <= 75;
-  if (mc === 'good') return s > 75;
-  return true;
-}
-
 function isDefaultState() {
-  return getFilter() === 'all' && allStoresActive() && getLibStatusFilter() === 'all' && getTagFilter() === 'all'
+  return getStatusFilter() === 'all' && allStoresActive() && getLibStatusFilter() === 'all' && getTagFilter() === 'all'
     && getPtFilter() === 'all' && getMcFilter() === 'all' && getRecentFilter() === 'all'
     && !getSearch() && getSort() === 'name';
 }
 
 function updateFilterBadge() {
   let n = 0;
-  if (getFilter() !== 'all')         n++;
+  if (getStatusFilter() !== 'all')   n++;
   if (!allStoresActive())             n++;
   if (getLibStatusFilter() !== 'all') n++;
   if (getTagFilter() !== 'all')      n++;
@@ -1107,7 +1211,7 @@ function updateFilterBadge() {
 
 function saveStateToHash() {
   const s = {};
-  if (getFilter() !== 'all')          s.status = getFilter();
+  if (getStatusFilter() !== 'all')    s.status = getStatusFilter();
   if (!allStoresActive())             s.stores = Array.from(getActiveStores()).join(',');
   if (getLibStatusFilter() !== 'all') s.lib = getLibStatusFilter();
   if (getTagFilter() !== 'all')       s.tag = getTagFilter();
@@ -1126,20 +1230,27 @@ function saveStateToHash() {
     localStorage.setItem('sp-shared', JSON.stringify(shared));
   } catch(e) {}
   // Update nav link to carry compatible filters to news page
-  const navLink = document.querySelector('.nav-link[href^="steam_news"]');
+  const navLink = document.querySelector('.nav-link[href^="steam_alerts"]');
   if (navLink) {
     const nf = {};
-    if (getFilter() !== 'all')          nf.status = getFilter();
+    if (getStatusFilter() !== 'all')    nf.status = getStatusFilter();
     if (!allStoresActive())             nf.stores = Array.from(getActiveStores()).join(',');
     if (getLibStatusFilter() !== 'all') nf.lib = getLibStatusFilter();
     if (getTagFilter() !== 'all')       nf.tag = getTagFilter();
+    if (getPtFilter() !== 'all')        nf.pt = getPtFilter();
+    if (getMcFilter() !== 'all')        nf.mc = getMcFilter();
     if (getRecentFilter() !== 'all')    nf.recent = getRecentFilter();
+    if (getSearch())                    nf.q = getSearch();
+    if (getSort() !== 'name')           nf.sort = getSort();
     const nh = new URLSearchParams(nf).toString();
-    navLink.href = 'steam_news.html' + (nh ? '#' + nh : '');
+    navLink.href = 'steam_alerts.html' + (nh ? '#' + nh : '');
   }
+  saveFilterState();
 }
 
 function loadStateFromHash() {
+  // Load cross-page filter state (stores + lib-status) from localStorage
+  loadFilterState();
   // Restore cross-page shared state (view mode) from localStorage if no hash
   try {
     const shared = JSON.parse(localStorage.getItem('sp-shared') || '{}');
@@ -1173,7 +1284,7 @@ function loadStateFromHash() {
 }
 
 function updateGrid() {
-  const filter          = getFilter();
+  const filter          = getStatusFilter();
   const activeStores    = getActiveStores();
   const libStatusFilter = getLibStatusFilter();
   const tagFilter       = getTagFilter();
@@ -1350,434 +1461,6 @@ updateGrid();
 </html>
 """
 
-_NEWS_TEMPLATE = r"""<!DOCTYPE html>
-<html lang="__T_html_lang__">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SteamPulse — News</title>
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg:#0a0e14; --surface:#111722; --border:#1f2d45;
-    --accent:#1db9ff; --text:#c8d8ef; --muted:#5a7199;
-    --ea:#f5a623; --released:#3dd68c; --unreleased:#7b7fff; --unknown:#5a7199;
-  }
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; font-size:14px; min-height:100vh; }
-  header {
-    background:linear-gradient(180deg,#0d1a2e 0%,transparent 100%);
-    border-bottom:1px solid var(--border);
-    padding:24px 40px 18px;
-    display:flex; align-items:center; gap:20px;
-  }
-  .header-text h1 { font-family:'Rajdhani',sans-serif; font-size:28px; font-weight:700; letter-spacing:2px; color:#fff; text-transform:uppercase; }
-  .header-text p { color:var(--muted); font-size:12px; margin-top:2px; font-family:'IBM Plex Mono',monospace; }
-  .nav-link {
-    padding: 6px 14px;
-    border-radius: 20px;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-size: 12px;
-    text-decoration: none;
-    transition: all .2s;
-    font-family: 'IBM Plex Mono', monospace;
-    letter-spacing: .5px;
-  }
-  .nav-link:hover { border-color: var(--accent); color: var(--accent); }
-  .toolbar { border-bottom:1px solid var(--border); background:var(--surface); position:sticky; top:0; z-index:100; }
-  .toolbar-main { padding:11px 40px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-  .toolbar-filters {
-    display:none; gap:16px 28px; flex-wrap:wrap;
-    padding:14px 40px 18px; border-top:1px solid var(--border);
-    background:rgba(0,0,0,.12);
-  }
-  .toolbar-filters.open { display:flex; }
-  .filter-group { display:flex; flex-direction:column; gap:7px; }
-  .filter-group-label { font-size:10px; font-family:'IBM Plex Mono',monospace; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
-  .filter-toggle-btn {
-    padding:6px 14px; border-radius:20px; border:1px solid var(--border);
-    background:transparent; color:var(--muted); font-size:12px; cursor:pointer;
-    transition:all .2s; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px;
-    display:inline-flex; align-items:center; gap:6px;
-  }
-  .filter-toggle-btn:hover { border-color:var(--accent); color:var(--accent); }
-  .filter-toggle-btn.has-active { border-color:var(--accent); color:var(--accent); background:rgba(29,185,255,.1); }
-  .filter-badge {
-    display:none; align-items:center; justify-content:center;
-    min-width:16px; height:16px; border-radius:8px;
-    background:var(--accent); color:#000; font-size:10px; font-weight:700; padding:0 4px;
-  }
-  .filter-badge.show { display:inline-flex; }
-  .search-wrap { position:relative; flex:1; min-width:200px; max-width:340px; }
-  .search-wrap input {
-    width:100%; background:var(--bg); border:1px solid var(--border);
-    color:var(--text); padding:8px 12px 8px 36px; border-radius:6px;
-    font-size:13px; outline:none; font-family:inherit; transition:border-color .2s;
-  }
-  .search-wrap input:focus { border-color:var(--accent); }
-  .search-wrap .icon { position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none; }
-  .filter-btns { display:flex; gap:6px; }
-  .filter-btn, .store-btn, .tag-btn {
-    padding:6px 14px; border-radius:20px; border:1px solid var(--border);
-    background:transparent; color:var(--muted); font-size:12px; cursor:pointer;
-    transition:all .2s; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px;
-  }
-  .filter-btn:hover, .store-btn:hover, .tag-btn:hover { border-color:var(--accent); color:var(--accent); }
-  .filter-btn.active, .store-btn.active, .tag-btn.active { background:var(--accent); border-color:var(--accent); color:#000; font-weight:500; }
-  .feed-tag {
-    display:inline-block; padding:1px 6px; border-radius:3px; margin-left:8px; flex-shrink:0;
-    font-size:10px; font-weight:600; font-family:'IBM Plex Mono',monospace;
-    text-transform:uppercase; letter-spacing:.5px; align-self:center;
-  }
-  .feed-tag-patchnotes { background:rgba(61,214,140,.12); color:#3dd68c; border:1px solid rgba(61,214,140,.25); }
-  .feed-tag-other { background:rgba(90,113,153,.12); color:#5a7199; border:1px solid rgba(90,113,153,.25); }
-  .count-label { margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted); }
-  .badge { padding:2px 7px; border-radius:3px; font-size:10px; font-weight:600; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px; text-transform:uppercase; }
-  .badge-earlyaccess { background:rgba(245,166,35,.15); color:var(--ea); border:1px solid rgba(245,166,35,.3); }
-  .badge-released    { background:rgba(61,214,140,.12); color:var(--released); border:1px solid rgba(61,214,140,.25); }
-  .badge-unreleased  { background:rgba(123,127,255,.12); color:var(--unreleased); border:1px solid rgba(123,127,255,.25); }
-  .badge-unknown     { background:rgba(90,113,153,.12); color:var(--unknown); border:1px solid rgba(90,113,153,.25); }
-  .feed { padding:20px 40px; display:flex; flex-direction:column; gap:6px; }
-  .feed-item {
-    background:var(--surface); border:1px solid var(--border); border-radius:8px;
-    display:flex; align-items:stretch; overflow:hidden; transition:border-color .15s;
-  }
-  .feed-item:hover { border-color:var(--accent); }
-  .feed-thumb { width:107px; height:40px; object-fit:cover; display:block; flex-shrink:0; align-self:center; }
-  .feed-game {
-    padding:8px 14px; border-right:1px solid var(--border);
-    display:flex; flex-direction:column; justify-content:center;
-    min-width:180px; max-width:240px;
-  }
-  .feed-game-name { font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:600; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .feed-game-badge { margin-top:3px; }
-  .feed-date {
-    padding:0 16px; font-family:'IBM Plex Mono',monospace; font-size:11px;
-    color:var(--muted); white-space:nowrap; display:flex; align-items:center;
-    border-right:1px solid var(--border); min-width:90px;
-  }
-  .feed-title { padding:8px 16px; flex:1; display:flex; align-items:center; font-size:13px; }
-  .feed-title a { color:var(--text); text-decoration:none; }
-  .feed-title a:hover { color:var(--accent); }
-  .empty { text-align:center; padding:80px 0; color:var(--muted); }
-  .empty p { margin-top:10px; font-size:13px; }
-  footer { text-align:center; padding:20px; color:var(--muted); font-size:11px; font-family:'IBM Plex Mono',monospace; border-top:1px solid var(--border); margin-top:10px; }
-  .scroll-top {
-    position:fixed; bottom:28px; right:28px; z-index:200;
-    width:42px; height:42px; border-radius:50%;
-    background:var(--accent); color:#000; border:none;
-    font-size:20px; cursor:pointer;
-    opacity:0; pointer-events:none;
-    transition:opacity .3s, transform .3s;
-    transform:translateY(10px);
-    box-shadow:0 4px 16px rgba(0,0,0,.4);
-    display:flex; align-items:center; justify-content:center;
-  }
-  .scroll-top.visible { opacity:1; pointer-events:auto; transform:translateY(0); }
-  .scroll-top:hover { transform:translateY(-2px); }
-  .theme-toggle {
-    position:fixed; bottom:28px; left:28px; z-index:200;
-    width:38px; height:38px; border-radius:50%;
-    background:var(--surface); border:1px solid var(--border);
-    color:var(--muted); font-size:16px; cursor:pointer;
-    transition:all .2s;
-    display:flex; align-items:center; justify-content:center;
-  }
-  .theme-toggle:hover { border-color:var(--accent); color:var(--accent); }
-  .reset-btn {
-    padding:6px 12px; border-radius:20px; border:1px solid rgba(255,80,80,.3);
-    background:transparent; color:#ff6b6b; font-size:12px; cursor:pointer;
-    transition:all .2s; font-family:'IBM Plex Mono',monospace; display:none;
-  }
-  .reset-btn.show { display:inline-flex; align-items:center; gap:4px; }
-  .reset-btn:hover { background:rgba(255,80,80,.12); border-color:#ff6b6b; }
-  html.light {
-    --bg:#f0f2f5; --surface:#ffffff; --surface2:#e8ecf1; --border:#d0d7e0;
-    --accent:#0a7cc4; --accent2:#00a87d; --text:#2c3e50; --muted:#6c7a8a;
-    --ea:#d4850a; --released:#1a9960; --unreleased:#5b5fe0; --unknown:#6c7a8a;
-  }
-  html.light header { background:linear-gradient(180deg,#dfe6ee 0%,transparent 100%); }
-  html.light .feed-game-name, html.light .header-text h1 { color:#1a2530; }
-  html.light .feed-item { box-shadow:0 1px 4px rgba(0,0,0,.08); }
-  @media(max-width:600px) { header,.toolbar-main,.toolbar-filters,.feed { padding-left:16px; padding-right:16px; } .feed-game { min-width:130px; max-width:160px; } .scroll-top { bottom:16px; right:16px; } .theme-toggle { bottom:16px; left:16px; } }
-</style>
-</head>
-<body>
-
-<header>
-  <svg width="36" height="36" viewBox="0 0 44 44" fill="none" style="flex-shrink:0">
-    <circle cx="22" cy="22" r="21" stroke="#1db9ff" stroke-width="1.5" opacity=".4"/>
-    <circle cx="22" cy="22" r="10" fill="#1db9ff" opacity=".15"/>
-    <circle cx="22" cy="22" r="5" fill="#1db9ff"/>
-    <circle cx="22" cy="7"  r="2.5" fill="#1db9ff" opacity=".7"/>
-    <circle cx="35" cy="29" r="2.5" fill="#1db9ff" opacity=".7"/>
-    <circle cx="9"  cy="29" r="2.5" fill="#1db9ff" opacity=".7"/>
-  </svg>
-  <div class="header-text">
-    <h1>SteamPulse — News</h1>
-    <p>__T_generated_at__ __GENERATED_AT__ · SteamID __STEAM_ID__</p>
-  </div>
-</header>
-
-<div class="toolbar">
-  <div class="toolbar-main">
-    <div class="search-wrap">
-      <span class="icon">⌕</span>
-      <input type="text" id="search" placeholder="Rechercher un jeu...">
-    </div>
-    <button class="filter-toggle-btn" id="filtersToggle" title="__T_title_btn_filters__">⚙ __T_btn_filters__<span class="filter-badge" id="filterBadge"></span></button>
-    <button class="reset-btn" id="resetBtn" title="__T_title_btn_reset__">✕ __T_btn_reset__</button>
-    <span class="count-label" id="countLabel"></span>
-    <a class="nav-link" href="__LIB_HREF__">📚 __T_link_library__</a>
-  </div>
-  <div class="toolbar-filters" id="toolbarFilters">
-    <div class="filter-group">
-      <div class="filter-group-label">__T_filter_status__</div>
-      <div class="filter-btns" id="statusBtns">
-        <button class="filter-btn active" data-filter="all">__T_lbl_all__</button>
-        <button class="filter-btn" data-filter="earlyaccess">Early Access</button>
-        <button class="filter-btn" data-filter="released">__T_lbl_released__</button>
-        <button class="filter-btn" data-filter="unreleased">__T_lbl_upcoming__</button>
-      </div>
-    </div>
-    <div class="filter-group">
-      <div class="filter-group-label">__T_filter_store__</div>
-      <div class="filter-btns" id="storeBtns">
-        <button class="store-btn active" data-store="steam">🎮 Steam</button>
-        <button class="store-btn active" data-store="epic">⚡ Epic</button>
-      </div>
-    </div>
-    <div class="filter-group">
-      <div class="filter-group-label">__T_filter_collection__</div>
-      <div class="filter-btns" id="libStatusBtns">
-        <button class="filter-btn active" data-lib-status="all">__T_lbl_all__</button>
-        <button class="filter-btn" data-lib-status="owned">__T_lbl_owned__</button>
-        <button class="filter-btn" data-lib-status="wishlist">🎁 Wishlist</button>
-        <button class="filter-btn" data-lib-status="followed">👁 __T_lbl_followed__</button>
-      </div>
-    </div>
-    <div class="filter-group">
-      <div class="filter-group-label">__T_filter_news_type__</div>
-      <div class="filter-btns" id="tagBtns">
-        <button class="tag-btn active" data-tag="all">__T_lbl_all_types__</button>
-        <button class="tag-btn" data-tag="patchnotes">📋 Patch notes</button>
-        <button class="tag-btn" data-tag="other">📰 News</button>
-      </div>
-    </div>
-    <div class="filter-group">
-      <div class="filter-group-label">__T_filter_playtime__</div>
-      <div class="filter-btns" id="playtimeBtns">
-        <button class="filter-btn active" data-pt="all">__T_lbl_all__</button>
-        <button class="filter-btn" data-pt="0">__T_lbl_never_played__</button>
-        <button class="filter-btn" data-pt="60">&lt; 1h</button>
-        <button class="filter-btn" data-pt="600">1-10h</button>
-        <button class="filter-btn" data-pt="601">&gt; 10h</button>
-      </div>
-    </div>
-    <div class="filter-group">
-      <div class="filter-group-label">__T_filter_metacritic__</div>
-      <div class="filter-btns" id="mcBtns">
-        <button class="filter-btn active" data-mc="all">__T_lbl_all__</button>
-        <button class="filter-btn" data-mc="none">__T_lbl_no_score__</button>
-        <button class="filter-btn" data-mc="poor">&lt; 60</button>
-        <button class="filter-btn" data-mc="mixed">60–74</button>
-        <button class="filter-btn" data-mc="good">75–89</button>
-        <button class="filter-btn" data-mc="great">≥ 90</button>
-      </div>
-    </div>
-    <div class="filter-group">
-      <div class="filter-group-label">__T_filter_recent__</div>
-      <div class="filter-btns" id="recentBtns">
-        <button class="filter-btn active" data-recent="all">__T_lbl_all__</button>
-        <button class="filter-btn" data-recent="2">__T_lbl_2_days__</button>
-        <button class="filter-btn" data-recent="5">__T_lbl_5_days__</button>
-        <button class="filter-btn" data-recent="15">__T_lbl_15_days__</button>
-        <button class="filter-btn" data-recent="30">__T_lbl_30_days__</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="feed" id="feed">
-__ROWS__
-</div>
-
-<footer>__T_footer__</footer>
-
-<button class="scroll-top" id="scrollTop" title="__T_title_scroll_top__">↑</button>
-<button class="theme-toggle" id="themeToggle" title="__T_title_theme__">🌙</button>
-
-<script>
-__I18N_JS__
-const allRows = Array.from(document.querySelectorAll('.feed-item'));
-__SHARED_JS__
-// --- Getters ---
-function getStatusFilter()    { return document.querySelector('#statusBtns .filter-btn.active').dataset.filter; }
-function getTagFilter()       { return document.querySelector('#tagBtns .tag-btn.active').dataset.tag; }
-function getPtFilter()        { return document.querySelector('#playtimeBtns .filter-btn.active').dataset.pt; }
-function getMcFilter()        { return document.querySelector('#mcBtns .filter-btn.active').dataset.mc; }
-function getRecentFilter()    { return document.querySelector('#recentBtns .filter-btn.active').dataset.recent; }
-function getSearch()          { return document.getElementById('search').value.toLowerCase().trim(); }
-
-// --- Check functions ---
-function checkMcFilter(mc, row) {
-  if (mc === 'all') return true;
-  const score = parseInt(row.dataset.metacritic) || 0;
-  if (mc === 'none')  return score === 0;
-  if (mc === 'poor')  return score > 0 && score < 60;
-  if (mc === 'mixed') return score >= 60 && score < 75;
-  if (mc === 'good')  return score >= 75 && score < 90;
-  if (mc === 'great') return score >= 90;
-  return true;
-}
-function isDefaultState() {
-  return getStatusFilter() === 'all' && allStoresActive() && getLibStatusFilter() === 'all' && getTagFilter() === 'all'
-    && getPtFilter() === 'all' && getMcFilter() === 'all' && getRecentFilter() === 'all'
-    && !getSearch();
-}
-
-function updateFilterBadge() {
-  let n = 0;
-  if (getStatusFilter() !== 'all')   n++;
-  if (!allStoresActive())             n++;
-  if (getLibStatusFilter() !== 'all') n++;
-  if (getTagFilter() !== 'all')      n++;
-  if (getPtFilter() !== 'all')       n++;
-  if (getMcFilter() !== 'all')       n++;
-  if (getRecentFilter() !== 'all')   n++;
-  const badge = document.getElementById('filterBadge');
-  badge.textContent = n;
-  badge.classList.toggle('show', n > 0);
-  document.getElementById('filtersToggle').classList.toggle('has-active', n > 0);
-}
-
-function saveStateToHash() {
-  const s = {};
-  if (getStatusFilter() !== 'all')    s.status = getStatusFilter();
-  if (!allStoresActive())             s.stores = Array.from(getActiveStores()).join(',');
-  if (getLibStatusFilter() !== 'all') s.lib = getLibStatusFilter();
-  if (getTagFilter() !== 'all')       s.tag = getTagFilter();
-  if (getPtFilter() !== 'all')        s.pt = getPtFilter();
-  if (getMcFilter() !== 'all')        s.mc = getMcFilter();
-  if (getRecentFilter() !== 'all')    s.recent = getRecentFilter();
-  if (getSearch())                    s.q = getSearch();
-  const h = new URLSearchParams(s).toString();
-  history.replaceState(null, '', h ? '#' + h : location.pathname);
-  // Update back link to carry compatible filters to library page
-  const backLink = document.querySelector('.nav-link[href^="steam_library"]');
-  if (backLink) {
-    const nf = {};
-    if (getStatusFilter() !== 'all')    nf.status = getStatusFilter();
-    if (!allStoresActive())             nf.stores = Array.from(getActiveStores()).join(',');
-    if (getLibStatusFilter() !== 'all') nf.lib = getLibStatusFilter();
-    if (getTagFilter() !== 'all')       nf.tag = getTagFilter();
-    if (getRecentFilter() !== 'all')    nf.recent = getRecentFilter();
-    const nh = new URLSearchParams(nf).toString();
-    backLink.href = 'steam_library.html' + (nh ? '#' + nh : '');
-  }
-}
-
-function loadStateFromHash() {
-  const h = location.hash.slice(1);
-  if (!h) return;
-  const p = new URLSearchParams(h);
-  if (p.get('status')) { activateBtn('#statusBtns .filter-btn', 'filter', p.get('status')); }
-  loadStoreHash(p);
-  if (p.get('lib'))    { activateBtn('#libStatusBtns .filter-btn', 'libStatus', p.get('lib')); }
-  if (p.get('tag'))    { activateBtn('#tagBtns .tag-btn', 'tag', p.get('tag')); }
-  if (p.get('pt'))     { activateBtn('#playtimeBtns .filter-btn', 'pt', p.get('pt')); }
-  if (p.get('mc'))     { activateBtn('#mcBtns .filter-btn', 'mc', p.get('mc')); }
-  if (p.get('recent')) { activateBtn('#recentBtns .filter-btn', 'recent', p.get('recent')); }
-  if (p.get('q'))      { document.getElementById('search').value = p.get('q'); }
-  if (!isDefaultState()) {
-    document.getElementById('toolbarFilters').classList.add('open');
-  }
-}
-
-function updateFeed() {
-  const statusFilter    = getStatusFilter();
-  const activeStores    = getActiveStores();
-  const libStatusFilter = getLibStatusFilter();
-  const tagFilter       = getTagFilter();
-  const ptFilter        = getPtFilter();
-  const mcFilter        = getMcFilter();
-  const recentFilter    = getRecentFilter();
-  const search          = getSearch();
-  let visible = allRows.filter(r => {
-    const statusOk    = statusFilter === 'all' || r.dataset.status === statusFilter;
-    const storeOk     = activeStores.has(r.dataset.store);
-    const libStatusOk = libStatusFilter === 'all' || r.dataset.libStatus === libStatusFilter;
-    const tagOk       = tagFilter === 'all' || r.dataset.tag === tagFilter;
-    const searchOk    = !search || r.dataset.name.includes(search);
-    const ptOk        = checkPtFilter(ptFilter, r);
-    const mcOk        = checkMcFilter(mcFilter, r);
-    const recentOk    = checkRecentFilter(recentFilter, r);
-    return statusOk && storeOk && libStatusOk && tagOk && searchOk && ptOk && mcOk && recentOk;
-  });
-  allRows.forEach(r => r.style.display = 'none');
-  visible.forEach(r => r.style.display = '');
-  let empty = document.getElementById('emptyMsg');
-  if (visible.length === 0) {
-    if (!empty) {
-      empty = document.createElement('div');
-      empty.id = 'emptyMsg'; empty.className = 'empty';
-      empty.innerHTML = '<div style="font-size:32px">🔍</div><p>' + I18N.no_match_news + '</p>';
-      document.getElementById('feed').appendChild(empty);
-    }
-    empty.style.display = '';
-  } else if (empty) {
-    empty.style.display = 'none';
-  }
-  document.getElementById('countLabel').textContent = I18N.count_news.replace('{n}', visible.length);
-  updateResetBtn();
-  saveStateToHash();
-}
-
-// --- Event listeners ---
-let _newsSearchTimer;
-document.getElementById('search').addEventListener('input', () => {
-  clearTimeout(_newsSearchTimer);
-  _newsSearchTimer = setTimeout(updateFeed, 120);
-});
-
-function setupFilterGroup(selector, callback) {
-  document.querySelectorAll(selector).forEach(btn => {
-    btn.addEventListener('click', () => {
-      btn.closest('.filter-btns').querySelectorAll('button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      callback ? callback() : updateFeed();
-    });
-  });
-}
-setupFilterGroup('#statusBtns .filter-btn');
-setupStoreFilter(updateFeed);
-setupFilterGroup('#libStatusBtns .filter-btn');
-setupFilterGroup('#tagBtns .tag-btn');
-setupFilterGroup('#playtimeBtns .filter-btn');
-setupFilterGroup('#mcBtns .filter-btn');
-setupFilterGroup('#recentBtns .filter-btn');
-
-// Reset
-document.getElementById('resetBtn').addEventListener('click', () => {
-  document.getElementById('search').value = '';
-  document.querySelectorAll('#storeBtns .store-btn').forEach(b => b.classList.add('active'));
-  ['#statusBtns .filter-btn', '#libStatusBtns .filter-btn', '#tagBtns .tag-btn',
-   '#playtimeBtns .filter-btn', '#mcBtns .filter-btn', '#recentBtns .filter-btn'].forEach(sel => {
-    document.querySelectorAll(sel).forEach(b => b.classList.remove('active'));
-    const first = document.querySelector(sel);
-    if (first) first.classList.add('active');
-  });
-  updateFeed();
-});
-
-loadStateFromHash();
-saveStateToHash(); // initialise le lien nav avec l'état courant
-updateFeed();
-</script>
-</body>
-</html>
-"""
 
 
 def _build_i18n_js(t: Translator) -> str:
@@ -2084,7 +1767,7 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
 def generate_html(
     records: list[GameRecord],
     steam_id: str,
-    news_href: str = "steam_news.html",
+    alerts_href: str = "steam_alerts.html",
     lang: str | None = None,
 ) -> str:
     """Render the full HTML page from a list of game records."""
@@ -2110,7 +1793,7 @@ def generate_html(
         .replace("__UNREL__", str(unrel))
         .replace("__PLAYTIME__", f"{total_playtime_h:,}h".replace(",", "\u202f"))
         .replace("__CARDS__", cards_html)
-        .replace("__NEWS_HREF__", html.escape(news_href)),
+        .replace("__ALERTS_HREF__", html.escape(alerts_href)),
         t,
     )
 
@@ -2119,107 +1802,745 @@ def write_html(
     records: list[GameRecord],
     steam_id: str,
     output_path: Path,
-    news_href: str = "steam_news.html",
+    alerts_href: str = "steam_alerts.html",
     lang: str | None = None,
 ) -> None:
     """Write the rendered HTML page to *output_path*."""
-    output_path.write_text(generate_html(records, steam_id, news_href, lang), encoding="utf-8")
+    output_path.write_text(generate_html(records, steam_id, alerts_href, lang), encoding="utf-8")
 
 
-def make_news_row(record: GameRecord, item: NewsItem, t: Translator | None = None) -> str:
-    """Return an HTML feed-item row for a single news article."""
+
+def make_alert_card(
+    alert: Alert, record: GameRecord | None = None, t: Translator | None = None
+) -> str:
+    """Return the HTML for a single alert card.
+
+    Args:
+        alert: The :class:`~steam_tracker.models.Alert` to render.
+        record: Optional :class:`~steam_tracker.models.GameRecord` for the game
+            (used for the thumbnail image).
+        t: Translation callable.  If ``None``, falls back to English.
+
+    Returns:
+        HTML string for one ``.alert-card`` element.
+    """
     if t is None:
         from .i18n import get_translator  # noqa: PLC0415
         t = get_translator()
-    game = record.game
-    status = record.status
-    details = record.details
 
-    appid = game.appid
-    name = html.escape(game.name)
+    details = record.details if record else None
+    game = record.game if record else None
     img_url = (
         details.header_image
         if details and details.header_image
-        else f"https://cdn.akamai.steamstatic.com/steam/apps/{appid}/header.jpg"
+        else f"https://cdn.akamai.steamstatic.com/steam/apps/{alert.appid}/header.jpg"
     )
-    badge_cls = f"badge badge-{status.badge}"
-    badge_label = t(f"badge_{status.badge}")
-    date_str = html.escape(item.date.strftime("%d/%m/%Y"))
-    title = html.escape(item.title)
-    url = html.escape(item.url)
-    primary_tag = item.tags[0].lower() if item.tags else ""
-    tag_css = "feed-tag-patchnotes" if primary_tag == "patchnotes" else "feed-tag-other"
-    tag_data = primary_tag if primary_tag == "patchnotes" else "other"
-    tag_html = (
-        f'<span class="feed-tag {tag_css}">{html.escape(primary_tag)}</span>'
-        if primary_tag
+    ts = int(alert.timestamp.timestamp()) if alert.timestamp else 0
+    date_str = alert.timestamp.strftime("%d/%m/%Y") if alert.timestamp else "—"
+    title_html = (
+        f'<a href="{html.escape(alert.url)}" target="_blank" rel="noopener">'
+        f"{html.escape(alert.title)}</a>"
+        if alert.url
+        else html.escape(alert.title)
+    )
+    details_html = (
+        f'<p class="alert-details">{html.escape(alert.details)}</p>' if alert.details else ""
+    )
+    # Store & collection data attributes for filtering
+    store_tag = "epic" if game and game.source == "epic" else "steam"
+    collection_tag = (
+        ("owned" if game.source in ("owned", "epic") else game.source)
+        if game
+        else "owned"
+    )
+    # Game-level data attributes for shared filters
+    status_tag = record.status.badge if record else "released"
+    playtime_val = game.playtime_forever if game else 0
+    metacritic_val = details.metacritic_score if details and details.metacritic_score else 0
+    # Compute last_patch_ts from game news (same logic as library page)
+    last_patch_ts = 0
+    if record and record.news:
+        for _n in record.news:
+            _primary = _n.tags[0].lower() if _n.tags else ""
+            if _primary == "patchnotes":
+                _ts = int(_n.date.timestamp())
+                if _ts > last_patch_ts:
+                    last_patch_ts = _ts
+    # Buildid badge
+    buildid = details.buildid if details and details.buildid else 0
+    buildid_html = (
+        f'      <span class="alert-buildid">build {buildid}</span>\n'
+        if buildid
         else ""
     )
-
-    store_tag = "epic" if game.source == "epic" else "steam"
-    lib_status_tag = "owned" if game.source in ("owned", "epic") else game.source
-    playtime = game.playtime_forever
-    metacritic_score = details.metacritic_score if details else 0
-    last_patch_ts = 0
-    for _n in record.news:
-        _primary = _n.tags[0].lower() if _n.tags else ""
-        if _primary == "patchnotes":
-            _ts = int(_n.date.timestamp())
-            if _ts > last_patch_ts:
-                last_patch_ts = _ts
-
+    # Tag for news-type filter: match alert to its NewsItem via source_id/gid
+    tag_val = "other"
+    if alert.source_type == "news" and record and record.news:
+        news_item = next(
+            (n for n in record.news if str(n.gid) == alert.source_id), None,
+        )
+        if news_item and any(t.lower() == "patchnotes" for t in news_item.tags):
+            tag_val = "patchnotes"
     return (
-        f'<div class="feed-item" data-status="{status.badge}" data-name="{name.lower()}" '
-        f'data-tag="{tag_data}" data-store="{store_tag}" data-lib-status="{lib_status_tag}" '
-        f'data-playtime="{playtime}" data-metacritic="{metacritic_score}" '
-        f'data-last-patch-ts="{last_patch_ts}">\n'
-        f'  <img class="feed-thumb" src="{html.escape(img_url)}" alt="" loading="lazy">\n'
-        f'  <div class="feed-game">\n'
-        f'    <div class="feed-game-name">{name}</div>\n'
-        f'    <div class="feed-game-badge"><span class="{html.escape(badge_cls)}">{html.escape(badge_label)}</span></div>\n'
-        f'  </div>\n'
-        f'  <div class="feed-date">{date_str}</div>\n'
-        f'  <div class="feed-title"><a href="{url}" target="_blank" rel="noopener">{title}</a>{tag_html}</div>\n'
+        f'<div class="alert-card" data-id="{html.escape(alert.id)}" '
+        f'data-rule="{html.escape(alert.rule_name)}" '
+        f'data-game="{html.escape(alert.game_name)}" '
+        f'data-name="{html.escape(alert.game_name.lower())}" '
+        f'data-appid="{alert.appid}" data-ts="{ts}" '
+        f'data-source="{html.escape(alert.source_type)}" '
+        f'data-store="{store_tag}" data-lib-status="{collection_tag}" '
+        f'data-status="{status_tag}" data-playtime="{playtime_val}" '
+        f'data-metacritic="{metacritic_val}" data-last-patch-ts="{last_patch_ts}" '
+        f'data-tag="{tag_val}">\n'
+        f'  <img class="alert-thumb" src="{html.escape(img_url)}" alt="" loading="lazy">\n'
+        f'  <div class="alert-body">\n'
+        f'    <div class="alert-meta">\n'
+        f'      <span class="alert-icon">{html.escape(alert.rule_icon)}</span>'
+        f'      <span class="alert-rule">{html.escape(alert.rule_name)}</span>'
+        f'      <span class="alert-game">{html.escape(alert.game_name)}</span>'
+        f'      <span class="alert-date">{date_str}</span>\n'
+        f"{buildid_html}"
+        f"    </div>\n"
+        f'    <div class="alert-title">{title_html}</div>\n'
+        f"{details_html}"
+        f"  </div>\n"
+        f'  <button class="mark-read-btn" data-id="{html.escape(alert.id)}" '
+        f'title="__T_btn_mark_read__">✓</button>\n'
         f"</div>"
     )
 
 
-def generate_news_html(
+_ALERTS_TEMPLATE = """\
+<!DOCTYPE html>
+<html lang="__T_html_lang__">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SteamPulse — __T_alert_page_title__</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0a0e14; --surface:#111722; --border:#1f2d45;
+    --accent:#1db9ff; --text:#c8d8ef; --muted:#5a7199;
+    --unread:#f5a623; --read-op:0.45;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; font-size:14px; min-height:100vh; }
+  header {
+    background:linear-gradient(180deg,#0d1a2e 0%,transparent 100%);
+    border-bottom:1px solid var(--border);
+    padding:24px 40px 18px;
+    display:flex; align-items:center; gap:20px;
+  }
+  .header-text h1 { font-family:'Rajdhani',sans-serif; font-size:28px; font-weight:700; letter-spacing:2px; color:#fff; text-transform:uppercase; }
+  .header-text p { color:var(--muted); font-size:12px; margin-top:2px; font-family:'IBM Plex Mono',monospace; }
+  .nav-link { padding:6px 14px; border-radius:20px; border:1px solid var(--border); color:var(--muted); font-size:12px; text-decoration:none; transition:all .2s; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px; }
+  .nav-link:hover { border-color:var(--accent); color:var(--accent); }
+  .toolbar { border-bottom:1px solid var(--border); background:var(--surface); position:sticky; top:0; z-index:100; }
+  .toolbar-main { padding:11px 40px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .view-btn { padding:5px 14px; border-radius:16px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:12px; cursor:pointer; transition:all .2s; font-family:'IBM Plex Mono',monospace; }
+  .view-btn:hover, .view-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(29,185,255,.07); }
+  .action-btn { padding:5px 14px; border-radius:16px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:12px; cursor:pointer; transition:all .2s; }
+  .action-btn:hover { border-color:var(--text); color:var(--text); }
+  .spacer { flex:1; }
+  .count-label { font-size:11px; color:var(--muted); font-family:'IBM Plex Mono',monospace; }
+  main { padding:28px 40px; max-width:1400px; }
+  .section-header { font-family:'Rajdhani',sans-serif; font-size:16px; font-weight:600; color:var(--text); text-transform:uppercase; letter-spacing:1px; padding:12px 0 8px; border-bottom:1px solid var(--border); margin-bottom:12px; margin-top:20px; display:flex; align-items:center; gap:10px; cursor:pointer; user-select:none; transition:color .2s; }
+  .section-header:first-child { margin-top:0; }
+  .section-header:hover { color:var(--accent); }
+  .section-header.collapsed { margin-bottom:0; }
+  .section-chevron { display:inline-block; width:14px; font-size:11px; transition:transform .2s; flex-shrink:0; }
+  .section-header:not(.collapsed) .section-chevron { transform:rotate(90deg); }
+  .section-cards { margin-bottom:0; }
+  .section-cards.collapsed { display:none; }
+  .group-controls { display:none; align-items:center; gap:8px; }
+  .group-controls.visible { display:flex; }
+  .section-badge { background:rgba(29,185,255,.12); border:1px solid rgba(29,185,255,.3); color:var(--accent); border-radius:12px; padding:1px 8px; font-size:11px; font-family:'IBM Plex Mono',monospace; }
+  .alert-card { display:flex; align-items:flex-start; gap:12px; padding:12px 16px; border:1px solid var(--border); border-radius:8px; background:var(--surface); margin-bottom:8px; transition:border-color .2s, opacity .2s; cursor:pointer; }
+  .alert-card:hover { border-color:rgba(29,185,255,.35); }
+  .alert-card.read { opacity:var(--read-op); }
+  .alert-card.hidden { display:none; }
+  .alert-thumb { width:48px; height:28px; object-fit:cover; border-radius:4px; flex-shrink:0; }
+  .alert-body { flex:1; min-width:0; }
+  .alert-meta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px; }
+  .alert-icon { font-size:14px; }
+  .alert-rule { font-size:11px; color:var(--accent); font-family:'IBM Plex Mono',monospace; }
+  .alert-game { font-size:11px; color:var(--muted); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .alert-date { font-size:11px; color:var(--muted); font-family:'IBM Plex Mono',monospace; white-space:nowrap; }
+  .alert-title { font-size:13px; color:var(--text); line-height:1.4; }
+  .alert-title a { color:var(--text); text-decoration:none; }
+  .alert-title a:hover { color:var(--accent); text-decoration:underline; }
+  .alert-details { font-size:12px; color:var(--muted); margin-top:4px; line-height:1.5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mark-read-btn { flex-shrink:0; background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:50%; width:22px; height:22px; font-size:11px; cursor:pointer; line-height:1; display:flex; align-items:center; justify-content:center; transition:all .2s; }
+  .mark-read-btn:hover { border-color:#3dd68c; color:#3dd68c; }
+  .alert-buildid { font-size:10px; color:var(--muted); font-family:'IBM Plex Mono',monospace; background:rgba(29,185,255,.08); border:1px solid rgba(29,185,255,.2); border-radius:8px; padding:1px 6px; white-space:nowrap; }
+__SHARED_FILTER_CSS__
+  .scroll-top { position:fixed; bottom:28px; right:28px; z-index:200; width:42px; height:42px; border-radius:50%; background:var(--accent); color:#000; border:none; font-size:20px; cursor:pointer; opacity:0; pointer-events:none; transition:opacity .3s, transform .3s; transform:translateY(10px); box-shadow:0 4px 16px rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center; }
+  .scroll-top.visible { opacity:1; pointer-events:auto; transform:translateY(0); }
+  .scroll-top:hover { transform:translateY(-2px); box-shadow:0 6px 24px rgba(29,185,255,.3); }
+  .theme-toggle { position:fixed; bottom:28px; left:28px; z-index:200; width:38px; height:38px; border-radius:50%; background:var(--surface); border:1px solid var(--border); color:var(--muted); font-size:16px; cursor:pointer; transition:all .2s; display:flex; align-items:center; justify-content:center; }
+  .theme-toggle:hover { border-color:var(--accent); color:var(--accent); }
+  html.light { --bg:#f0f2f5; --surface:#ffffff; --border:#d0d7e0; --accent:#0a7cc4; --text:#2c3e50; --muted:#6c7a8a; }
+  html.light .scroll-top { box-shadow:0 4px 16px rgba(0,0,0,.15); }
+  html.light header { background:linear-gradient(180deg, #dfe6ee 0%, transparent 100%); }
+  html.light .header-text h1 { color:#1a2530; }
+  .no-alerts { text-align:center; padding:60px 20px; color:var(--muted); font-size:16px; }
+  footer { border-top:1px solid var(--border); padding:16px 40px; font-size:11px; color:var(--muted); text-align:center; font-family:'IBM Plex Mono',monospace; }
+  @media (max-width:600px) {
+    header { padding:16px 16px 12px; }
+    .toolbar { padding:10px 16px; }
+    main { padding:16px; }
+    .scroll-top { bottom:16px; right:16px; }
+    .theme-toggle { bottom:16px; left:16px; }
+    #toolbarFilters.open { position:fixed; top:0; left:0; right:0; bottom:0; z-index:1000; overflow-y:auto; background:var(--bg); display:flex !important; flex-direction:column; padding:0 20px 40px; border-top:none; gap:20px; }
+    .filter-panel-close { display:flex; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-text">
+    <h1>SteamPulse</h1>
+    <p>🔔 __T_alert_page_title__ · __STEAM_ID__ · __T_generated_at__ __GENERATED_AT__</p>
+  </div>
+</header>
+<div class="toolbar">
+  <div class="toolbar-main">
+    <div class="search-wrap">
+      <span class="icon">⌕</span>
+      <input type="text" id="search" placeholder="__T_search_placeholder__">
+    </div>
+    <select id="sortBy">
+      <option value="date">__T_sort_lastupdate__</option>
+      <option value="name">__T_sort_name_asc__</option>
+      <option value="name_desc">__T_sort_name_desc__</option>
+      <option value="playtime">__T_sort_playtime__</option>
+      <option value="metacritic">__T_sort_metacritic__</option>
+    </select>
+    <button class="view-btn active" data-view="combined">__T_alert_view_combined__</button>
+    <button class="view-btn" data-view="by-rule">__T_alert_view_by_rule__</button>
+    <button class="view-btn" data-view="by-game">__T_alert_view_by_game__</button>
+    <div class="group-controls" id="groupControls">
+      <div class="search-wrap">
+        <span class="icon">⌕</span>
+        <input type="text" id="groupSearch" placeholder="__T_alert_group_search__">
+      </div>
+      <button class="action-btn" id="toggleAllBtn">__T_alert_expand_all__</button>
+    </div>
+    <button class="filter-toggle-btn" id="filtersToggle" title="__T_title_btn_filters__">⚙ __T_btn_filters__<span class="filter-badge" id="filterBadge"></span></button>
+    <button class="reset-btn" id="resetBtn" title="__T_title_btn_reset__">✕ __T_btn_reset__</button>
+    <div class="spacer"></div>
+    <button class="action-btn" id="unreadToggle">__T_btn_show_unread_only__</button>
+    <button class="action-btn" id="markAllBtn">__T_btn_mark_all_read__</button>
+    <span class="count-label" id="countLabel"></span>
+    <a class="nav-link" href="__LIB_HREF__">📚 __T_link_library__</a>
+  </div>
+  <div class="toolbar-filters" id="toolbarFilters">
+    <button type="button" class="filter-panel-close" id="filterPanelClose">__T_btn_filters__ <span>✕</span></button>
+    <div class="filter-group">
+      <div class="filter-group-label">__T_filter_status__</div>
+      <div class="filter-btns" id="filterBtns">
+        <button class="filter-btn active" data-filter="all">__T_lbl_all__</button>
+        <button class="filter-btn" data-filter="earlyaccess" data-tooltip="__T_tt_filter_earlyaccess__">Early Access</button>
+        <button class="filter-btn" data-filter="released" data-tooltip="__T_tt_filter_released__">__T_lbl_released__</button>
+        <button class="filter-btn" data-filter="unreleased" data-tooltip="__T_tt_filter_unreleased__">__T_lbl_upcoming__</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">__T_filter_store__</div>
+      <div class="filter-btns" id="storeBtns">
+        <button class="store-btn active" data-store="steam">🎮 Steam</button>
+        <button class="store-btn active" data-store="epic">⚡ Epic</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">__T_filter_collection__</div>
+      <div class="filter-btns" id="libStatusBtns">
+        <button class="filter-btn active" data-lib-status="all">__T_lbl_all__</button>
+        <button class="filter-btn" data-lib-status="owned" data-tooltip="__T_tt_filter_lib_owned__">__T_lbl_owned__</button>
+        <button class="filter-btn" data-lib-status="wishlist" data-tooltip="__T_tt_filter_lib_wishlist__">🎁 Wishlist</button>
+        <button class="filter-btn" data-lib-status="followed" data-tooltip="__T_tt_filter_lib_followed__">👁 __T_lbl_followed__</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">__T_filter_news_type__</div>
+      <div class="filter-btns" id="tagBtns">
+        <button class="tag-btn active" data-tag="all">__T_lbl_all_types__</button>
+        <button class="tag-btn" data-tag="patchnotes" data-tooltip="__T_tt_filter_tag_patch__">📋 Patch notes</button>
+        <button class="tag-btn" data-tag="other" data-tooltip="__T_tt_filter_tag_news__">📰 News</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">__T_filter_playtime__</div>
+      <div class="filter-btns" id="playtimeBtns">
+        <button class="filter-btn active" data-pt="all">__T_lbl_all__</button>
+        <button class="filter-btn" data-pt="0" data-tooltip="__T_tt_filter_pt_0__">__T_lbl_never_played__</button>
+        <button class="filter-btn" data-pt="60" data-tooltip="__T_tt_filter_pt_60__">&lt; 1h</button>
+        <button class="filter-btn" data-pt="600" data-tooltip="__T_tt_filter_pt_600__">1-10h</button>
+        <button class="filter-btn" data-pt="601" data-tooltip="__T_tt_filter_pt_601__">&gt; 10h</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">__T_filter_metacritic__</div>
+      <div class="filter-btns" id="mcBtns">
+        <button class="filter-btn active" data-mc="all">__T_lbl_all__</button>
+        <button class="filter-btn" data-mc="none" data-tooltip="__T_tt_filter_mc_none__">__T_lbl_no_score__</button>
+        <button class="filter-btn" data-mc="bad" data-tooltip="__T_tt_filter_mc_bad__">&lt; 50</button>
+        <button class="filter-btn" data-mc="mid" data-tooltip="__T_tt_filter_mc_mid__">50–75</button>
+        <button class="filter-btn" data-mc="good" data-tooltip="__T_tt_filter_mc_good__">&gt; 75</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">__T_filter_recent__</div>
+      <div class="filter-btns" id="recentBtns">
+        <button class="filter-btn active" data-recent="all">__T_lbl_all__</button>
+        <button class="filter-btn" data-recent="2" data-tooltip="__T_tt_filter_recent_2__">__T_lbl_2_days__</button>
+        <button class="filter-btn" data-recent="5" data-tooltip="__T_tt_filter_recent_5__">__T_lbl_5_days__</button>
+        <button class="filter-btn" data-recent="15" data-tooltip="__T_tt_filter_recent_15__">__T_lbl_15_days__</button>
+        <button class="filter-btn" data-recent="30" data-tooltip="__T_tt_filter_recent_30__">__T_lbl_30_days__</button>
+      </div>
+    </div>
+  </div>
+</div>
+<main>
+  <div id="alertsContainer">__ALERTS__</div>
+  <div class="no-alerts" id="noAlertsMsg" style="display:none">__T_alert_no_alerts__</div>
+</main>
+<button class="scroll-top" id="scrollTop" title="__T_title_scroll_top__">↑</button>
+<button class="theme-toggle" id="themeToggle" title="__T_title_theme__">🌙</button>
+<footer>__T_footer__</footer>
+<script>
+__SHARED_JS__
+(function() {
+  var READ_KEY = 'steampulse_read_alerts';
+  var I18N = {
+    count1: '__I18N_COUNT1__',
+    countN: '__I18N_COUNTN__',
+    unreadBadge: '__I18N_UNREAD__',
+    showAll: '__I18N_SHOW_ALL__',
+    showUnread: '__I18N_SHOW_UNREAD__',
+    noAlerts: '__I18N_NO_ALERTS__',
+    expandAll: '__I18N_EXPAND_ALL__',
+    collapseAll: '__I18N_COLLAPSE_ALL__'
+  };
+  function getRead() {
+    try { return new Set(JSON.parse(localStorage.getItem(READ_KEY) || '[]')); }
+    catch(e) { return new Set(); }
+  }
+  function saveRead(s) {
+    try { localStorage.setItem(READ_KEY, JSON.stringify(Array.from(s))); } catch(e) {}
+  }
+  var readSet = getRead();
+  var unreadOnly = false;
+  var currentView = 'combined';
+
+  function applyRead() {
+    document.querySelectorAll('.alert-card').forEach(function(c) {
+      var id = c.getAttribute('data-id');
+      if (readSet.has(id)) c.classList.add('read');
+      else c.classList.remove('read');
+    });
+  }
+
+  function markCard(id) {
+    readSet.add(id);
+    saveRead(readSet);
+    document.querySelectorAll('[data-id="' + id + '"]').forEach(function(el) {
+      if (el.classList.contains('alert-card')) el.classList.add('read');
+    });
+    applyFilters();
+  }
+
+  function getSearch() { var el = document.getElementById('search'); return el ? el.value.toLowerCase().trim() : ''; }
+  function getSort()   { var el = document.getElementById('sortBy'); return el ? el.value : 'date'; }
+  function getGroupSearch() { var el = document.getElementById('groupSearch'); return el ? el.value.toLowerCase().trim() : ''; }
+
+  function isDefaultState() {
+    return getStatusFilter() === 'all' && allStoresActive() && getLibStatusFilter() === 'all'
+      && getTagFilter() === 'all' && getPtFilter() === 'all' && getMcFilter() === 'all'
+      && getRecentFilter() === 'all' && !getSearch() && getSort() === 'date'
+      && !unreadOnly && !getGroupSearch();
+  }
+  window.isDefaultState = isDefaultState;
+
+  function updateFilterBadge() {
+    var n = 0;
+    if (getStatusFilter() !== 'all')   n++;
+    if (!allStoresActive())             n++;
+    if (getLibStatusFilter() !== 'all') n++;
+    if (getTagFilter() !== 'all')      n++;
+    if (getPtFilter() !== 'all')       n++;
+    if (getMcFilter() !== 'all')       n++;
+    if (getRecentFilter() !== 'all')   n++;
+    var badge = document.getElementById('filterBadge');
+    badge.textContent = n;
+    badge.classList.toggle('show', n > 0);
+    document.getElementById('filtersToggle').classList.toggle('has-active', n > 0);
+  }
+  window.updateFilterBadge = updateFilterBadge;
+
+  function applyFilters() {
+    var stores = getActiveStores();
+    var lib = getLibStatusFilter();
+    var statusF = getStatusFilter();
+    var tagF = getTagFilter();
+    var ptF = getPtFilter();
+    var mcF = getMcFilter();
+    var recentF = getRecentFilter();
+    var search = getSearch();
+    var sort = getSort();
+    var allCards = Array.from(document.querySelectorAll('.alert-card'));
+    allCards.forEach(function(c) {
+      var isRead = readSet.has(c.getAttribute('data-id'));
+      var storeOk = stores.has(c.getAttribute('data-store') || 'steam');
+      var collectionOk = lib === 'all' || (c.getAttribute('data-lib-status') || 'owned') === lib;
+      var statusOk = statusF === 'all' || (c.getAttribute('data-status') || 'released') === statusF;
+      var tagOk = tagF === 'all' || (c.getAttribute('data-tag') || 'other') === tagF;
+      var ptOk = checkPtFilter(ptF, c);
+      var mcOk = checkMcFilter(mcF, c);
+      var recentOk = checkRecentFilter(recentF, c);
+      var searchOk = !search || (c.getAttribute('data-name') || '').indexOf(search) !== -1;
+      var shouldHide = (unreadOnly && isRead) || !storeOk || !collectionOk || !statusOk || !tagOk || !ptOk || !mcOk || !recentOk || !searchOk;
+      c.classList.toggle('hidden', shouldHide);
+    });
+    // Sort visible cards
+    var container = document.getElementById('alertsContainer');
+    if (currentView === 'combined') {
+      allCards.sort(function(a, b) {
+        if (sort === 'name')       return (a.getAttribute('data-game') || '').localeCompare(b.getAttribute('data-game') || '');
+        if (sort === 'name_desc')  return (b.getAttribute('data-game') || '').localeCompare(a.getAttribute('data-game') || '');
+        if (sort === 'playtime')   return (parseInt(b.getAttribute('data-playtime')) || 0) - (parseInt(a.getAttribute('data-playtime')) || 0);
+        if (sort === 'metacritic') return (parseInt(b.getAttribute('data-metacritic')) || 0) - (parseInt(a.getAttribute('data-metacritic')) || 0);
+        return (parseInt(b.getAttribute('data-ts')) || 0) - (parseInt(a.getAttribute('data-ts')) || 0);
+      });
+      allCards.forEach(function(c) { container.appendChild(c); });
+    }
+    updateSections();
+    updateCount();
+    updateResetBtn();
+    saveFilterState();
+    // Update nav link to carry filters back to library page
+    var navLink = document.querySelector('.nav-link[href^="steam_library"]');
+    if (navLink) {
+      var nf = {};
+      if (statusF !== 'all') nf.status = statusF;
+      if (!allStoresActive()) nf.stores = Array.from(stores).join(',');
+      if (lib !== 'all') nf.lib = lib;
+      if (tagF !== 'all') nf.tag = tagF;
+      if (ptF !== 'all') nf.pt = ptF;
+      if (mcF !== 'all') nf.mc = mcF;
+      if (recentF !== 'all') nf.recent = recentF;
+      var nh = new URLSearchParams(nf).toString();
+      navLink.href = 'steam_library.html' + (nh ? '#' + nh : '');
+    }
+  }
+
+  function updateSections() {
+    var groupQuery = getGroupSearch();
+    document.querySelectorAll('.section-header').forEach(function(h) {
+      var cardsDiv = h.nextElementSibling;
+      if (!cardsDiv || !cardsDiv.classList.contains('section-cards')) return;
+      var visible = 0;
+      cardsDiv.querySelectorAll('.alert-card').forEach(function(c) {
+        if (!c.classList.contains('hidden')) visible++;
+      });
+      var badge = h.querySelector('.section-badge');
+      if (badge) badge.textContent = visible;
+      var nameMatch = !groupQuery || h.textContent.toLowerCase().indexOf(groupQuery) !== -1;
+      var shouldHide = visible === 0 || !nameMatch;
+      h.style.display = shouldHide ? 'none' : '';
+      if (shouldHide) {
+        cardsDiv.style.display = 'none';
+      } else {
+        cardsDiv.style.display = h.classList.contains('collapsed') ? 'none' : '';
+      }
+    });
+  }
+
+  function updateCount() {
+    var all = document.querySelectorAll('.alert-card');
+    var visible = 0, unread = 0;
+    all.forEach(function(c) {
+      if (!c.classList.contains('hidden')) visible++;
+      if (!readSet.has(c.getAttribute('data-id'))) unread++;
+    });
+    var lbl = visible === 1 ? I18N.count1 : I18N.countN.replace('{n}', visible);
+    if (unread > 0 && !unreadOnly) lbl += '  ·  ' + I18N.unreadBadge.replace('{n}', unread);
+    document.getElementById('countLabel').textContent = lbl;
+    var noMsg = document.getElementById('noAlertsMsg');
+    if (noMsg) noMsg.style.display = all.length === 0 ? '' : 'none';
+  }
+
+  function toggleSection(header) {
+    var cardsDiv = header.nextElementSibling;
+    if (!cardsDiv || !cardsDiv.classList.contains('section-cards')) return;
+    var collapsed = header.classList.toggle('collapsed');
+    cardsDiv.classList.toggle('collapsed', collapsed);
+    cardsDiv.style.display = collapsed ? 'none' : '';
+  }
+
+  function toggleAllSections(expand) {
+    document.querySelectorAll('.section-header').forEach(function(h) {
+      if (h.style.display === 'none') return;
+      var cardsDiv = h.nextElementSibling;
+      if (!cardsDiv || !cardsDiv.classList.contains('section-cards')) return;
+      h.classList.toggle('collapsed', !expand);
+      cardsDiv.classList.toggle('collapsed', !expand);
+      cardsDiv.style.display = expand ? '' : 'none';
+    });
+    var btn = document.getElementById('toggleAllBtn');
+    if (btn) btn.textContent = expand ? I18N.collapseAll : I18N.expandAll;
+  }
+
+  function buildView(view) {
+    var container = document.getElementById('alertsContainer');
+    var allCards = Array.from(container.querySelectorAll('.alert-card'));
+    container.querySelectorAll('.section-header').forEach(function(h) { h.remove(); });
+    container.querySelectorAll('.section-cards').forEach(function(d) { d.remove(); });
+    allCards.forEach(function(c) { c.remove(); });
+    var gc = document.getElementById('groupControls');
+    if (gc) gc.classList.toggle('visible', view !== 'combined');
+    var toggleBtn = document.getElementById('toggleAllBtn');
+    if (toggleBtn) toggleBtn.textContent = I18N.expandAll;
+    var groupSearchEl = document.getElementById('groupSearch');
+    if (groupSearchEl) groupSearchEl.value = '';
+
+    if (view === 'combined') {
+      allCards.sort(function(a, b) { return parseInt(b.getAttribute('data-ts') || 0) - parseInt(a.getAttribute('data-ts') || 0); });
+      allCards.forEach(function(c) { container.appendChild(c); });
+    } else {
+      var key = view === 'by-rule' ? 'data-rule' : 'data-game';
+      var groups = {};
+      var order = [];
+      allCards.forEach(function(c) {
+        var k = c.getAttribute(key) || '';
+        if (!groups[k]) { groups[k] = []; order.push(k); }
+        groups[k].push(c);
+      });
+      order.forEach(function(k) {
+        var h = document.createElement('div');
+        h.className = 'section-header collapsed';
+        var chevron = document.createElement('span');
+        chevron.className = 'section-chevron';
+        chevron.textContent = '\u25B8';
+        h.appendChild(chevron);
+        h.appendChild(document.createTextNode(' ' + k + ' '));
+        var badge = document.createElement('span');
+        badge.className = 'section-badge';
+        badge.textContent = groups[k].length;
+        h.appendChild(badge);
+        h.addEventListener('click', function() { toggleSection(h); });
+        container.appendChild(h);
+        var wrapper = document.createElement('div');
+        wrapper.className = 'section-cards collapsed';
+        wrapper.style.display = 'none';
+        groups[k].sort(function(a, b) { return parseInt(b.getAttribute('data-ts') || 0) - parseInt(a.getAttribute('data-ts') || 0); });
+        groups[k].forEach(function(c) { wrapper.appendChild(c); });
+        container.appendChild(wrapper);
+      });
+    }
+    applyFilters();
+  }
+
+  // View mode buttons
+  document.querySelectorAll('.view-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.view-btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      currentView = btn.getAttribute('data-view');
+      buildView(currentView);
+    });
+  });
+
+  // Unread toggle
+  document.getElementById('unreadToggle').addEventListener('click', function() {
+    unreadOnly = !unreadOnly;
+    this.textContent = unreadOnly ? I18N.showAll : I18N.showUnread;
+    applyFilters();
+  });
+
+  // Mark all read
+  document.getElementById('markAllBtn').addEventListener('click', function() {
+    document.querySelectorAll('.alert-card').forEach(function(c) {
+      readSet.add(c.getAttribute('data-id'));
+      c.classList.add('read');
+    });
+    saveRead(readSet);
+    applyFilters();
+  });
+
+  // Store & all shared filters (reuse shared helpers)
+  setupStoreFilter(applyFilters);
+  // Generic click handler for all single-select filter groups
+  ['#filterBtns', '#libStatusBtns', '#playtimeBtns', '#mcBtns', '#recentBtns'].forEach(function(sel) {
+    document.querySelectorAll(sel + ' .filter-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        btn.closest('.filter-btns').querySelectorAll('button').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        applyFilters();
+      });
+    });
+  });
+  // Tag buttons (news type)
+  document.querySelectorAll('#tagBtns .tag-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('#tagBtns .tag-btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      applyFilters();
+    });
+  });
+  // Search
+  var searchEl = document.getElementById('search');
+  if (searchEl) { searchEl.addEventListener('input', function() { applyFilters(); }); }
+  // Sort
+  var sortEl = document.getElementById('sortBy');
+  if (sortEl) { sortEl.addEventListener('change', function() { applyFilters(); }); }
+  // Group search
+  var groupSearchEl = document.getElementById('groupSearch');
+  if (groupSearchEl) { groupSearchEl.addEventListener('input', function() { updateSections(); updateCount(); updateResetBtn(); }); }
+  // Toggle all sections
+  var toggleAllBtnEl = document.getElementById('toggleAllBtn');
+  if (toggleAllBtnEl) {
+    toggleAllBtnEl.addEventListener('click', function() {
+      var anyCollapsed = document.querySelector('.section-header.collapsed:not([style*="display: none"])');
+      toggleAllSections(!!anyCollapsed);
+    });
+  }
+
+  // Reset
+  document.getElementById('resetBtn').addEventListener('click', function() {
+    document.querySelectorAll('#storeBtns .store-btn').forEach(function(b) { b.classList.add('active'); });
+    ['#filterBtns', '#libStatusBtns', '#playtimeBtns', '#mcBtns', '#recentBtns'].forEach(function(sel) {
+      document.querySelectorAll(sel + ' .filter-btn').forEach(function(b) { b.classList.remove('active'); });
+      var first = document.querySelector(sel + ' .filter-btn');
+      if (first) first.classList.add('active');
+    });
+    document.querySelectorAll('#tagBtns .tag-btn').forEach(function(b) { b.classList.remove('active'); });
+    var firstTag = document.querySelector('#tagBtns .tag-btn');
+    if (firstTag) firstTag.classList.add('active');
+    if (searchEl) searchEl.value = '';
+    if (sortEl) sortEl.value = 'date';
+    var gSearchEl = document.getElementById('groupSearch');
+    if (gSearchEl) gSearchEl.value = '';
+    unreadOnly = false;
+    document.getElementById('unreadToggle').textContent = I18N.showUnread;
+    applyFilters();
+  });
+
+  // Mark-read on individual cards
+  document.querySelectorAll('.mark-read-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      markCard(this.getAttribute('data-id'));
+    });
+  });
+  document.querySelectorAll('.alert-card').forEach(function(c) {
+    c.addEventListener('click', function(e) {
+      if (!e.target.classList.contains('mark-read-btn')) {
+        markCard(this.getAttribute('data-id'));
+      }
+    });
+  });
+
+  // Initialise: load filters from URL hash (from library nav link) or window.name
+  var h = location.hash.slice(1);
+  if (h) {
+    var p = new URLSearchParams(h);
+    if (p.get('stores')) {
+      var storeSet = new Set(p.get('stores').split(',').filter(Boolean));
+      document.querySelectorAll('#storeBtns .store-btn').forEach(function(b) {
+        b.classList.toggle('active', storeSet.has(b.dataset.store));
+      });
+    }
+    if (p.get('status')) { activateBtn('#filterBtns .filter-btn', 'filter', p.get('status')); }
+    if (p.get('lib'))    { activateBtn('#libStatusBtns .filter-btn', 'libStatus', p.get('lib')); }
+    if (p.get('tag'))    { activateBtn('#tagBtns .tag-btn', 'tag', p.get('tag')); }
+    if (p.get('pt'))     { activateBtn('#playtimeBtns .filter-btn', 'pt', p.get('pt')); }
+    if (p.get('mc'))     { activateBtn('#mcBtns .filter-btn', 'mc', p.get('mc')); }
+    if (p.get('recent')) { activateBtn('#recentBtns .filter-btn', 'recent', p.get('recent')); }
+    if (p.get('q') && searchEl)   { searchEl.value = p.get('q'); }
+    if (p.get('sort') && sortEl)  { sortEl.value = p.get('sort'); }
+  } else {
+    loadFilterState();
+  }
+  if (!isDefaultState()) {
+    document.getElementById('toolbarFilters').classList.add('open');
+  }
+  applyRead();
+  applyFilters();
+})();
+</script>
+</body>
+</html>
+"""
+
+
+def generate_alerts_html(
+    alerts: list[Alert],
     records: list[GameRecord],
     steam_id: str,
     library_href: str = "steam_library.html",
     lang: str | None = None,
 ) -> str:
-    """Render the dedicated news feed page from a list of game records."""
+    """Render the alerts page from a list of Alert objects.
+
+    Args:
+        alerts: Alerts to display (sorted newest-first by this function).
+        records: Game records used for thumbnail images.
+        steam_id: The user's SteamID64 (shown in the header).
+        library_href: URL of the library page (for the nav link).
+        lang: Language code (e.g. ``"fr"``).  Falls back to English.
+
+    Returns:
+        A self-contained HTML string.
+    """
     from .i18n import get_translator  # noqa: PLC0415
+
     t = get_translator(lang)
-    items: list[tuple[int, GameRecord, NewsItem]] = []
-    for record in records:
-        items.extend((int(item.date.timestamp()), record, item) for item in record.news)
-    items.sort(key=lambda x: x[0], reverse=True)
-
-    rows_html = "\n".join(make_news_row(rec, it, t) for _, rec, it in items)
+    record_map = {r.game.appid: r for r in records}
+    sorted_alerts = sorted(alerts, key=lambda a: a.timestamp, reverse=True)
+    cards_html = "\n".join(
+        make_alert_card(a, record_map.get(a.appid), t) for a in sorted_alerts
+    )
     now_str = datetime.now().strftime("%d/%m/%Y à %H:%M")
-
     return _apply_html_t(
-        _NEWS_TEMPLATE.replace("__SHARED_JS__", _SHARED_JS)
-        .replace("__I18N_JS__", _build_i18n_js(t))
+        _ALERTS_TEMPLATE
+        .replace("__SHARED_FILTER_CSS__", _SHARED_FILTER_CSS)
+        .replace("__SHARED_JS__", _SHARED_JS)
         .replace("__GENERATED_AT__", now_str)
         .replace("__STEAM_ID__", html.escape(steam_id))
-        .replace("__ROWS__", rows_html)
-        .replace("__LIB_HREF__", html.escape(library_href)),
+        .replace("__LIB_HREF__", html.escape(library_href))
+        .replace("__ALERTS__", cards_html)
+        .replace("__I18N_COUNT1__", t("alert_count_1").replace("'", "\\'"))
+        .replace("__I18N_COUNTN__", t("alert_count_n").replace("'", "\\'"))
+        .replace("__I18N_UNREAD__", t("alert_unread_badge").replace("'", "\\'"))
+        .replace("__I18N_SHOW_ALL__", t("btn_show_all").replace("'", "\\'"))
+        .replace("__I18N_SHOW_UNREAD__", t("btn_show_unread_only").replace("'", "\\'"))
+        .replace("__I18N_NO_ALERTS__", t("alert_no_alerts").replace("'", "\\'"))
+        .replace("__I18N_EXPAND_ALL__", t("alert_expand_all").replace("'", "\\'"))
+        .replace("__I18N_COLLAPSE_ALL__", t("alert_collapse_all").replace("'", "\\'")),
         t,
     )
 
 
-def write_news_html(
+def write_alerts_html(
+    alerts: list[Alert],
     records: list[GameRecord],
     steam_id: str,
     output_path: Path,
     library_href: str = "steam_library.html",
     lang: str | None = None,
 ) -> None:
-    """Write the rendered news feed page to *output_path*."""
+    """Write the rendered alerts page to *output_path*.
+
+    Args:
+        alerts: Alerts to render.
+        records: Game records for thumbnail images.
+        steam_id: User's SteamID64.
+        output_path: Destination file path.
+        library_href: URL of the library page.
+        lang: Language code.
+    """
     output_path.write_text(
-        generate_news_html(records, steam_id, library_href, lang), encoding="utf-8"
+        generate_alerts_html(alerts, records, steam_id, library_href, lang), encoding="utf-8"
     )

@@ -38,17 +38,23 @@
 - **i18n** — 28 new tooltip keys (EN + FR)
 - 226 tests total
 
+### v1.4.0 — SteamCMD, Alerts & Field History
+- **SteamCMD API** (`steamcmd_api.py`) — fetches `buildid`, `timeupdated`, depot sizes, branch names from `api.steamcmd.net` (free, no auth); detects silent updates
+- **New Store API fields** — `contents`, `dlc_appids`, `controller_support`, `required_age` parsed and stored
+- **Field history** — `field_history` DB table tracking all `app_details` changes across fetches; enables retroactive alert creation
+- **Configurable alert rules engine** (`alerts.py`) — `[[alerts]]` rules in TOML; two types: `news_keyword` (match news titles/tags by keywords) and `state_change` (detect field diffs: `buildid` changed, `price_final` decreased, `metacritic_score` appeared, `dlc_appids` changed)
+- **6 default rules** shipped via `steam-setup`: All News, Price Drop, Release 1.0, Review Bomb, Major Update, New DLC
+- **`steam_alerts.html` replaces `steam_news.html`** — 3 view modes (by rule / by game / combined); read/unread via `localStorage`; mark individual, per-rule, or all
+- **Accordion sections** — collapsible groups in "By rule" and "By game" views with animated chevron; toggle all button; group search field
+- **Full filter panel on alerts page** — 7 shared filter groups (Status, Store, Collection, News type, Playtime, Metacritic, Recent); cross-page persistence via URL hash + `localStorage`
+- **Build ID badge** on alert cards for silent update detection
+- **Automatic backfill** — after each fetch, alert rules are re-evaluated against full field history (no manual flag needed)
+- Navigation: Library ↔ Alerts (2 pages)
+- 264 tests total
+
 ---
 
 ## 🔵 Planned / Not yet started
-
-### Config file (TOML)
-- Use stdlib `tomllib` (Python 3.11+) — no extra dependency
-- Config file location: `~/.config/steampulse/config.toml` (XDG) or `%APPDATA%\steampulse\config.toml` on Windows
-- Store persistent credentials: Steam API key, SteamID64, Epic device auth, Twitch client ID/secret
-- CLI flags override config values (flags take precedence)
-- Removes need to pass `--key`, `--steamid`, `--epic-device-id`, etc. on every run
-- Migration: if config file exists and flag is omitted, read from config
 
 ### Manual AppID mappings CLI
 - Interface to add/edit manual `appid_mappings` entries (e.g. `steam-fetch --add-mapping epic:Flier 1234567`)
@@ -72,8 +78,6 @@
 
 ## 💡 Ideas (not committed)
 
-- Web UI / local HTTP server mode (vs. static HTML files)
-- Automatic re-fetch on a schedule (daemon / cron mode)
 - Game price history tracking (store prices as time series)
 - Export to CSV / JSON
 - **Per-game news timeline** — dedicated view (or expandable panel on the card) showing the full update history for a single game: chronological list of patch notes and news entries, each with its date, title, type tag (patch note / news), and a direct link to the article; useful to quickly assess how actively a game is maintained
