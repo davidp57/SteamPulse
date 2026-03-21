@@ -285,6 +285,8 @@ Pour chaque jeu **Epic** : le jeu est résolu vers un AppID Steam si possible �
 
 > Sur mobile (petit écran), le panneau de filtres s'ouvre en plein écran avec un bouton de fermeture en haut.
 
+> **Optimisations mobile :** La barre d'outils se masque automatiquement lors du défilement vers le bas pour maximiser la visibilité du contenu, et réapparaît instantanément en défilant vers le haut. L'en-tête est compact (logo masqué, statistiques réduites) et tous les contrôles sont réduits pour une utilisation tactile.
+
 Tout l'état du filtre et du tri est persisté dans le hash URL, ce qui permet de sauvegarder ou partager une vue filtrée.
 
 **Cartes :**

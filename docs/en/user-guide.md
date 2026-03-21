@@ -278,6 +278,8 @@ For each **Epic** game: the game is resolved to a Steam AppID when possible — 
 
 > On mobile (narrow screens), the filter panel opens as a full-screen overlay with a close button at the top.
 
+> **Mobile optimizations:** The toolbar auto-hides when scrolling down to maximize content visibility, and reappears instantly when scrolling up. The header is compacted (logo hidden, smaller stats) and all toolbar controls are reduced in size for touch-friendly use.
+
 All filter and sort state is persisted in the URL hash so you can bookmark or share a filtered view.
 
 **Cards:**

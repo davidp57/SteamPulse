@@ -101,11 +101,19 @@ if (_filterClose) {
   });
 }
 
-// Scroll-to-top
+// Scroll-to-top + auto-hide toolbar on mobile
 const scrollBtn = document.getElementById('scrollTop');
+const _toolbar = document.querySelector('.toolbar');
+let _lastY = window.scrollY;
 if (scrollBtn) {
   window.addEventListener('scroll', () => {
-    scrollBtn.classList.toggle('visible', window.scrollY > 400);
+    const y = window.scrollY;
+    scrollBtn.classList.toggle('visible', y > 400);
+    if (_toolbar && window.innerWidth <= 600) {
+      if (y > _lastY && y > 80) _toolbar.classList.add('toolbar-hidden');
+      else _toolbar.classList.remove('toolbar-hidden');
+    }
+    _lastY = y;
   }, {passive: true});
   scrollBtn.addEventListener('click', () => {
     window.scrollTo({top: 0, behavior: 'smooth'});
@@ -344,7 +352,9 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     position: sticky;
     top: 0;
     z-index: 100;
+    transition: transform .3s ease;
   }
+  .toolbar.toolbar-hidden { transform: translateY(-100%); }
   .toolbar-main {
     padding: 11px 40px;
     display: flex;
@@ -1013,11 +1023,18 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   }
   @media (max-width: 600px) {
     header, .toolbar-main, .toolbar-filters, .grid { padding-left: 16px; padding-right: 16px; }
-    .header-stats { gap: 10px; flex-wrap: wrap; justify-content: center; }
-    .stat-val { font-size: 20px; }
+    header { padding: 16px 16px 12px; gap: 12px; }
+    header svg { display: none; }
+    .header-text h1 { font-size: 22px; letter-spacing: 1px; }
+    .header-stats { gap: 8px 16px; flex-wrap: wrap; justify-content: center; }
+    .stat-val { font-size: 18px; }
+    .stat-lbl { font-size: 9px; }
+    .toolbar-main { gap: 6px; padding-top: 8px; padding-bottom: 8px; }
+    .search-wrap { max-width: 100%; min-width: 0; flex: 1 1 100%; }
+    select { font-size: 12px; padding: 6px 8px; }
+    .view-toggle, .filter-toggle-btn, .nav-link { font-size: 11px; padding: 5px 10px; }
+    .count-label { font-size: 10px; }
     .grid { grid-template-columns: 1fr; }
-    .toolbar-main { gap: 8px; }
-    .search-wrap { max-width: 100%; }
     .grid.list-view .card-img { width: 80px; }
     .scroll-top { bottom: 16px; right: 16px; }
     .theme-toggle { bottom: 16px; left: 16px; }
@@ -1940,7 +1957,8 @@ _ALERTS_TEMPLATE = """\
   .header-text p { color:var(--muted); font-size:12px; margin-top:2px; font-family:'IBM Plex Mono',monospace; }
   .nav-link { padding:6px 14px; border-radius:20px; border:1px solid var(--border); color:var(--muted); font-size:12px; text-decoration:none; transition:all .2s; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px; }
   .nav-link:hover { border-color:var(--accent); color:var(--accent); }
-  .toolbar { border-bottom:1px solid var(--border); background:var(--surface); position:sticky; top:0; z-index:100; }
+  .toolbar { border-bottom:1px solid var(--border); background:var(--surface); position:sticky; top:0; z-index:100; transition:transform .3s ease; }
+  .toolbar.toolbar-hidden { transform:translateY(-100%); }
   .toolbar-main { padding:11px 40px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
   .view-btn { padding:5px 14px; border-radius:16px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:12px; cursor:pointer; transition:all .2s; font-family:'IBM Plex Mono',monospace; }
   .view-btn:hover, .view-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(29,185,255,.07); }
@@ -2012,7 +2030,16 @@ __SHARED_FILTER_CSS__
   footer { border-top:1px solid var(--border); padding:16px 40px; font-size:11px; color:var(--muted); text-align:center; font-family:'IBM Plex Mono',monospace; }
   @media (max-width:600px) {
     header { padding:16px 16px 12px; }
-    .toolbar { padding:10px 16px; }
+    .header-text h1 { font-size:22px; letter-spacing:1px; }
+    .toolbar-main { gap:6px; padding:8px 16px; }
+    .search-wrap { max-width:100%; min-width:0; flex:1 1 100%; }
+    .view-btn { padding:4px 10px; font-size:11px; }
+    .action-btn { padding:4px 10px; font-size:11px; }
+    .group-controls { flex:1 1 100%; }
+    .group-controls .search-wrap { flex:1 1 auto; }
+    .font-btn { width:28px; height:28px; font-size:12px; }
+    .filter-toggle-btn, .nav-link { font-size:11px; padding:5px 10px; }
+    .count-label { font-size:10px; }
     main { padding:16px; }
     .scroll-top { bottom:16px; right:16px; }
     .theme-toggle { bottom:16px; left:16px; }
