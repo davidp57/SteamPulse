@@ -137,9 +137,13 @@ class AlertEngine:
             The number of new alerts inserted.
         """
         history = self._db.get_field_history(appid=appid)
+        # Build name lookup once to avoid O(history × games) performance.
+        name_map: dict[int, str] = {
+            r.game.appid: r.game.name for r in self._db.get_all_game_records()
+        }
         count = 0
         for change in history:
-            game_name = self._resolve_game_name(change.appid)
+            game_name = name_map.get(change.appid, str(change.appid))
             for rule in self._rules:
                 if not rule.enabled or rule.rule_type != "state_change":
                     continue
@@ -152,14 +156,6 @@ class AlertEngine:
         return count
 
     # ── private helpers ───────────────────────────────────────────────────────
-
-    def _resolve_game_name(self, appid: int) -> str:
-        """Look up the game name from the database."""
-        records = self._db.get_all_game_records()
-        for r in records:
-            if r.game.appid == appid:
-                return r.game.name
-        return str(appid)
 
     @staticmethod
     def _news_matches(rule: AlertRule, item: NewsItem) -> bool:
@@ -187,9 +183,11 @@ class AlertEngine:
         new = change.new_value
         condition = rule.condition
         if condition == "changed":
-            return True
+            return old is not None and old != new
         if condition == "appeared":
-            return old is None or old in ("", "0", "[]")
+            is_empty = old is None or old in ("", "0", "[]")
+            new_present = new not in ("", "0", "[]")
+            return is_empty and new_present
         if condition == "decreased":
             if old is None:
                 return False

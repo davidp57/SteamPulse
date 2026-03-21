@@ -367,15 +367,28 @@ class Database:
                         ))
 
             if old_row is None:
-                # First insert: record each non-default field as "appeared"
+                # First insert: persist baseline to field_history for future
+                # diffs, but do NOT return them — avoids spurious alerts.
                 for field_name, new_val in new_values.items():
-                    changes.append(FieldChange(
+                    baseline = FieldChange(
                         appid=details.appid,
                         field_name=field_name,
                         old_value=None,
                         new_value=new_val,
                         timestamp=ts,
-                    ))
+                    )
+                    con.execute(
+                        "INSERT INTO field_history"
+                        " (appid, field_name, old_value, new_value, timestamp)"
+                        " VALUES (?, ?, ?, ?, ?)",
+                        (
+                            baseline.appid,
+                            baseline.field_name,
+                            baseline.old_value,
+                            baseline.new_value,
+                            baseline.timestamp.isoformat(),
+                        ),
+                    )
 
             # Persist the changes into field_history
             for change in changes:

@@ -1857,6 +1857,15 @@ def make_alert_card(
     status_tag = record.status.badge if record else "released"
     playtime_val = game.playtime_forever if game else 0
     metacritic_val = details.metacritic_score if details and details.metacritic_score else 0
+    # Compute last_patch_ts from game news (same logic as library page)
+    last_patch_ts = 0
+    if record and record.news:
+        for _n in record.news:
+            _primary = _n.tags[0].lower() if _n.tags else ""
+            if _primary == "patchnotes":
+                _ts = int(_n.date.timestamp())
+                if _ts > last_patch_ts:
+                    last_patch_ts = _ts
     # Buildid badge
     buildid = details.buildid if details and details.buildid else 0
     buildid_html = (
@@ -1870,7 +1879,7 @@ def make_alert_card(
         news_item = next(
             (n for n in record.news if str(n.gid) == alert.source_id), None,
         )
-        if news_item and any("patchnotes" in t for t in news_item.tags):
+        if news_item and any(t.lower() == "patchnotes" for t in news_item.tags):
             tag_val = "patchnotes"
     return (
         f'<div class="alert-card" data-id="{html.escape(alert.id)}" '
@@ -1881,7 +1890,7 @@ def make_alert_card(
         f'data-source="{html.escape(alert.source_type)}" '
         f'data-store="{store_tag}" data-lib-status="{collection_tag}" '
         f'data-status="{status_tag}" data-playtime="{playtime_val}" '
-        f'data-metacritic="{metacritic_val}" data-last-patch-ts="{ts}" '
+        f'data-metacritic="{metacritic_val}" data-last-patch-ts="{last_patch_ts}" '
         f'data-tag="{tag_val}">\n'
         f'  <img class="alert-thumb" src="{html.escape(img_url)}" alt="" loading="lazy">\n'
         f'  <div class="alert-body">\n'
@@ -1896,7 +1905,7 @@ def make_alert_card(
         f"{details_html}"
         f"  </div>\n"
         f'  <button class="mark-read-btn" data-id="{html.escape(alert.id)}" '
-        f'title="Mark as read">✓</button>\n'
+        f'title="__T_btn_mark_read__">✓</button>\n'
         f"</div>"
     )
 
@@ -2311,7 +2320,15 @@ __SHARED_JS__
       order.forEach(function(k) {
         var h = document.createElement('div');
         h.className = 'section-header collapsed';
-        h.innerHTML = '<span class="section-chevron">\u25B8</span> ' + k + ' <span class="section-badge">' + groups[k].length + '</span>';
+        var chevron = document.createElement('span');
+        chevron.className = 'section-chevron';
+        chevron.textContent = '\u25B8';
+        h.appendChild(chevron);
+        h.appendChild(document.createTextNode(' ' + k + ' '));
+        var badge = document.createElement('span');
+        badge.className = 'section-badge';
+        badge.textContent = groups[k].length;
+        h.appendChild(badge);
         h.addEventListener('click', function() { toggleSection(h); });
         container.appendChild(h);
         var wrapper = document.createElement('div');

@@ -34,6 +34,7 @@ STRINGS: dict[str, str] = {
     "alert_group_search":    "Search groups\u2026",
     "btn_mark_all_read":     "Mark all read",
     "btn_mark_rule_read":    "Mark rule read",
+    "btn_mark_read":         "Mark as read",
     "alert_no_alerts":       "No alerts yet.",
     "alert_count_1":         "1 alert",
     "alert_count_n":         "{n} alerts",

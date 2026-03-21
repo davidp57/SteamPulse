@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -99,15 +100,15 @@ class AlertRule(BaseModel):
     """A user-configured rule that produces alerts when matched."""
 
     name: str
-    rule_type: str                           # "news_keyword" | "state_change"
+    rule_type: Literal["news_keyword", "state_change"]
     icon: str = "📰"
     enabled: bool = True
     # news_keyword rule fields
     keywords: list[str] = Field(default_factory=list)
-    match: str = "any"                       # "title" | "content" | "any"
+    match: Literal["title", "content", "any"] = "any"
     # state_change rule fields
     field: str = ""
-    condition: str = ""                      # "changed" | "increased" | "decreased" | "appeared"
+    condition: Literal["changed", "increased", "decreased", "appeared", ""] = ""
     # Internal flag for the built-in "All News" rule
     builtin: bool = False
 

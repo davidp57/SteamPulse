@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from steam_tracker.alerts import AlertEngine
 from steam_tracker.db import Database
@@ -230,6 +231,21 @@ def test_evaluate_field_changes_appeared_no_match_when_was_nonzero(
     assert alerts == []
 
 
+def test_evaluate_field_changes_appeared_no_match_when_new_is_zero(
+    appeared_rule: AlertRule, alert_db: Database
+) -> None:
+    """'appeared' must not fire when new value is empty/zero."""
+    ts = datetime(2024, 1, 15, tzinfo=UTC)
+    changes = [
+        FieldChange(
+            appid=420, field_name="metacritic_score", old_value=None, new_value="0", timestamp=ts
+        ),
+    ]
+    engine = AlertEngine([appeared_rule], alert_db)
+    alerts = engine.evaluate_field_changes(420, "Half-Life 2", changes)
+    assert alerts == []
+
+
 def test_evaluate_field_changes_changed_condition(
     changed_rule: AlertRule, alert_db: Database
 ) -> None:
@@ -242,6 +258,36 @@ def test_evaluate_field_changes_changed_condition(
     engine = AlertEngine([changed_rule], alert_db)
     alerts = engine.evaluate_field_changes(420, "Half-Life 2", changes)
     assert len(alerts) == 1
+
+
+def test_evaluate_field_changes_changed_no_match_on_first_insert(
+    changed_rule: AlertRule, alert_db: Database
+) -> None:
+    """'changed' must not fire on first insert (old=None)."""
+    ts = datetime(2024, 1, 15, tzinfo=UTC)
+    changes = [
+        FieldChange(
+            appid=420, field_name="buildid", old_value=None, new_value="1000", timestamp=ts
+        ),
+    ]
+    engine = AlertEngine([changed_rule], alert_db)
+    alerts = engine.evaluate_field_changes(420, "Half-Life 2", changes)
+    assert alerts == []
+
+
+def test_evaluate_field_changes_changed_no_match_when_same_value(
+    changed_rule: AlertRule, alert_db: Database
+) -> None:
+    """'changed' must not fire when old equals new."""
+    ts = datetime(2024, 1, 15, tzinfo=UTC)
+    changes = [
+        FieldChange(
+            appid=420, field_name="buildid", old_value="1000", new_value="1000", timestamp=ts
+        ),
+    ]
+    engine = AlertEngine([changed_rule], alert_db)
+    alerts = engine.evaluate_field_changes(420, "Half-Life 2", changes)
+    assert alerts == []
 
 
 def test_evaluate_field_changes_wrong_field_no_match(
@@ -352,3 +398,17 @@ def test_backfill_creates_alerts_from_field_history(
     assert count > 0
     stored = alert_db.get_alerts(rule_name="Silent Update")
     assert len(stored) == count
+
+
+# ── AlertRule validation ──────────────────────────────────────────────────────
+
+def test_alert_rule_rejects_invalid_rule_type() -> None:
+    """Invalid rule_type must raise a Pydantic ValidationError."""
+    with pytest.raises(ValidationError):
+        AlertRule(name="Bad", rule_type="unknown")  # type: ignore[arg-type]
+
+
+def test_alert_rule_rejects_invalid_condition() -> None:
+    """Invalid condition must raise a Pydantic ValidationError."""
+    with pytest.raises(ValidationError):
+        AlertRule(name="Bad", rule_type="state_change", field="x", condition="bogus")  # type: ignore[arg-type]

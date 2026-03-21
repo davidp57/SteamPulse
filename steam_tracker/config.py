@@ -160,8 +160,8 @@ def load_alert_rules(path: Path | None = None) -> list[AlertRule]:
         with p.open("rb") as f:
             raw = tomllib.load(f)
         for entry in raw.get("alerts", []):
-                with contextlib.suppress(Exception):
-                    user_rules.append(AlertRule.model_validate(entry))
+            with contextlib.suppress(Exception):
+                user_rules.append(AlertRule.model_validate(entry))
     return [ALL_NEWS_RULE, *user_rules]
 
 
