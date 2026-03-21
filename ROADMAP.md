@@ -50,7 +50,7 @@
 - **Build ID badge** on alert cards for silent update detection
 - **Automatic backfill** — after each fetch, alert rules are re-evaluated against full field history (no manual flag needed)
 - Navigation: Library ↔ Alerts (2 pages)
-- 264 tests total
+- 271 tests total
 
 ---
 

@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [1.4.0] — 2026-03-21
+
 ### Added
 
 - **Configurable alerts system** (`steam_tracker/alerts.py`) — replaces the standalone news page with a rule-based alert engine. Six default rules shipped via `steam-setup`:
@@ -53,9 +57,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-### Changed
+## [1.3.0] — 2026-03-19
 
-- **Card image** — now uses native Steam 460×215 aspect ratio (`aspect-ratio: 460 / 215`) instead of a fixed 80 px height; images fill the card frame without stretching or squashing (may be cropped when their aspect ratio differs).
+### Changed (`aspect-ratio: 460 / 215`) instead of a fixed 80 px height; images fill the card frame without stretching or squashing (may be cropped when their aspect ratio differs).
 - **Card metadata** — AppID (`#appid`) removed from the visible card body; it is still available as the `data-appid` HTML attribute.
 - **News section** — hidden entirely when a game has no recent news, reclaiming the footer space on the card.
 - **News overlay** — the news accordion now expands as a `position: absolute` overlay below the card, leaving the grid layout undisturbed; all other cards are dimmed (opacity 0.3) and blurred (blur 1.5 px, scale 0.975); only one card can be expanded at a time; clicking outside collapses it.
