@@ -608,7 +608,9 @@ docker compose up -d
 **Portainer:**
 
 1. Go to **Stacks** → select `steampulse`
-2. Click **Pull and redeploy**
+2. Click **Editor**
+3. Click **Update the stack**
+4. Check **Re-pull image and redeploy**
 
 **Verify that the new image is actually running:**
 
