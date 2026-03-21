@@ -22,7 +22,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Alert rules in TOML** — `[[alerts]]` sections in `config.toml`; two rule types: `news_keyword` (match news titles/tags) and `state_change` (detect field diffs)
 - **SteamCMD API** (`steam_tracker/steamcmd_api.py`) — fetches `buildid`, `timeupdated`, depot sizes, branch names from `api.steamcmd.net` (free, no auth); enables detection of silent updates
 - **Field history** — `field_history` DB table tracking all `app_details` changes across fetches; enables retroactive alert creation and change-based rules
-- **`--backfill-alerts`** CLI flag — retroactively generates alerts from existing `field_history` data
+- **Automatic backfill** — after each fetch, new or changed alert rules are automatically evaluated against the full field history; no manual CLI flag needed
 - **New Store API fields** — `contents` (full article body), `dlc_appids`, `controller_support`, `required_age` now parsed and stored
 - **New DB tables** — `field_history` and `alerts` with additive migrations; `upsert_app_details()` now returns `list[FieldChange]` for downstream alert evaluation
 - **30 new tests** — 21 in `test_alerts.py`, 9 in `test_steamcmd_api.py`

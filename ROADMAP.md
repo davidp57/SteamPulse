@@ -45,7 +45,7 @@
 - **Configurable alert rules engine** (`alerts.py`) — `[[alerts]]` rules in TOML; two types: `news_keyword` (match news titles/tags by keywords) and `state_change` (detect field diffs: `buildid` changed, `price_final` decreased, `metacritic_score` appeared, `dlc_appids` changed)
 - **6 default rules** shipped via `steam-setup`: All News, Price Drop, Release 1.0, Review Bomb, Major Update, New DLC
 - **`steam_alerts.html` replaces `steam_news.html`** — 3 view modes (by rule / by game / combined); read/unread via `localStorage`; mark individual, per-rule, or all
-- **`--backfill-alerts`** CLI flag to retroactively generate alerts from existing field history
+- **Automatic backfill** — after each fetch, alert rules are re-evaluated against full field history (no manual flag needed)
 - Navigation: Library ↔ Alerts (2 pages)
 - 257 tests total
 

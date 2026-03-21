@@ -232,7 +232,6 @@ For each **Epic** game: the game is resolved to a Steam AppID when possible — 
 | `--lang` | *(system)* | Force interface language (`en`, `fr`, …). Defaults to the system locale, falls back to `en`. |
 | `--config` | *(platform default)* | Path to a custom config TOML file |
 | `--setup` | off | Run the interactive setup wizard and exit |
-| `--backfill-alerts` | off | Retroactively generate alerts from existing field history |
 | `-v` / `--verbose` | off | Enable DEBUG logging |
 
 **Epic Games options:**

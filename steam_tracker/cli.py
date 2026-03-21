@@ -260,8 +260,8 @@ def cmd_fetch() -> None:
 
     print(t("cli_fetch_done", count=len(results), db=args.db))
 
-    if getattr(args, "backfill_alerts", False):
-        n_backfilled = engine.backfill()
+    n_backfilled = engine.backfill()
+    if n_backfilled:
         print(t("cli_backfill_alerts", count=n_backfilled))
 
     save_cli_credentials(
@@ -421,6 +421,10 @@ def cmd_run() -> None:
     db.mark_fetched(news_fetched, news=True)
 
     print(t("cli_fetch_done", count=len(results), db=args.db))
+
+    n_backfilled = engine_run.backfill()
+    if n_backfilled:
+        print(t("cli_backfill_alerts", count=n_backfilled))
 
     # ── Render phase ───────────────────────────────────────────────────────────────────
     print(t("cli_rendering"))
