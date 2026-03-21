@@ -203,7 +203,9 @@ def save_cli_credentials(    args_dict: dict[str, Any],
             changed = True
 
     if changed:
-        write_config(updates, path=path)
+        # Preserve existing [[alerts]] rules when rewriting the config.
+        existing_rules = load_alert_rules(path)[1:]  # strip builtin ALL_NEWS_RULE
+        write_config(updates, path=path, alert_rules=existing_rules or None)
 
 
 # ---------------------------------------------------------------------------

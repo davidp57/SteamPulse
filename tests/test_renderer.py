@@ -481,6 +481,83 @@ def test_make_alert_card_escapes_xss_in_game_name() -> None:
     assert "&lt;script&gt;" in card
 
 
+def test_make_alert_card_has_store_and_collection_attrs(sample_record: GameRecord) -> None:
+    """Cards carry data-store / data-lib-status for JS filtering."""
+    card = make_alert_card(_sample_alert(), sample_record)
+    assert 'data-store="steam"' in card
+    assert 'data-lib-status="owned"' in card
+
+
+def test_make_alert_card_epic_store_tag() -> None:
+    """An Epic game should produce data-store='epic'."""
+    epic_game = OwnedGame(appid=999, name="Epic Game", source="epic")
+    record = GameRecord(
+        game=epic_game,
+        details=None,
+        news=[],
+        status=GameStatus(label="Released", badge="released", release_date="2024"),
+    )
+    card = make_alert_card(_sample_alert(), record)
+    assert 'data-store="epic"' in card
+    assert 'data-lib-status="owned"' in card
+
+
+def test_make_alert_card_wishlist_collection_tag() -> None:
+    """A wishlist game should produce data-lib-status='wishlist'."""
+    wl_game = OwnedGame(appid=420, name="Half-Life 2", source="wishlist")
+    record = GameRecord(
+        game=wl_game,
+        details=None,
+        news=[],
+        status=GameStatus(label="Released", badge="released", release_date="2024"),
+    )
+    card = make_alert_card(_sample_alert(), record)
+    assert 'data-lib-status="wishlist"' in card
+
+
+def test_make_alert_card_shows_buildid(sample_record: GameRecord) -> None:
+    """When the game has a non-zero buildid, a badge is displayed."""
+    assert sample_record.details is not None
+    sample_record.details.buildid = 12345
+    card = make_alert_card(_sample_alert(), sample_record)
+    assert "build 12345" in card
+
+
+def test_make_alert_card_no_buildid_when_zero(sample_record: GameRecord) -> None:
+    """No buildid badge when buildid is 0."""
+    assert sample_record.details is not None
+    sample_record.details.buildid = 0
+    card = make_alert_card(_sample_alert(), sample_record)
+    assert "alert-buildid" not in card
+
+
+def test_generate_alerts_html_has_nav_in_toolbar(sample_record: GameRecord) -> None:
+    """Nav link to library must be in the toolbar, not in the header."""
+    page = generate_alerts_html([_sample_alert()], [sample_record], "76561198000000000")
+    # The link should be inside the toolbar <div class="toolbar">...</div>
+    import re
+    toolbar = re.search(r'<div class="toolbar">.*?</div>\s*<main>', page, re.DOTALL)
+    assert toolbar is not None
+    assert "steam_library.html" in toolbar.group()
+
+
+def test_generate_alerts_html_has_store_filter_buttons(sample_record: GameRecord) -> None:
+    """Alerts page should have store filter buttons."""
+    page = generate_alerts_html([_sample_alert()], [sample_record], "76561198000000000")
+    assert 'data-store="steam"' in page
+    assert 'data-store="epic"' in page
+    assert "store-btn" in page
+
+
+def test_generate_alerts_html_has_collection_filter_buttons(sample_record: GameRecord) -> None:
+    """Alerts page should have lib-status filter buttons."""
+    page = generate_alerts_html([_sample_alert()], [sample_record], "76561198000000000")
+    assert 'data-lib-status="all"' in page
+    assert 'data-lib-status="owned"' in page
+    assert 'data-lib-status="wishlist"' in page
+    assert 'data-lib-status="followed"' in page
+
+
 # ── generate_alerts_html ──────────────────────────────────────────────────────
 
 

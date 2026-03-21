@@ -26,6 +26,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **New Store API fields** — `contents` (full article body), `dlc_appids`, `controller_support`, `required_age` now parsed and stored
 - **New DB tables** — `field_history` and `alerts` with additive migrations; `upsert_app_details()` now returns `list[FieldChange]` for downstream alert evaluation
 - **30 new tests** — 21 in `test_alerts.py`, 9 in `test_steamcmd_api.py`
+- **Accordion sections** — in "By rule" and "By game" views, alerts are grouped under collapsible section headers with animated chevron (❯); all sections start collapsed by default
+- **Toggle all button** — "Expand all / Collapse all" button to open or close every accordion group at once
+- **Group search** — real-time search field in the toolbar to filter section headers by name (visible only in grouped views)
+- **Alerts toolbar redesign** — search box, sort dropdown (date, name, playtime, Metacritic), view-mode buttons (combined/by-rule/by-game), group controls, filter toggle with badge, reset button, mark-all-read
+- **Full filter panel on alerts page** — 7 filter groups (Status, Store, Collection, News type, Playtime, Metacritic, Recent update) shared with the library page
+- **Cross-page filter persistence** — Store and Collection filter state is carried between Library ↔ Alerts via URL hash, `window.name`, and `localStorage`
+- **Build ID badge** — alert cards display a `build XXXXX` badge when the game has a non-zero `buildid` (useful for silent update detection)
 
 ### Changed
 
@@ -34,6 +41,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **`cmd_render`** — outputs `steam_alerts.html` instead of `steam_news.html`
 - **`SteamFetcher`** — merges SteamCMD metadata (`buildid`, `timeupdated`, `depot_sizes`, `branches`) via `model_copy(update={...})`
 - **Wizard** — writes `DEFAULT_ALERT_RULES` to `config.toml` on first setup
+
+### Fixed
+
+- **Alert rules lost on credential save** — `save_cli_credentials()` now preserves existing `[[alerts]]` rules when rewriting `config.toml` (previously, updating a credential erased the alerts section)
 
 ### Removed
 

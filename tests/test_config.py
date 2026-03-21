@@ -9,10 +9,12 @@ import pytest
 
 from steam_tracker.config import (
     get_config_path,
+    load_alert_rules,
     load_config,
     save_cli_credentials,
     write_config,
 )
+from steam_tracker.models import AlertRule
 
 # ── get_config_path ───────────────────────────────────────────────────────────
 
@@ -276,3 +278,25 @@ def test_save_cli_credentials_does_not_save_settings_if_not_explicit(
     loaded = load_config(p)
     assert "workers" not in loaded
     assert "db" not in loaded
+
+
+def test_save_cli_credentials_preserves_alert_rules(tmp_path: Path) -> None:
+    """Alert rules in config must survive a save_cli_credentials rewrite."""
+    p = tmp_path / "config.toml"
+    rules = [
+        AlertRule(
+            name="Price Drop", rule_type="state_change",
+            field="price", condition="decreased",
+        ),
+    ]
+    write_config({"key": "K", "steamid": "S"}, p, alert_rules=rules)
+    # Verify rules are written
+    assert "[[alerts]]" in p.read_text(encoding="utf-8")
+
+    # save_cli_credentials rewrites the config — rules must be preserved
+    save_cli_credentials({"key": "NEW"}, existing={"key": "K", "steamid": "S"}, path=p)
+    loaded_rules = load_alert_rules(p)
+    # First rule is the builtin ALL_NEWS_RULE, second should be the user rule
+    assert len(loaded_rules) == 2
+    assert loaded_rules[1].name == "Price Drop"
+    assert "[[alerts]]" in p.read_text(encoding="utf-8")
