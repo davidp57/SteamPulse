@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -15,6 +16,13 @@ STEAM_API_BASE = "https://api.steampowered.com"
 STORE_API_BASE = "https://store.steampowered.com/api"
 
 _Params = dict[str, str | int]
+
+_KEY_RE = re.compile(r"([?&])key=[^&]+")
+
+
+def _redact_key(text: str) -> str:
+    """Remove API key query-parameter values from a string."""
+    return _KEY_RE.sub(r"\1key=REDACTED", text)
 
 
 def _int(v: Any, default: int = 0) -> int:  # noqa: ANN401
@@ -50,7 +58,10 @@ def get_owned_games(
         "format": "json",
     }
     resp = s.get(url, params=params, timeout=15)
-    resp.raise_for_status()
+    try:
+        resp.raise_for_status()
+    except requests.HTTPError as exc:
+        raise requests.HTTPError(_redact_key(str(exc)), response=exc.response) from None
     games_raw: Any = resp.json().get("response", {}).get("games", [])
     return [OwnedGame.model_validate(g) for g in games_raw]
 
@@ -206,7 +217,7 @@ def get_wishlist(
         resp.raise_for_status()
         items: Any = resp.json().get("response", {}).get("items", [])
     except requests.HTTPError as exc:
-        log.warning("wishlist fetch failed for steamid=%s: %s", steam_id, exc)
+        log.warning("wishlist fetch failed for steamid=%s: %s", steam_id, _redact_key(str(exc)))
         return []
     except Exception:
         log.warning("wishlist fetch failed for steamid=%s", steam_id, exc_info=True)
@@ -239,7 +250,11 @@ def get_followed_games(
             # endpoint not publicly available for this account
             log.debug("GetFollowedGames not available for steamid=%s (404)", steam_id)
         else:
-            log.warning("followed games fetch failed for steamid=%s: %s", steam_id, exc)
+            log.warning(
+                "followed games fetch failed for steamid=%s: %s",
+                steam_id,
+                _redact_key(str(exc)),
+            )
         return []
     except Exception:
         log.warning("followed games fetch failed for steamid=%s", steam_id, exc_info=True)

@@ -1,9 +1,10 @@
 """Tests for steam_tracker.api."""
 from __future__ import annotations
 
+import pytest
 import responses as resp_mock
 
-from steam_tracker.api import get_app_details, get_app_news, get_owned_games
+from steam_tracker.api import _redact_key, get_app_details, get_app_news, get_owned_games
 from steam_tracker.models import AppDetails, NewsItem, OwnedGame
 
 _STEAM_API = "https://api.steampowered.com"
@@ -271,4 +272,41 @@ def test_get_app_news_returns_items() -> None:
 def test_get_app_news_returns_empty_on_error() -> None:
     resp_mock.add(resp_mock.GET, f"{_STEAM_API}/ISteamNews/GetNewsForApp/v2/", status=429)
     assert get_app_news(420) == []
+
+
+# --- _redact_key ---
+
+
+def test_redact_key_removes_key_from_url() -> None:
+    url = "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=SECRET123&steamid=765"
+    assert "SECRET123" not in _redact_key(url)
+    assert "key=REDACTED" in _redact_key(url)
+    assert "steamid=765" in _redact_key(url)
+
+
+def test_redact_key_handles_key_in_middle() -> None:
+    url = "https://example.com?steamid=1&key=ABCDEF&format=json"
+    assert "ABCDEF" not in _redact_key(url)
+    assert "key=REDACTED" in _redact_key(url)
+
+
+def test_redact_key_noop_without_key() -> None:
+    text = "401 Client Error: Unauthorized for url: https://example.com?foo=bar"
+    assert _redact_key(text) == text
+
+
+# --- get_owned_games error redaction ---
+
+
+@resp_mock.activate
+def test_get_owned_games_401_redacts_key() -> None:
+    resp_mock.add(
+        resp_mock.GET,
+        f"{_STEAM_API}/IPlayerService/GetOwnedGames/v1/",
+        status=401,
+    )
+    with pytest.raises(Exception, match="401") as exc_info:
+        get_owned_games("MY_SECRET_KEY", "76561198000000000")
+    assert "MY_SECRET_KEY" not in str(exc_info.value)
+    assert "REDACTED" in str(exc_info.value)
 
