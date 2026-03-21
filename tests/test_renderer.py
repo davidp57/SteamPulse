@@ -531,6 +531,41 @@ def test_make_alert_card_no_buildid_when_zero(sample_record: GameRecord) -> None
     assert "alert-buildid" not in card
 
 
+def test_make_alert_card_has_store_url_attr() -> None:
+    """Card should carry a data-store-url pointing to the Steam store."""
+    card = make_alert_card(_sample_alert())
+    assert 'data-store-url="https://store.steampowered.com/app/420"' in card
+
+
+def test_make_alert_card_has_news_url_attr() -> None:
+    """Card with alert.url carries data-news-url for JS click handler."""
+    alert = _sample_alert()
+    alert.url = "https://example.com/news"
+    card = make_alert_card(alert)
+    assert 'data-news-url="https://example.com/news"' in card
+
+
+def test_make_alert_card_no_news_url_when_empty() -> None:
+    """Card without alert.url must not have data-news-url."""
+    alert = _sample_alert()
+    alert.url = ""
+    card = make_alert_card(alert)
+    assert "data-news-url" not in card
+
+
+def test_make_alert_card_game_name_is_link() -> None:
+    """Game name should be an <a> tag linking to the store page."""
+    card = make_alert_card(_sample_alert())
+    assert 'class="alert-game"' in card
+    assert 'href="https://store.steampowered.com/app/420"' in card
+
+
+def test_make_alert_card_thumb_is_link() -> None:
+    """Thumbnail image should be wrapped in an <a> linking to the store page."""
+    card = make_alert_card(_sample_alert())
+    assert 'class="alert-thumb-link"' in card
+
+
 def test_generate_alerts_html_has_nav_in_toolbar(sample_record: GameRecord) -> None:
     """Nav link to library must be in the toolbar, not in the header."""
     page = generate_alerts_html([_sample_alert()], [sample_record], "76561198000000000")

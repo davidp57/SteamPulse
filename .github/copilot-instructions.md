@@ -155,6 +155,20 @@ When the user asks to prepare a PR, follow these steps in order:
 6. **Temporary PR description** — create a temporary markdown file in English (e.g. `.github/pull_request_description.md`) to help the user fill in the PR on GitHub. This file must **not** be committed.
 7. **Commit** — commit all the above changes (tests, docs, changelog, roadmap) in one clean commit. Do **not** commit the PR description file.
 
+### Commit workflow
+
+When the user asks to commit, follow these steps **in order** before creating the commit:
+
+1. **Tests** — verify existing tests still pass; add or update tests for all new/changed behavior.
+2. **Quality checks** — run `ruff check`, `mypy`, and `pytest`; fix all issues before proceeding.
+3. **Documentation** — verify and update all relevant docs:
+   - `CHANGELOG.md` — add/update entries under `## [Unreleased]`. **Never create a new version section or bump the version number.**
+   - `ROADMAP.md` — move completed features from "Planned" to "Done" if applicable; keep "Planned" and "Ideas" accurate.
+   - `README.md` — update any affected info (test count, feature list, etc.).
+   - `docs/en/` and `docs/fr/` user guides — update if the change affects user-facing behavior.
+   - Docstrings — update if public API signatures or behavior changed.
+4. **Commit** — stage all modified files (code + tests + docs) and commit in one clean commit with a descriptive message.
+
 ### Release workflow
 
 When the user asks to do a release, follow these steps in order:

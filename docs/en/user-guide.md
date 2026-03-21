@@ -297,18 +297,20 @@ If a game has news, a **▼ N updates** bar appears at the bottom of the card. C
 ### Alerts page (`steam_alerts.html`)
 
 **Toolbar — main row (always visible):**
-- **Search** — filters alerts by game name in real time
+- **Search** — filters alerts by game name in real time, with autocomplete dropdown (suggestions filtered to visible games only) and a × clear button
 - **Sort** — by date (newest/oldest), name (A–Z / Z–A), playtime, Metacritic score
-- **View mode** — three togglable views:
+- **View mode** — four togglable views:
   - **Combined** — all alert cards in a single flat list
   - **By rule** — cards grouped under collapsible section headers (one per alert rule)
-  - **By game** — cards grouped by game name
+  - **By game** — cards grouped by game name (game thumbnail shown in section header)
+  - **Rule / Game** — two-level grouping: first by rule, then by game within each rule, both collapsible
 - **Group controls** (visible only in grouped views):
-  - **Group search** — filters section headers by name in real time
+  - **Group search** — filters section headers by name in real time (with × clear button)
   - **Expand all / Collapse all** — toggle button to open or close every group at once
 - **⚙ Filters** — expands/collapses the filter panel; a badge shows the number of active filters
 - **Reset** — clears all filters, search and sort to defaults
 - **Mark all as read** — marks every visible alert as read
+- **Font size** — A− / A+ buttons to decrease/increase text size (persisted across sessions)
 
 **Filter panel (collapsible):**
 
@@ -336,15 +338,21 @@ In "By rule" and "By game" views, alerts are grouped under collapsible sections:
 
 Each card shows:
 - Rule icon + rule name
-- Game header image
-- Game name (clickable → opens the Steam store page)
-- Alert date + read/unread status (click to toggle)
-- News snippet (title + source) for news-based alerts
+- Game header image (120×56, clickable → opens the Steam store page; hidden in grouped-by-game views)
+- Game name (clickable → opens the Steam store page; hidden in grouped-by-game views)
+- Alert date
+- News snippet (title + details) — clicking the title or details opens the news URL
 - Build ID badge when relevant (e.g. `build 12345` for silent update detection)
+- ✓ checkmark button — only way to mark the card as read
+
+**Click zones:**
+- **Game image or game name** → opens the Steam store page in a new tab
+- **News title or details text** → opens the news article URL
+- **✓ checkmark button** → marks the alert as read
 
 **Read/unread tracking:**
 - State is stored locally in `localStorage` — no server needed
-- Click an individual card to toggle read/unread
+- Click the ✓ checkmark button to mark an individual card as read
 - Use "Mark all as read" to mark everything at once
 
 Alert rules are configured in `config.toml` under `[[alerts]]` sections. Run `steam-setup` to see and edit the default rules.

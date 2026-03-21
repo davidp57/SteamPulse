@@ -29,6 +29,7 @@ STRINGS: dict[str, str] = {
     "alert_view_by_rule":    "Par règle",
     "alert_view_by_game":    "Par jeu",
     "alert_view_combined":   "Combiné",
+    "alert_view_by_rule_game": "Règle / Jeu",
     "alert_expand_all":      "Tout ouvrir",
     "alert_collapse_all":    "Tout fermer",
     "alert_group_search":    "Chercher un groupe\u2026",

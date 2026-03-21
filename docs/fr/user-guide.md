@@ -304,18 +304,20 @@ Si un jeu a des news, une barre **▼ N mises à jour** apparaît en bas de la c
 ### Page alertes (`steam_alerts.html`)
 
 **Barre d’outils — ligne principale (toujours visible) :**
-- **Recherche** — filtre les alertes par nom de jeu en temps réel
+- **Recherche** — filtre les alertes par nom de jeu en temps réel, avec dropdown d’autocomplétion (suggestions filtrées aux jeux visibles uniquement) et bouton × pour effacer
 - **Tri** — par date (récentes/anciennes), nom (A–Z / Z–A), temps de jeu, score Metacritic
-- **Mode d’affichage** — trois vues commutables :
+- **Mode d'affichage** — quatre vues commutables :
   - **Combiné** — toutes les cartes dans une liste unique
   - **Par règle** — cartes groupées sous des en-têtes de section repliables (un par règle d’alerte)
-  - **Par jeu** — cartes groupées par nom de jeu
+  - **Par jeu** — cartes groupées par nom de jeu (vignette du jeu dans l’en-tête de section)
+  - **Règle / Jeu** — double regroupement : d’abord par règle, puis par jeu dans chaque règle, les deux niveaux étant repliables
 - **Contrôles de groupes** (visibles uniquement en vue groupée) :
-  - **Recherche de groupe** — filtre les en-têtes de section par nom en temps réel
+  - **Recherche de groupe** — filtre les en-têtes de section par nom en temps réel (avec bouton × pour effacer)
   - **Tout ouvrir / Tout fermer** — bouton pour ouvrir ou fermer toutes les sections d’un coup
 - **⚙ Filtres** — affiche / masque le panneau de filtres ; un badge indique le nombre de filtres actifs
 - **Reset** — réinitialise tous les filtres, la recherche et le tri
 - **Tout marquer comme lu** — marque toutes les alertes visibles comme lues
+- **Taille du texte** — boutons A− / A+ pour réduire/agrandir la taille de police (persistant entre les sessions)
 
 **Panneau de filtres (repliable) :**
 
@@ -343,15 +345,21 @@ Dans les vues « Par règle » et « Par jeu », les alertes sont regroupées so
 
 Chaque carte affiche :
 - Icône de règle + nom de la règle
-- Image d’en-tête du jeu
-- Nom du jeu (cliquable → ouvre la fiche Steam)
-- Date de l’alerte + statut lu/non lu (clic pour basculer)
-- Extrait de news (titre + source) pour les alertes de type news
+- Image d’en-tête du jeu (120×56, cliquable → ouvre la fiche Steam ; masquée dans les vues groupées par jeu)
+- Nom du jeu (cliquable → ouvre la fiche Steam ; masqué dans les vues groupées par jeu)
+- Date de l’alerte
+- Extrait de news (titre + détails) — un clic sur le titre ou les détails ouvre l’URL de la news
 - Badge Build ID quand pertinent (ex. `build 12345` pour la détection de mises à jour silencieuses)
+- Bouton ✓ — seule manière de marquer la carte comme lue
+
+**Zones de clic :**
+- **Image du jeu ou nom du jeu** → ouvre la fiche Steam dans un nouvel onglet
+- **Titre ou texte de la news** → ouvre l’article de la news
+- **Bouton ✓** → marque l’alerte comme lue
 
 **Suivi lu/non lu :**
 - L’état est stocké localement dans `localStorage` — aucun serveur nécessaire
-- Clique sur une carte pour basculer lu/non lu
+- Clique sur le bouton ✓ pour marquer une carte individuellement
 - Utilise « Tout marquer comme lu » pour tout marquer d’un coup
 
 Les règles d’alerte sont configurées dans `config.toml` sous les sections `[[alerts]]`. Lance `steam-setup` pour voir et éditer les règles par défaut.
