@@ -155,6 +155,20 @@ When the user asks to prepare a PR, follow these steps in order:
 6. **Temporary PR description** — create a temporary markdown file in English (e.g. `.github/pull_request_description.md`) to help the user fill in the PR on GitHub. This file must **not** be committed.
 7. **Commit** — commit all the above changes (tests, docs, changelog, roadmap) in one clean commit. Do **not** commit the PR description file.
 
+### Release workflow
+
+When the user asks to do a release, follow these steps in order:
+
+1. **Ask for the version number** — never choose it yourself. Wait for the user to confirm (e.g. `v1.4.0`).
+2. **Bump version** — update `version` in `pyproject.toml` to the new value.
+3. **Finalize CHANGELOG** — move everything under `## [Unreleased]` into a new section `## [X.Y.Z] — YYYY-MM-DD` (today's date). Keep the empty `## [Unreleased]` header for future entries.
+4. **Update ROADMAP** — ensure the new version appears in the "Done" section with an accurate feature summary; verify "Planned" and "Ideas" sections are still correct.
+5. **Update README** — update any version-specific info (test count, badge, etc.) if needed.
+6. **Quality checks** — run `ruff check`, `mypy`, and `pytest`; fix all issues before proceeding.
+7. **Commit** — one clean commit: `release: vX.Y.Z`.
+8. **Tag** — create an annotated git tag `vX.Y.Z`.
+9. **Push** — ask the user before pushing the commit and tag to GitHub (this triggers CI: PyInstaller EXE build, GitHub Release, Docker image publish to GHCR).
+
 ### Commands
 
 > **Version policy**: Never change the version number in `pyproject.toml` or anywhere else unless explicitly asked by the user.
