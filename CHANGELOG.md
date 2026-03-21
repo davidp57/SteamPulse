@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [1.5.0] — 2026-03-21
+
 ### Added
 
 - **Alerts page UX redesign** — differentiated click zones (game image/name → store page, news title/body → news URL, checkmark → mark read), "Rule / Game" dual-grouping view with two levels of collapsible sections, autocomplete search filtered to visible games, search-clear buttons (×), font size controls (A−/A+, persisted in localStorage), larger game thumbnails (120×56), responsive card sizing

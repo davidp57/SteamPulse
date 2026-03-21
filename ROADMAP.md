@@ -52,6 +52,13 @@
 - Navigation: Library ↔ Alerts (2 pages)
 - 271 tests total
 
+### v1.5.0 — Alerts UX, Epic title fix & DB cleanup
+- **Alerts page UX redesign** — differentiated click zones, dual-grouping view (Rule / Game), autocomplete search, font size controls, larger thumbnails, responsive sizing
+- **Mobile UX improvements** — auto-hide toolbar, compact header, full-width search on both pages
+- **Automatic DB cleanup on fetch** — extensible rule-based cleanup (`Database.run_cleanup()`); first rule removes Epic games incorrectly named "Live"
+- **Epic title fix** — robust fallback chain (`catalogItem.title` → `productName` → filtered `sandboxName` → `appName`)
+- 295 tests total
+
 ---
 
 ## 🔵 Planned / Not yet started
