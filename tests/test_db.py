@@ -347,3 +347,63 @@ def test_cleanup_noop_on_clean_db(db: Database) -> None:
     assert db.run_cleanup() == 0
     db.upsert_game(OwnedGame(appid=420, name="Half-Life 2", source="owned"))
     assert db.run_cleanup() == 0
+
+
+# -- get_diagnostic_summary -------------------------------------------------
+
+
+def test_get_diagnostic_summary_empty_db(db: Database) -> None:
+    """On an empty DB, all counts should be zero."""
+    summary = db.get_diagnostic_summary()
+    assert summary["total_games"] == 0
+    assert summary["enriched_count"] == 0
+    assert summary["unenriched_count"] == 0
+    assert summary["total_mappings"] == 0
+    assert summary["total_alerts"] == 0
+    assert summary["total_news"] == 0
+
+
+def test_get_diagnostic_summary_with_data(db: Database) -> None:
+    """Summary should reflect inserted games and details."""
+    db.upsert_game(OwnedGame(appid=10, name="CS", source="owned"))
+    db.upsert_game(OwnedGame(appid=20, name="TF2", source="owned"))
+    db.upsert_game(OwnedGame(
+        appid=2_000_000_001, name="Hades", source="epic",
+        external_id="epic:cat1",
+    ))
+    # Enrich only one game
+    db.upsert_app_details(AppDetails(
+        appid=10, name="Counter-Strike",
+    ))
+
+    summary = db.get_diagnostic_summary()
+    assert summary["total_games"] == 3
+    assert summary["enriched_count"] == 1
+    assert summary["unenriched_count"] == 2
+    by_source = summary["by_source"]
+    assert isinstance(by_source, dict)
+    assert by_source.get("owned") == 2
+    assert by_source.get("epic") == 1
+
+
+# -- get_all_appid_mappings -------------------------------------------------
+
+
+def test_get_all_appid_mappings_empty(db: Database) -> None:
+    """Returns an empty list on a fresh DB."""
+    assert db.get_all_appid_mappings() == []
+
+
+def test_get_all_appid_mappings_returns_rows(db: Database) -> None:
+    """Inserted mappings should be returned as dicts."""
+    db.upsert_appid_mapping("epic", "cat1", "Hades", 1145360)
+    db.upsert_appid_mapping("epic", "cat2", "Celeste", None)
+
+    mappings = db.get_all_appid_mappings()
+    assert len(mappings) == 2
+    resolved = [m for m in mappings if m["steam_appid"] is not None]
+    unresolved = [m for m in mappings if m["steam_appid"] is None]
+    assert len(resolved) == 1
+    assert resolved[0]["external_name"] == "Hades"
+    assert len(unresolved) == 1
+    assert unresolved[0]["external_name"] == "Celeste"

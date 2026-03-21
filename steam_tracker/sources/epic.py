@@ -10,11 +10,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from ..epic_api import epic_auth_with_code, epic_auth_with_refresh, epic_get_library
 from ..i18n import get_translator
-from ..models import SYNTHETIC_APPID_BASE, OwnedGame
+from ..models import SYNTHETIC_APPID_BASE, DiscoveryStats, OwnedGame, SkippedItem
 from ..resolver import IGDBResolver, SteamStoreResolver, resolve_steam_appid
 
 if TYPE_CHECKING:
@@ -76,6 +77,15 @@ def _extract_epic_title(item: dict[str, object]) -> str:
     return ""
 
 
+# Pattern matching hex-like identifiers (24+ lowercase hex chars).
+_HEX_ID_RE = re.compile(r"^[a-f0-9]{24,}$")
+
+
+def _is_hex_id(name: str) -> bool:
+    """Return True if *name* looks like a raw catalog/item hex identifier."""
+    return bool(_HEX_ID_RE.match(name))
+
+
 def _hash_appid(catalog_item_id: str) -> int:
     """Generate a deterministic appid in the reserved range for unresolved games."""
     digest = hashlib.sha256(catalog_item_id.encode()).hexdigest()
@@ -91,6 +101,7 @@ class EpicSource:
     """
 
     name = "epic"
+    last_stats: DiscoveryStats | None = None
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
         """Register Epic-specific CLI arguments.
@@ -188,6 +199,7 @@ class EpicSource:
         print(t("cli_epic_resolving"))
         games: list[OwnedGame] = []
         resolved_count = 0
+        skipped: list[SkippedItem] = []
         total = len(library_items)
         width = len(str(total))
         for idx, item in enumerate(library_items, 1):
@@ -199,8 +211,24 @@ class EpicSource:
             # in several places depending on API version; try them all.
             internal_name = str(item.get("appName", ""))
             name = _extract_epic_title(item) or internal_name
+
+            # ── Skip logic ─────────────────────────────────────────────
             if not catalog_id or not name or name in _SANDBOX_LABELS:
+                skipped.append(SkippedItem(
+                    catalog_id=catalog_id or "?",
+                    raw_name=name or internal_name or "?",
+                    reason="no_title" if not name else "sandbox_label",
+                ))
                 continue
+            if _is_hex_id(name):
+                skipped.append(SkippedItem(
+                    catalog_id=catalog_id,
+                    raw_name=name,
+                    reason="hex_id",
+                ))
+                log.debug("Epic skip hex-id: catalog=%s name=%r", catalog_id, name)
+                continue
+
             log.debug("Epic item: internal=%r  title=%r", internal_name, name)
 
             print(f"\r   [{idx:>{width}}/{total}] {name[:55]:<55}", end="", flush=True)
@@ -231,6 +259,17 @@ class EpicSource:
         print()  # newline after the \r progress line
         print(t("cli_epic_resolved_done", resolved=resolved_count, total=len(games),
                 unresolved=len(games) - resolved_count))
+        if skipped:
+            print(t("cli_epic_skipped", count=len(skipped)))
+
+        self.last_stats = DiscoveryStats(
+            source="epic",
+            total_api_items=total,
+            accepted_count=len(games),
+            resolved_count=resolved_count,
+            unresolved_count=len(games) - resolved_count,
+            skipped_items=skipped,
+        )
 
         return games
 

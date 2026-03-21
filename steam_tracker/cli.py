@@ -10,8 +10,15 @@ from .config import get_config_path, load_alert_rules, load_config, save_cli_cre
 from .db import Database
 from .fetcher import SteamFetcher
 from .i18n import get_translator
-from .models import SYNTHETIC_APPID_BASE, AppDetails, FieldChange, NewsItem, OwnedGame
-from .renderer import write_alerts_html, write_html
+from .models import (
+    SYNTHETIC_APPID_BASE,
+    AppDetails,
+    DiscoveryStats,
+    FieldChange,
+    NewsItem,
+    OwnedGame,
+)
+from .renderer import write_alerts_html, write_diagnostic_html, write_html
 from .sources import get_all_sources
 
 # ---------------------------------------------------------------------------
@@ -317,12 +324,18 @@ def cmd_render() -> None:
     records = db.get_all_game_records()
     out = Path(args.output)
     alerts_out = out.parent / "steam_alerts.html"
+    diag_out = out.parent / "steam_diagnostic.html"
     all_alerts = db.get_alerts()
     write_html(records, args.steamid, out, alerts_href=alerts_out.name, lang=args.lang)
     write_alerts_html(all_alerts, records, args.steamid, alerts_out,
                       library_href=out.name, lang=args.lang)
+    write_diagnostic_html(
+        db.get_diagnostic_summary(), db.get_all_appid_mappings(), diag_out,
+        library_href=out.name, alerts_href=alerts_out.name, lang=args.lang,
+    )
     print(t("cli_render_library", count=len(records), path=out.resolve()))
     print(t("cli_render_alerts", count=len(all_alerts), path=alerts_out.resolve()))
+    print(t("cli_render_diagnostic", path=diag_out.resolve()))
 
 
 def cmd_run() -> None:
@@ -376,9 +389,13 @@ def cmd_run() -> None:
 
     # ── Game discovery (all sources) ───────────────────────────────────────
     all_discovered: list[OwnedGame] = []
+    all_discovery_stats: list[DiscoveryStats] = []
     for source in get_all_sources():
         if source.is_enabled(args):
             all_discovered.extend(source.discover_games(args, db=db))
+            stats = getattr(source, "last_stats", None)
+            if isinstance(stats, DiscoveryStats):
+                all_discovery_stats.append(stats)
 
     # Persist credentials early so rotated tokens (e.g. Epic refresh_token)
     # survive even if the enrichment phase crashes.
@@ -454,9 +471,16 @@ def cmd_run() -> None:
     records = db.get_all_game_records()
     out = Path(args.output)
     alerts_out = out.parent / "steam_alerts.html"
+    diag_out = out.parent / "steam_diagnostic.html"
     all_alerts = db.get_alerts()
     write_html(records, args.steamid, out, alerts_href=alerts_out.name, lang=args.lang)
     write_alerts_html(all_alerts, records, args.steamid, alerts_out,
                       library_href=out.name, lang=args.lang)
+    write_diagnostic_html(
+        db.get_diagnostic_summary(), db.get_all_appid_mappings(), diag_out,
+        discovery_stats=all_discovery_stats,
+        library_href=out.name, alerts_href=alerts_out.name, lang=args.lang,
+    )
     print(t("cli_render_library", count=len(records), path=out.resolve()))
     print(t("cli_render_alerts", count=len(all_alerts), path=alerts_out.resolve()))
+    print(t("cli_render_diagnostic", path=diag_out.resolve()))

@@ -481,3 +481,113 @@ def test_discover_games_sandbox_name_live_uses_appname() -> None:
 
     assert len(games) == 1
     assert games[0].name == "GoneHomeFallback"
+
+
+# -- _is_hex_id unit tests --------------------------------------------------
+
+
+def test_is_hex_id_rejects_valid_hex() -> None:
+    """A 32-char lowercase hex string should be detected as a hex ID."""
+    from steam_tracker.sources.epic import _is_hex_id
+
+    assert _is_hex_id("91eac4ac00304bcc9d7d4a55a95894b3") is True
+
+
+def test_is_hex_id_accepts_real_game_name() -> None:
+    """A real game title should not be rejected."""
+    from steam_tracker.sources.epic import _is_hex_id
+
+    assert _is_hex_id("Hades") is False
+    assert _is_hex_id("Amnesia: The Dark Descent") is False
+
+
+def test_is_hex_id_requires_minimum_length() -> None:
+    """Short hex strings (< 24 chars) are not flagged."""
+    from steam_tracker.sources.epic import _is_hex_id
+
+    assert _is_hex_id("abc123") is False
+    assert _is_hex_id("deadbeef") is False
+
+
+def test_is_hex_id_rejects_uppercase() -> None:
+    """Uppercase letters are not matched by the hex regex."""
+    from steam_tracker.sources.epic import _is_hex_id
+
+    assert _is_hex_id("91EAC4AC00304BCC9D7D4A55A95894B3") is False
+
+
+# -- discover_games hex ID filtering ----------------------------------------
+
+
+@resp_mock.activate
+def test_discover_games_filters_hex_id_names() -> None:
+    """Items whose only name is a hex ID should be filtered out."""
+    from steam_tracker.sources.epic import EpicSource
+
+    resp_mock.add(resp_mock.POST, _EPIC_OAUTH, json=_oauth_token_response())
+    resp_mock.add(
+        resp_mock.GET,
+        _EPIC_LIBRARY,
+        json=_library_response([
+            # Real game — should be kept
+            _library_item("cat1", "Hades"),
+            # Hex ID as appName, no title — should be filtered
+            {
+                "catalogItemId": "cat_hex",
+                "namespace": "ns1",
+                "appName": "91eac4ac00304bcc9d7d4a55a95894b3",
+                "sandboxName": "Live",
+            },
+        ]),
+    )
+
+    args = _make_args(epic_auth_code="code123")
+    with patch(
+        "steam_tracker.sources.epic.resolve_steam_appid", return_value=None
+    ):
+        source = EpicSource()
+        games = source.discover_games(args)
+
+    assert len(games) == 1
+    assert games[0].name == "Hades"
+
+
+# -- last_stats (DiscoveryStats) --------------------------------------------
+
+
+@resp_mock.activate
+def test_discover_games_populates_last_stats() -> None:
+    """After discover_games(), source.last_stats contains discovery statistics."""
+    from steam_tracker.sources.epic import EpicSource
+
+    resp_mock.add(resp_mock.POST, _EPIC_OAUTH, json=_oauth_token_response())
+    resp_mock.add(
+        resp_mock.GET,
+        _EPIC_LIBRARY,
+        json=_library_response([
+            _library_item("cat1", "Hades"),
+            _library_item("cat2", "Celeste"),
+            {
+                "catalogItemId": "cat_hex",
+                "namespace": "ns1",
+                "appName": "91eac4ac00304bcc9d7d4a55a95894b3",
+                "sandboxName": "Live",
+            },
+        ]),
+    )
+
+    args = _make_args(epic_auth_code="code123")
+    with patch(
+        "steam_tracker.sources.epic.resolve_steam_appid", return_value=1145360
+    ):
+        source = EpicSource()
+        games = source.discover_games(args)
+
+    assert len(games) == 2
+    assert source.last_stats is not None
+    assert source.last_stats.total_api_items == 3
+    assert source.last_stats.accepted_count == 2
+    assert source.last_stats.resolved_count == 2
+    assert source.last_stats.unresolved_count == 0
+    assert len(source.last_stats.skipped_items) == 1
+    assert source.last_stats.skipped_items[0].reason == "hex_id"

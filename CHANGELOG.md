@@ -9,6 +9,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Diagnostic page** — new `steam_diagnostic.html` page generated alongside library and alerts pages; provides database summary stats, per-source game counts, AppID mapping table with search, Epic discovery statistics, and skipped items table with skip reasons
+- **Epic hex-ID filtering** — games whose only name is a long hex catalog ID (e.g. `91eac4ac00304bcc…`) are now automatically filtered out during Epic library discovery; tracked as `SkippedItem(reason="hex_id")` and visible on the diagnostic page
+
 ### Fixed
 
 - **Epic refresh token lost on crash** — credentials (especially rotated Epic `refresh_token`) are now persisted immediately after game discovery, before the enrichment phase; previously they were only saved at the very end of the pipeline, so a crash during fetch/render would lose the new single-use token

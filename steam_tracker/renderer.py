@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .models import Alert, GameRecord
+from .models import Alert, DiscoveryStats, GameRecord, SkippedItem
 
 if TYPE_CHECKING:
     from .i18n import Translator
@@ -2817,4 +2817,296 @@ def write_alerts_html(
     """
     output_path.write_text(
         generate_alerts_html(alerts, records, steam_id, library_href, lang), encoding="utf-8"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Diagnostic page
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_DIAGNOSTIC_TEMPLATE = """\
+<!DOCTYPE html>
+<html lang="__T_html_lang__">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SteamPulse — __T_diag_page_title__</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0d1117;--surface:#161b22;--card:#1c2333;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--accent2:#3fb950;--red:#f85149;--orange:#d29922;--yellow:#e3b341;--font:'Inter',sans-serif;--mono:'IBM Plex Mono',monospace}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh}
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 32px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.header h1{font-size:20px;font-weight:600;display:flex;align-items:center;gap:8px}
+.nav-links{display:flex;gap:12px}
+.nav-links a{color:var(--accent);text-decoration:none;font-size:13px;font-family:var(--mono);padding:6px 14px;border-radius:8px;border:1px solid var(--border);transition:all .2s}
+.nav-links a:hover{border-color:var(--accent);background:rgba(88,166,255,.08)}
+.content{max-width:1200px;margin:32px auto;padding:0 24px;display:flex;flex-direction:column;gap:28px}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.section-header{padding:16px 20px;font-size:15px;font-weight:600;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;font-family:var(--mono);letter-spacing:.5px}
+.section-body{padding:20px}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
+.stat-value{font-size:28px;font-weight:700;color:var(--accent);font-family:var(--mono)}
+.stat-label{font-size:12px;color:var(--muted);margin-top:4px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px}
+.source-bar{display:flex;gap:8px;flex-wrap:wrap}
+.source-chip{padding:8px 16px;border-radius:8px;background:var(--card);border:1px solid var(--border);font-family:var(--mono);font-size:13px}
+.source-chip .count{color:var(--accent);font-weight:600;margin-left:4px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:10px 12px;font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface)}
+td{padding:8px 12px;border-bottom:1px solid rgba(48,54,61,.5);font-family:var(--mono);font-size:12px;word-break:break-all}
+tr:hover td{background:rgba(88,166,255,.04)}
+.badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:500;font-family:var(--mono)}
+.badge-resolved{background:rgba(63,185,80,.15);color:var(--accent2)}
+.badge-unresolved{background:rgba(248,81,73,.12);color:var(--red)}
+.badge-manual{background:rgba(210,153,34,.15);color:var(--orange)}
+.badge-hex{background:rgba(227,179,65,.12);color:var(--yellow)}
+.badge-notitle{background:rgba(139,148,158,.15);color:var(--muted)}
+.badge-sandbox{background:rgba(210,153,34,.12);color:var(--orange)}
+.table-wrap{max-height:600px;overflow-y:auto}
+.search-box{padding:8px 14px;margin:0 20px 0 0;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-family:var(--mono);font-size:12px;width:220px}
+.search-box::placeholder{color:var(--muted)}
+.info-msg{color:var(--muted);font-style:italic;font-size:13px}
+.gen-footer{text-align:center;padding:24px;font-size:11px;color:var(--muted);font-family:var(--mono)}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🔍 SteamPulse — __T_diag_page_title__</h1>
+  <div class="nav-links">
+    <a href="__LIB_HREF__">__T_link_library__</a>
+    <a href="__ALERTS_HREF__">__T_link_alerts__</a>
+  </div>
+</div>
+
+<div class="content">
+  <!-- Database summary -->
+  <div class="section">
+    <div class="section-header">📊 __T_diag_section_summary__</div>
+    <div class="section-body">
+      <div class="stat-grid">__SUMMARY_STATS__</div>
+    </div>
+  </div>
+
+  <!-- Sources breakdown -->
+  <div class="section">
+    <div class="section-header">📦 __T_diag_section_sources__</div>
+    <div class="section-body"><div class="source-bar">__SOURCE_CHIPS__</div></div>
+  </div>
+
+  <!-- Epic discovery stats -->
+  <div class="section">
+    <div class="section-header">🎮 __T_diag_section_epic__</div>
+    <div class="section-body">__EPIC_STATS__</div>
+  </div>
+
+  <!-- Skipped items -->
+  <div class="section">
+    <div class="section-header">⏭ __T_diag_section_skipped__</div>
+    <div class="section-body">__SKIPPED_CONTENT__</div>
+  </div>
+
+  <!-- AppID mappings -->
+  <div class="section">
+    <div class="section-header">
+      🔗 __T_diag_section_mappings__
+      <input type="text" class="search-box" id="mappingSearch" placeholder="__T_diag_search__" oninput="filterMappings()">
+    </div>
+    <div class="section-body">
+      <div class="stat-grid" style="margin-bottom:16px">__MAPPING_STATS__</div>
+      <div class="table-wrap">
+        <table id="mappingTable">
+          <thead><tr>
+            <th>__T_diag_col_name__</th><th>__T_diag_col_source__</th>
+            <th>__T_diag_col_external_id__</th><th>__T_diag_col_steam_appid__</th>
+            <th>__T_diag_col_status__</th><th>__T_diag_col_date__</th>
+          </tr></thead>
+          <tbody>__MAPPING_ROWS__</tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="gen-footer">__T_generated_at__ __GENERATED_AT__ · __T_footer__</div>
+
+<script>
+function filterMappings(){
+  const q=document.getElementById('mappingSearch').value.toLowerCase();
+  document.querySelectorAll('#mappingTable tbody tr').forEach(r=>{
+    r.style.display=r.textContent.toLowerCase().includes(q)?'':'none';
+  });
+}
+</script>
+</body>
+</html>
+"""
+
+
+def _make_stat_card(value: object, label: str) -> str:
+    return f'<div class="stat-card"><div class="stat-value">{value}</div><div class="stat-label">{html.escape(str(label))}</div></div>'
+
+
+def _make_mapping_row(m: dict[str, object], t: Translator) -> str:
+    """Render a single ``<tr>`` for an appid mapping."""
+    steam_appid = m["steam_appid"]
+    is_manual = bool(m.get("manual"))
+    if is_manual:
+        badge_cls = "badge-manual"
+        status_text = t("diag_status_manual")
+    elif steam_appid is not None:
+        badge_cls = "badge-resolved"
+        status_text = t("diag_status_resolved")
+    else:
+        badge_cls = "badge-unresolved"
+        status_text = t("diag_status_unresolved")
+    appid_display = str(steam_appid) if steam_appid is not None else "—"
+    resolved_at = str(m.get("resolved_at", ""))[:10]
+    return (
+        f"<tr><td>{html.escape(str(m['external_name']))}</td>"
+        f"<td>{html.escape(str(m['external_source']))}</td>"
+        f"<td>{html.escape(str(m['external_id']))}</td>"
+        f"<td>{appid_display}</td>"
+        f'<td><span class="badge {badge_cls}">{html.escape(status_text)}</span></td>'
+        f"<td>{resolved_at}</td></tr>"
+    )
+
+
+def _make_skipped_row(item: SkippedItem, t: Translator) -> str:
+    """Render a single ``<tr>`` for a skipped Epic item."""
+    reason_map = {
+        "no_title": ("badge-notitle", t("diag_reason_no_title")),
+        "hex_id": ("badge-hex", t("diag_reason_hex_id")),
+        "sandbox_label": ("badge-sandbox", t("diag_reason_sandbox")),
+    }
+    badge_cls, reason_text = reason_map.get(item.reason, ("badge-notitle", item.reason))
+    return (
+        f"<tr><td>{html.escape(item.catalog_id)}</td>"
+        f"<td>{html.escape(item.raw_name)}</td>"
+        f'<td><span class="badge {badge_cls}">{html.escape(reason_text)}</span></td></tr>'
+    )
+
+
+def generate_diagnostic_html(
+    summary: dict[str, object],
+    mappings: list[dict[str, object]],
+    discovery_stats: list[DiscoveryStats] | None = None,
+    library_href: str = "steam_library.html",
+    alerts_href: str = "steam_alerts.html",
+    lang: str | None = None,
+) -> str:
+    """Render the diagnostic page from database summaries.
+
+    Args:
+        summary: Dict from :meth:`Database.get_diagnostic_summary`.
+        mappings: List from :meth:`Database.get_all_appid_mappings`.
+        discovery_stats: Optional list of :class:`DiscoveryStats` from sources.
+        library_href: URL of the library page.
+        alerts_href: URL of the alerts page.
+        lang: Language code.
+
+    Returns:
+        A self-contained HTML string.
+    """
+    from .i18n import get_translator  # noqa: PLC0415
+
+    t = get_translator(lang)
+
+    # ── Summary stats ──────────────────────────────────────────────────
+    summary_cards = "".join([
+        _make_stat_card(summary["total_games"], t("diag_total_games")),
+        _make_stat_card(summary["enriched_count"], t("diag_enriched")),
+        _make_stat_card(summary["unenriched_count"], t("diag_unenriched")),
+        _make_stat_card(summary["total_news"], t("diag_total_news")),
+        _make_stat_card(summary["total_alerts"], t("diag_total_alerts")),
+    ])
+
+    # ── Source chips ───────────────────────────────────────────────────
+    by_source: dict[str, int] = summary.get("by_source", {})  # type: ignore[assignment]
+    source_chips = "".join(
+        f'<div class="source-chip">{html.escape(src)}<span class="count">{cnt}</span></div>'
+        for src, cnt in sorted(by_source.items())
+    )
+
+    # ── Epic stats ─────────────────────────────────────────────────────
+    epic_stats_list = [s for s in (discovery_stats or []) if s.source == "epic"]
+    if epic_stats_list:
+        es = epic_stats_list[0]
+        epic_html = '<div class="stat-grid">' + "".join([
+            _make_stat_card(es.total_api_items, t("diag_api_items")),
+            _make_stat_card(es.accepted_count, t("diag_accepted")),
+            _make_stat_card(es.resolved_count, t("diag_resolved_appids")),
+            _make_stat_card(es.unresolved_count, t("diag_unresolved_appids")),
+            _make_stat_card(len(es.skipped_items), t("diag_skipped")),
+        ]) + "</div>"
+    else:
+        epic_html = f'<p class="info-msg">{t("diag_no_epic")}</p>'
+
+    # ── Skipped items ──────────────────────────────────────────────────
+    all_skipped: list[SkippedItem] = []
+    for ds in (discovery_stats or []):
+        all_skipped.extend(ds.skipped_items)
+    if all_skipped:
+        skipped_rows = "".join(_make_skipped_row(s, t) for s in all_skipped)
+        skipped_html = (
+            '<div class="table-wrap"><table>'
+            f"<thead><tr><th>{t('diag_col_catalog_id')}</th>"
+            f"<th>{t('diag_col_raw_name')}</th>"
+            f"<th>{t('diag_col_reason')}</th></tr></thead>"
+            f"<tbody>{skipped_rows}</tbody></table></div>"
+        )
+    else:
+        skipped_html = f'<p class="info-msg">{t("diag_no_skipped")}</p>'
+
+    # ── Mappings ───────────────────────────────────────────────────────
+    mapping_stats = "".join([
+        _make_stat_card(summary["total_mappings"], t("diag_total_mappings")),
+        _make_stat_card(summary["resolved_mappings"], t("diag_resolved")),
+        _make_stat_card(summary["unresolved_mappings"], t("diag_unresolved")),
+        _make_stat_card(summary["manual_mappings"], t("diag_manual")),
+    ])
+    mapping_rows = "".join(_make_mapping_row(m, t) for m in mappings)
+
+    now_str = datetime.now().strftime("%d/%m/%Y à %H:%M")
+
+    return _apply_html_t(
+        _DIAGNOSTIC_TEMPLATE
+        .replace("__LIB_HREF__", html.escape(library_href))
+        .replace("__ALERTS_HREF__", html.escape(alerts_href))
+        .replace("__GENERATED_AT__", now_str)
+        .replace("__SUMMARY_STATS__", summary_cards)
+        .replace("__SOURCE_CHIPS__", source_chips)
+        .replace("__EPIC_STATS__", epic_html)
+        .replace("__SKIPPED_CONTENT__", skipped_html)
+        .replace("__MAPPING_STATS__", mapping_stats)
+        .replace("__MAPPING_ROWS__", mapping_rows),
+        t,
+    )
+
+
+def write_diagnostic_html(
+    summary: dict[str, object],
+    mappings: list[dict[str, object]],
+    output_path: Path,
+    discovery_stats: list[DiscoveryStats] | None = None,
+    library_href: str = "steam_library.html",
+    alerts_href: str = "steam_alerts.html",
+    lang: str | None = None,
+) -> None:
+    """Write the rendered diagnostic page to *output_path*.
+
+    Args:
+        summary: Dict from :meth:`Database.get_diagnostic_summary`.
+        mappings: List from :meth:`Database.get_all_appid_mappings`.
+        output_path: Destination file path.
+        discovery_stats: Optional list of :class:`DiscoveryStats` from sources.
+        library_href: URL of the library page.
+        alerts_href: URL of the alerts page.
+        lang: Language code.
+    """
+    output_path.write_text(
+        generate_diagnostic_html(
+            summary, mappings, discovery_stats, library_href, alerts_href, lang
+        ),
+        encoding="utf-8",
     )

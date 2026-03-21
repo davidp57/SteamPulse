@@ -359,6 +359,18 @@ Each card shows:
 
 Alert rules are configured in `config.toml` under `[[alerts]]` sections. Run `steam-setup` to see and edit the default rules.
 
+### Diagnostic page (`steam_diagnostic.html`)
+
+A technical page generated alongside the library and alerts pages. It provides:
+
+- **Database summary** — total games, enriched/unenriched counts, alerts and news counts
+- **Per-source breakdown** — number of games from each source (Steam, Epic)
+- **AppID mappings table** — all external-to-Steam AppID resolutions with status (resolved, unresolved, manual); includes a search field
+- **Epic discovery statistics** — total API items, accepted, resolved, unresolved, and skipped counts (only shown when Epic source was used during fetch)
+- **Skipped items table** — items filtered out during Epic discovery, with reason (no title, hex ID, sandbox label)
+
+This page is useful for diagnosing data quality issues, checking which Epic games were resolved to Steam AppIDs, and identifying items that were filtered out.
+
 ---
 
 ## 9. Cache strategy & refresh
