@@ -110,4 +110,47 @@ STRINGS: dict[str, str] = {
     "js_count_game_n":       "{n} jeux",
     "js_no_match_news":      "Aucune news ne correspond.",
     "js_count_news":         "{n} news",
+
+    # ── Infobulles des filtres ──────────────────────────────────────────────────────────────
+    "tt_filter_earlyaccess": "Jeux actuellement en Early Access (pas v1.0)",
+    "tt_filter_released":    "Jeux avec une sortie officielle v1.0",
+    "tt_filter_unreleased":  "Jeux pas encore sortis",
+    "tt_filter_lib_owned":   "Jeux que tu possèdes (Steam + Epic)",
+    "tt_filter_lib_wishlist":"Jeux dans ta wishlist",
+    "tt_filter_lib_followed":"Jeux que tu suis sans les posséder",
+    "tt_filter_tag_patch":   "Afficher uniquement les patch notes",
+    "tt_filter_tag_news":    "Afficher uniquement les articles de news",
+    "tt_filter_pt_0":        "Jeux jamais lancés (0 minutes)",
+    "tt_filter_pt_60":       "Jeux joués moins d\u2019une heure",
+    "tt_filter_pt_600":      "Jeux joués entre 1 et 10 heures",
+    "tt_filter_pt_601":      "Jeux joués plus de 10 heures",
+    "tt_filter_mc_none":     "Jeux sans score Metacritic",
+    "tt_filter_mc_bad":      "Score < 50 : critiques négatives",
+    "tt_filter_mc_mid":      "Score 50–75 : critiques mitigées",
+    "tt_filter_mc_good":     "Score > 75 : critiques favorables",
+    "tt_filter_recent_2":    "Jeux avec une news dans les 2 derniers jours",
+    "tt_filter_recent_5":    "Jeux avec une news dans les 5 derniers jours",
+    "tt_filter_recent_15":   "Jeux avec une news dans les 15 derniers jours",
+    "tt_filter_recent_30":   "Jeux avec une news dans les 30 derniers jours",
+
+    # ── Infobulles des éléments de tuile ───────────────────────────────────────
+    "tt_badge_earlyaccess":  "En accès anticipé — pas encore v1.0",
+    "tt_badge_released":     "Version finale (v1.0 ou ultérieure)",
+    "tt_badge_unreleased":   "Pas encore sorti",
+    "tt_badge_unknown":      "Statut inconnu",
+    "tt_developer":          "Développeur",
+    "tt_price":              "Prix actuel sur Steam",
+    "tt_release_date":       "Date de sortie",
+    "tt_last_news":          "Date de la dernière actualité ou mise à jour",
+    "tt_playtime":           "Temps de jeu total (depuis toujours)",
+
+    # ── Labels de qualité Metacritic ────────────────────────────────────────────
+    "tt_mc_favorable":       "Favorable",
+    "tt_mc_mixed":           "Mitigé",
+    "tt_mc_negative":        "Négatif",
+
+    # ── Infobulles des plateformes ───────────────────────────────────────────────
+    "tt_platform_windows":   "Windows",
+    "tt_platform_mac":       "Mac",
+    "tt_platform_linux":     "Linux",
 }

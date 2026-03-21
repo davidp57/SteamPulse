@@ -1,6 +1,7 @@
 """HTML renderer: turns a list of GameRecords into a self-contained page."""
 from __future__ import annotations
 
+import contextlib
 import html
 import json
 import re
@@ -53,6 +54,13 @@ function updateResetBtn() {
 document.getElementById('filtersToggle').addEventListener('click', () => {
   document.getElementById('toolbarFilters').classList.toggle('open');
 });
+// Mobile filter close button
+const _filterClose = document.getElementById('filterPanelClose');
+if (_filterClose) {
+  _filterClose.addEventListener('click', () => {
+    document.getElementById('toolbarFilters').classList.remove('open');
+  });
+}
 
 // Scroll-to-top
 const scrollBtn = document.getElementById('scrollTop');
@@ -372,7 +380,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
-    overflow: hidden;
     transition: transform .18s, border-color .18s, box-shadow .18s;
     cursor: pointer;
   }
@@ -383,14 +390,15 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   }
   .card-img {
     width: 100%;
-    height: 80px;
+    aspect-ratio: 460 / 215;
     object-fit: cover;
     display: block;
     background: var(--surface2);
+    border-radius: 10px 10px 0 0;
   }
   .card-img-placeholder {
     width: 100%;
-    height: 80px;
+    aspect-ratio: 460 / 215;
     background: linear-gradient(135deg, #0d1a2e, #1a2a45);
     display: flex;
     align-items: center;
@@ -398,6 +406,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     color: var(--muted);
     font-size: 11px;
     font-family: 'IBM Plex Mono', monospace;
+    border-radius: 10px 10px 0 0;
   }
   .card-body { padding: 14px 16px; }
   .card-top {
@@ -496,6 +505,36 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     font-style: italic;
   }
 
+  /* NEWS OVERLAY — expanded card floats above grid */
+  .card.expanded {
+    overflow: visible;
+    content-visibility: visible;
+    z-index: 50;
+    border-color: var(--accent) !important;
+    box-shadow: 0 8px 40px rgba(0,0,0,.75), 0 0 0 1px var(--accent);
+  }
+  .card.expanded .news-list {
+    display: block;
+    position: absolute;
+    left: -1px; right: -1px;
+    top: calc(100% - 1px);
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-top: 1px solid var(--border);
+    border-radius: 0 0 10px 10px;
+    padding: 12px 16px 14px;
+    z-index: 50;
+    box-shadow: 0 16px 40px rgba(0,0,0,.6);
+  }
+  /* Dim + blur all other cards when one is expanded */
+  .grid.has-expanded .card:not(.expanded) {
+    opacity: 0.3;
+    filter: blur(1.5px);
+    transform: scale(0.975);
+    pointer-events: none;
+    transition: opacity .25s, filter .25s, transform .25s;
+  }
+
   /* GENRE / PLATFORM TAGS */
   .genre-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 9px; }
   .genre-tag {
@@ -536,6 +575,61 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   .mc-green  { background: rgba(61,214,140,.15); color: var(--released); border: 1px solid rgba(61,214,140,.3); }
   .mc-yellow { background: rgba(245,166,35,.15); color: var(--ea); border: 1px solid rgba(245,166,35,.3); }
   .mc-red    { background: rgba(255,80,80,.15); color: #ff6b6b; border: 1px solid rgba(255,80,80,.3); }
+
+  /* METACRITIC TOOLTIP */
+  .mc-tt-wrap { position: relative; display: inline-flex; align-items: center; }
+  .mc-tt {
+    position: absolute;
+    bottom: calc(100% + 8px); left: 50%;
+    transform: translateX(-50%);
+    min-width: 130px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 8px 12px;
+    text-align: center;
+    font-size: 11px;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--text);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .15s;
+    z-index: 300;
+    white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(0,0,0,.4);
+  }
+  .mc-tt::after {
+    content: ''; position: absolute;
+    top: 100%; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--border);
+  }
+  .mc-tt-score { display: block; font-size: 15px; font-weight: 600; color: var(--accent); margin-bottom: 3px; }
+  .mc-tt-label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  .mc-tt-wrap:hover .mc-tt { opacity: 1; }
+
+  /* GENERIC TOOLTIP via data-tooltip attribute */
+  [data-tooltip] { position: relative; }
+  [data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 6px); left: 50%;
+    transform: translateX(-50%);
+    background: rgba(10,14,20,.97);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 5px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+    color: var(--text);
+    pointer-events: none;
+    z-index: 300;
+    font-family: 'IBM Plex Mono', monospace;
+    box-shadow: 0 3px 10px rgba(0,0,0,.3);
+    opacity: 0;
+    transition: opacity .15s;
+  }
+  [data-tooltip]:hover::after { opacity: 1; }
 
   /* EMPTY */
   .empty {
@@ -762,6 +856,26 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     opacity: .6;
   }
 
+  /* FILTER PANEL CLOSE BUTTON (mobile only by default) */
+  .filter-panel-close {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top: 0;
+    background: var(--bg);
+    border: none;
+    border-bottom: 1px solid var(--border);
+    padding: 16px 0 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+    width: 100%;
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: .5px;
+  }
+  .filter-panel-close:hover { color: var(--accent); }
+
   /* TABLE VIEW — wide screens only */
   @media (max-width: 1099px) {
     /* Compact list on narrow: revert to flex-wrap */
@@ -788,6 +902,20 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     .grid.list-view .card-img { width: 80px; }
     .scroll-top { bottom: 16px; right: 16px; }
     .theme-toggle { bottom: 16px; left: 16px; }
+    /* Mobile filter overlay */
+    #toolbarFilters.open {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 1000;
+      overflow-y: auto;
+      background: var(--bg);
+      display: flex !important;
+      flex-direction: column;
+      padding: 0 20px 40px;
+      border-top: none;
+      gap: 20px;
+    }
+    .filter-panel-close { display: flex; }
   }
 </style>
 </head>
@@ -851,13 +979,14 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     <a class="nav-link" href="__NEWS_HREF__">🗞 __T_link_news__</a>
   </div>
   <div class="toolbar-filters" id="toolbarFilters">
+    <button type="button" class="filter-panel-close" id="filterPanelClose">__T_btn_filters__ <span>✕</span></button>
     <div class="filter-group">
       <div class="filter-group-label">__T_filter_status__</div>
       <div class="filter-btns" id="filterBtns">
         <button class="filter-btn active" data-filter="all">__T_lbl_all__</button>
-        <button class="filter-btn" data-filter="earlyaccess">Early Access</button>
-        <button class="filter-btn" data-filter="released">__T_lbl_released__</button>
-        <button class="filter-btn" data-filter="unreleased">__T_lbl_upcoming__</button>
+        <button class="filter-btn" data-filter="earlyaccess" data-tooltip="__T_tt_filter_earlyaccess__">Early Access</button>
+        <button class="filter-btn" data-filter="released" data-tooltip="__T_tt_filter_released__">__T_lbl_released__</button>
+        <button class="filter-btn" data-filter="unreleased" data-tooltip="__T_tt_filter_unreleased__">__T_lbl_upcoming__</button>
       </div>
     </div>
     <div class="filter-group">
@@ -871,47 +1000,47 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <div class="filter-group-label">__T_filter_collection__</div>
       <div class="filter-btns" id="libStatusBtns">
         <button class="filter-btn active" data-lib-status="all">__T_lbl_all__</button>
-        <button class="filter-btn" data-lib-status="owned">__T_lbl_owned__</button>
-        <button class="filter-btn" data-lib-status="wishlist">🎁 Wishlist</button>
-        <button class="filter-btn" data-lib-status="followed">👁 __T_lbl_followed__</button>
+        <button class="filter-btn" data-lib-status="owned" data-tooltip="__T_tt_filter_lib_owned__">__T_lbl_owned__</button>
+        <button class="filter-btn" data-lib-status="wishlist" data-tooltip="__T_tt_filter_lib_wishlist__">🎁 Wishlist</button>
+        <button class="filter-btn" data-lib-status="followed" data-tooltip="__T_tt_filter_lib_followed__">👁 __T_lbl_followed__</button>
       </div>
     </div>
     <div class="filter-group">
       <div class="filter-group-label">__T_filter_news_type__</div>
       <div class="filter-btns" id="tagBtns">
         <button class="tag-btn active" data-tag="all">__T_lbl_all_types__</button>
-        <button class="tag-btn" data-tag="patchnotes">📋 Patch notes</button>
-        <button class="tag-btn" data-tag="other">📰 News</button>
+        <button class="tag-btn" data-tag="patchnotes" data-tooltip="__T_tt_filter_tag_patch__">📋 Patch notes</button>
+        <button class="tag-btn" data-tag="other" data-tooltip="__T_tt_filter_tag_news__">📰 News</button>
       </div>
     </div>
     <div class="filter-group">
       <div class="filter-group-label">__T_filter_playtime__</div>
       <div class="filter-btns" id="playtimeBtns">
         <button class="filter-btn active" data-pt="all">__T_lbl_all__</button>
-        <button class="filter-btn" data-pt="0">__T_lbl_never_played__</button>
-        <button class="filter-btn" data-pt="60">< 1h</button>
-        <button class="filter-btn" data-pt="600">1-10h</button>
-        <button class="filter-btn" data-pt="601">> 10h</button>
+        <button class="filter-btn" data-pt="0" data-tooltip="__T_tt_filter_pt_0__">__T_lbl_never_played__</button>
+        <button class="filter-btn" data-pt="60" data-tooltip="__T_tt_filter_pt_60__">&lt; 1h</button>
+        <button class="filter-btn" data-pt="600" data-tooltip="__T_tt_filter_pt_600__">1-10h</button>
+        <button class="filter-btn" data-pt="601" data-tooltip="__T_tt_filter_pt_601__">&gt; 10h</button>
       </div>
     </div>
     <div class="filter-group">
       <div class="filter-group-label">__T_filter_metacritic__</div>
       <div class="filter-btns" id="mcBtns">
         <button class="filter-btn active" data-mc="all">__T_lbl_all__</button>
-        <button class="filter-btn" data-mc="none">__T_lbl_no_score__</button>
-        <button class="filter-btn" data-mc="bad">< 50</button>
-        <button class="filter-btn" data-mc="mid">50–75</button>
-        <button class="filter-btn" data-mc="good">> 75</button>
+        <button class="filter-btn" data-mc="none" data-tooltip="__T_tt_filter_mc_none__">__T_lbl_no_score__</button>
+        <button class="filter-btn" data-mc="bad" data-tooltip="__T_tt_filter_mc_bad__">&lt; 50</button>
+        <button class="filter-btn" data-mc="mid" data-tooltip="__T_tt_filter_mc_mid__">50–75</button>
+        <button class="filter-btn" data-mc="good" data-tooltip="__T_tt_filter_mc_good__">&gt; 75</button>
       </div>
     </div>
     <div class="filter-group">
       <div class="filter-group-label">__T_filter_recent__</div>
       <div class="filter-btns" id="recentBtns">
         <button class="filter-btn active" data-recent="all">__T_lbl_all__</button>
-        <button class="filter-btn" data-recent="2">__T_lbl_2_days__</button>
-        <button class="filter-btn" data-recent="5">__T_lbl_5_days__</button>
-        <button class="filter-btn" data-recent="15">__T_lbl_15_days__</button>
-        <button class="filter-btn" data-recent="30">__T_lbl_30_days__</button>
+        <button class="filter-btn" data-recent="2" data-tooltip="__T_tt_filter_recent_2__">__T_lbl_2_days__</button>
+        <button class="filter-btn" data-recent="5" data-tooltip="__T_tt_filter_recent_5__">__T_lbl_5_days__</button>
+        <button class="filter-btn" data-recent="15" data-tooltip="__T_tt_filter_recent_15__">__T_lbl_15_days__</button>
+        <button class="filter-btn" data-recent="30" data-tooltip="__T_tt_filter_recent_30__">__T_lbl_30_days__</button>
       </div>
     </div>
   </div>
@@ -1183,12 +1312,24 @@ document.getElementById('viewToggle').addEventListener('click', () => {
   saveStateToHash();
 });
 
-// Expand/collapse news
+// Expand/collapse news — single open at a time, overlay mode
 document.querySelectorAll('.news-toggle').forEach(toggle => {
   toggle.addEventListener('click', e => {
     e.stopPropagation();
-    toggle.closest('.card').classList.toggle('expanded');
+    const card = toggle.closest('.card');
+    const grid = document.getElementById('grid');
+    const wasExpanded = card.classList.contains('expanded');
+    document.querySelectorAll('.card.expanded').forEach(c => c.classList.remove('expanded'));
+    if (!wasExpanded) card.classList.add('expanded');
+    grid.classList.toggle('has-expanded', !wasExpanded);
   });
+});
+// Close expanded card when clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('.card.expanded')) {
+    document.querySelectorAll('.card.expanded').forEach(c => c.classList.remove('expanded'));
+    document.getElementById('grid').classList.remove('has-expanded');
+  }
 });
 
 // Open Steam store on card click
@@ -1695,23 +1836,40 @@ def _parse_release_ts(date_str: str) -> int:
             return int(datetime.strptime(s.strip(), fmt).replace(tzinfo=UTC).timestamp())
         except ValueError:
             continue
-    m = re.search(r"\b((?:19|20)\d{2})\b", s)
-    if m:
-        try:
+    if m := re.search(r"\b((?:19|20)\d{2})\b", s):
+        with contextlib.suppress(ValueError):
             return int(datetime(int(m.group()), 1, 1, tzinfo=UTC).timestamp())
-        except ValueError:
-            pass
     return 0
 
 
-def _metacritic_html(score: int, url: str) -> str:
+def _metacritic_html(score: int, url: str, t: Translator | None = None) -> str:
+    if t is None:
+        from .i18n import get_translator  # noqa: PLC0415
+        t = get_translator()
     if score <= 0:
         return ""
-    cls = "mc-green" if score >= 75 else ("mc-yellow" if score >= 50 else "mc-red")
-    safe_url = html.escape(url)
-    link_open = f'<a href="{safe_url}" target="_blank" rel="noopener" style="text-decoration:none">' if url else ""
-    link_close = "</a>" if url else ""
-    return f'{link_open}<span class="metacritic-badge {cls}">MC {score}</span>{link_close}'
+    if score >= 75:
+        cls = "mc-green"
+        label = t("tt_mc_favorable")
+    elif score >= 50:
+        cls = "mc-yellow"
+        label = t("tt_mc_mixed")
+    else:
+        cls = "mc-red"
+        label = t("tt_mc_negative")
+    badge = f'<span class="metacritic-badge {cls}">MC {score}</span>'
+    tooltip = (
+        f'<span class="mc-tt">'
+        f'<span class="mc-tt-score">{score}\u00a0/\u00a0100</span>'
+        f'<span class="mc-tt-label">{html.escape(label)}</span>'
+        f'</span>'
+    )
+    if url:
+        safe_url = html.escape(url)
+        inner = f'<a href="{safe_url}" target="_blank" rel="noopener" style="text-decoration:none">{badge}</a>'
+    else:
+        inner = badge
+    return f'<span class="mc-tt-wrap">{inner}{tooltip}</span>'
 
 
 def _price_html(details: object, t: Translator | None = None) -> str:
@@ -1722,8 +1880,9 @@ def _price_html(details: object, t: Translator | None = None) -> str:
         from .i18n import get_translator  # noqa: PLC0415
         t = get_translator()
     price_free_lbl = t("price_free")
+    price_tip = html.escape(t("tt_price"))
     if details.is_free:
-        return f'<span class="price-free">{price_free_lbl}</span>'
+        return f'<span class="price-free" data-tooltip="{price_tip}">{price_free_lbl}</span>'
     if details.price_final <= 0:
         return ""
     currency = html.escape(details.price_currency)
@@ -1731,25 +1890,28 @@ def _price_html(details: object, t: Translator | None = None) -> str:
     if details.price_discount_pct > 0:
         original = f"{details.price_initial / 100:.2f} {currency}"
         return (
-            f'<span class="price-tag">'
+            f'<span class="price-tag" data-tooltip="{price_tip}">'
             f'<span class="price-discount">{original}</span>'
             f" {final} (-{details.price_discount_pct}%)"
             f"</span>"
         )
-    return f'<span class="price-tag">{final}</span>'
+    return f'<span class="price-tag" data-tooltip="{price_tip}">{final}</span>'
 
 
-def _platform_html(details: object) -> str:
+def _platform_html(details: object, t: Translator | None = None) -> str:
     from .models import AppDetails
+    if t is None:
+        from .i18n import get_translator  # noqa: PLC0415
+        t = get_translator()
     if not isinstance(details, AppDetails):
         return ""
     icons = []
     if details.platform_windows:
-        icons.append("🪟")
+        icons.append(f'<span data-tooltip="{html.escape(t("tt_platform_windows"))}">🪟</span>')
     if details.platform_mac:
-        icons.append("🍎")
+        icons.append(f'<span data-tooltip="{html.escape(t("tt_platform_mac"))}">🍎</span>')
     if details.platform_linux:
-        icons.append("🐧")
+        icons.append(f'<span data-tooltip="{html.escape(t("tt_platform_linux"))}">🐧</span>')
     return f'<span class="platform-icons">{"".join(icons)}</span>' if icons else ""
 
 
@@ -1786,16 +1948,23 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         )
         genres_html = f'<div class="genre-tags">{tags}</div>\n'
 
+    # ── element tooltips ────────────────────────────────────────────────────
+    _tt_badge = html.escape(t(f"tt_badge_{status.badge}"))
+    _tt_dev = html.escape(t("tt_developer"))
+    _tt_rel = html.escape(t("tt_release_date"))
+    _tt_news = html.escape(t("tt_last_news"))
+    _tt_pt = html.escape(t("tt_playtime"))
+
     # ── developer / platform / metacritic / price row ──────────────────────
     detail_parts: list[str] = []
     if details and details.developers:
         detail_parts.append(
-            f'<span class="dev-name">{html.escape(details.developers[0])}</span>'
+            f'<span class="dev-name" data-tooltip="{_tt_dev}">{html.escape(details.developers[0])}</span>'
         )
-    plat = _platform_html(details) if details else ""
+    plat = _platform_html(details, t) if details else ""
     if plat:
         detail_parts.append(plat)
-    mc = _metacritic_html(details.metacritic_score, details.metacritic_url) if details else ""
+    mc = _metacritic_html(details.metacritic_score, details.metacritic_url, t) if details else ""
     if mc:
         detail_parts.append(mc)
     price = _price_html(details, t) if details else ""
@@ -1830,6 +1999,20 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
     else:
         toggle_lbl = t("card_news_toggle_n", count=nc)
 
+    news_section_html = (
+        f'    <div class="news-section">\n'
+        f'      <div class="news-toggle">\n'
+        f'        <div class="news-title">\U0001f5de {html.escape(toggle_lbl)}</div>\n'
+        f'        <span class="news-toggle-icon">\u25bc</span>\n'
+        f"      </div>\n"
+        f"    </div>\n"
+    ) if nc > 0 else ""
+    news_list_html = (
+        f'  <div class="news-list">\n'
+        f"    {news_html}\n"
+        f"  </div>\n"
+    ) if nc > 0 else ""
+
     release_ts = _parse_release_ts(status.release_date)
     last_update_ts = int(news_list[0].date.timestamp()) if news_list else 0
     last_all_date = news_list[0].date.strftime("%d/%m/%Y") if news_list else ""
@@ -1842,10 +2025,9 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
             if _ts > last_patch_ts:
                 last_patch_ts = _ts
                 last_patch_date = _n.date.strftime("%d/%m/%Y")
-        else:
-            if _ts > last_other_ts:
-                last_other_ts = _ts
-                last_other_date = _n.date.strftime("%d/%m/%Y")
+        elif _ts > last_other_ts:
+            last_other_ts = _ts
+            last_other_date = _n.date.strftime("%d/%m/%Y")
     placeholder = html.escape(game.name[:2].upper())
     store_tag = "epic" if game.source == "epic" else "steam"
     lib_status_tag = "owned" if game.source in ("owned", "epic") else game.source
@@ -1859,6 +2041,7 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         pt_display = f"🕹 {pt_fmt}"
     metacritic_score = details.metacritic_score if details else 0
     store_hint = "🎮 Epic" if game.source == "epic" else "↗ Steam"
+    _pt_attr = f' data-tooltip="{_tt_pt}"' if game.source == "owned" else ""
     return (
         f'<div class="card" data-appid="{appid}" data-status="{status.badge}" '
         f'data-store="{store_tag}" data-lib-status="{lib_status_tag}" data-name="{name.lower()}" '
@@ -1875,33 +2058,25 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         f'    <div class="col-title">\n'
         f'    <div class="card-top">\n'
         f'      <div class="card-title">{name}</div>\n'
-        f'      <span class="{html.escape(badge_cls)}">{html.escape(badge_label)}</span>\n'
+        f'      <span class="{html.escape(badge_cls)}" data-tooltip="{_tt_badge}">{html.escape(badge_label)}</span>\n'
         f"    </div>\n"
         f"    </div>\n"
         f'    <div class="col-detail">{detail_row}</div>\n'
         f'    <div class="col-genres">{genres_html}</div>\n'
         f'    <div class="col-meta">\n'
         f'    <div class="card-meta">\n'
-        f"      <span>📅 {rel_date}</span>\n"
-        f'      <span class="news-date-display"'
+        f'      <span data-tooltip="{_tt_rel}">📅 {rel_date}</span>\n'
+        f'      <span class="news-date-display" data-tooltip="{_tt_news}"'
         f' data-date-all="{html.escape(last_all_date)}"'
         f' data-date-patch="{html.escape(last_patch_date)}"'
         f' data-date-other="{html.escape(last_other_date)}">'
         f'\U0001f4f0 {html.escape(last_all_date) or "—"}</span>\n'
-        f"      <span>{pt_display}</span>\n"
-        f'      <span style="color:#3a5a99">#{appid}</span>\n'
+        f'      <span{_pt_attr}>{pt_display}</span>\n'
         f"    </div>\n"
         f"    </div>\n"
-        f'    <div class="news-section">\n'
-        f'      <div class="news-toggle">\n'
-        f'        <div class="news-title">🗞 {html.escape(toggle_lbl)}</div>\n'
-        f'        <span class="news-toggle-icon">▼</span>\n'
-        f"      </div>\n"
-        f'      <div class="news-list">\n'
-        f"        {news_html}\n"
-        f"      </div>\n"
-        f"    </div>\n"
+        f"{news_section_html}"
         f"  </div>\n"
+        f"{news_list_html}"
         f"</div>"
     )
 
@@ -1917,9 +2092,9 @@ def generate_html(
     t = get_translator(lang)
     cards_html = "\n".join(make_card(r, t) for r in records)
     total = len(records)
-    ea = sum(1 for r in records if r.status.badge == "earlyaccess")
-    released = sum(1 for r in records if r.status.badge == "released")
-    unrel = sum(1 for r in records if r.status.badge == "unreleased")
+    ea = sum(r.status.badge == "earlyaccess" for r in records)
+    released = sum(r.status.badge == "released" for r in records)
+    unrel = sum(r.status.badge == "unreleased" for r in records)
     total_playtime_min = sum(r.game.playtime_forever for r in records)
     total_playtime_h = total_playtime_min // 60
     now_str = datetime.now().strftime("%d/%m/%Y à %H:%M")
@@ -2020,8 +2195,7 @@ def generate_news_html(
     t = get_translator(lang)
     items: list[tuple[int, GameRecord, NewsItem]] = []
     for record in records:
-        for item in record.news:
-            items.append((int(item.date.timestamp()), record, item))
+        items.extend((int(item.date.timestamp()), record, item) for item in record.news)
     items.sort(key=lambda x: x[0], reverse=True)
 
     rows_html = "\n".join(make_news_row(rec, it, t) for _, rec, it in items)

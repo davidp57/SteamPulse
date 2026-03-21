@@ -50,6 +50,13 @@
 - **Amazon Prime Gaming** — library discovery
 - Plugin architecture is already in place; adding a store = new `sources/<store>.py` file
 
+### Collections
+- User-defined groups to organize games across stores and statuses (e.g. "À finir", "Co-op avec amis", "Abandonné")
+- Collections stored in the DB (`collections` and `collection_games` tables — additive migration)
+- CLI surface to manage collections: `steam-fetch --add-to <collection> <appid|name>`, `--remove-from`, `--list-collections`
+- HTML dashboard: collection filter group alongside Store / Collection status filters; a game can belong to multiple collections (multi-select, OR logic)
+- Collections exported as part of the generated HTML (no server required)
+
 ---
 
 ## 💡 Ideas (not committed)
@@ -58,3 +65,4 @@
 - Automatic re-fetch on a schedule (daemon / cron mode)
 - Game price history tracking (store prices as time series)
 - Export to CSV / JSON
+- **Per-game news timeline** — dedicated view (or expandable panel on the card) showing the full update history for a single game: chronological list of patch notes and news entries, each with its date, title, type tag (patch note / news), and a direct link to the article; useful to quickly assess how actively a game is maintained

@@ -114,6 +114,29 @@ def test_metacritic_html_zero_returns_empty() -> None:
     assert _metacritic_html(0, "") == ""
 
 
+def test_metacritic_html_has_tooltip_wrapper() -> None:
+    html = _metacritic_html(82, "")
+    assert "mc-tt-wrap" in html
+    assert "mc-tt" in html
+    assert "mc-tt-score" in html
+    assert "82" in html
+
+
+def test_metacritic_html_tooltip_label_favorable() -> None:
+    html = _metacritic_html(80, "")
+    assert "Favorable" in html
+
+
+def test_metacritic_html_tooltip_label_mixed() -> None:
+    html = _metacritic_html(60, "")
+    assert "Mixed" in html
+
+
+def test_metacritic_html_tooltip_label_negative() -> None:
+    html = _metacritic_html(30, "")
+    assert "Negative" in html
+
+
 def test_price_html_free_game() -> None:
     d = AppDetails(appid=1, is_free=True)
     assert "Free" in _price_html(d)
@@ -188,6 +211,46 @@ def test_make_card_shows_price(sample_record: GameRecord) -> None:
 def test_make_card_shows_platform_icons(sample_record: GameRecord) -> None:
     card = make_card(sample_record)
     assert "🪟" in card
+
+
+def test_make_card_no_news_section_when_empty() -> None:
+    """news-section must be absent when the game has no news (saves vertical space)."""
+    record = GameRecord(
+        game=OwnedGame(appid=1, name="NoNewsGame"),
+        status=GameStatus(label="Sorti", badge="released", release_date="—"),
+    )
+    card = make_card(record)
+    assert "news-section" not in card
+    assert "news-toggle" not in card
+
+
+def test_make_card_news_section_present_when_has_news(sample_record: GameRecord) -> None:
+    """news-section (toggle bar) and news-list (overlay) must both be present when
+    the game has news; news-list must appear *after* news-section (outside card-body)."""
+    card = make_card(sample_record)
+    assert len(sample_record.news) > 0
+    assert "news-section" in card
+    assert "news-toggle" in card
+    assert "news-list" in card
+    # news-list must be placed after news-section (not nested inside it)
+    assert card.index('"news-section"') < card.index('"news-list"')
+
+
+def test_make_card_appid_not_in_body_text(sample_record: GameRecord) -> None:
+    """AppID should be a data attribute only; the visible text '#<appid>' is removed."""
+    card = make_card(sample_record)
+    # data-appid attribute must still be present
+    assert 'data-appid="420"' in card
+    # The old visible span (#appid) must be gone
+    assert "#420" not in card
+
+
+def test_generate_html_uses_aspect_ratio_for_card_img() -> None:
+    """Card images must use aspect-ratio: 460 / 215, not a fixed height."""
+    page = generate_html([], "76561198000000000")
+    assert "aspect-ratio: 460 / 215" in page
+    # The old fixed 80px height must be gone
+    assert "height: 80px" not in page
 
 
 # ── _parse_release_ts ─────────────────────────────────────────────────────────

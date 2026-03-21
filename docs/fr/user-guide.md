@@ -279,22 +279,27 @@ Pour chaque jeu **Epic** : le jeu est résolu vers un AppID Steam si possible �
 | **Metacritic** | Tous · Sans score · < 50 · 50–75 · > 75 | Sélection unique |
 | **Màj récente** | Tous · 2 jours · 5 jours · 15 jours · 30 jours (basé sur la date du dernier patch note) | Sélection unique |
 
+> Survol d'un bouton de filtre pour afficher une infobulle expliquant ce qu'il filtre.
+
 > Les filtres **Store** et **Bibliothèque** sont combinés avec ET : seuls les jeux correspondant à un store actif **et** au statut de collection sélectionné sont affichés.
+
+> Sur mobile (petit écran), le panneau de filtres s'ouvre en plein écran avec un bouton de fermeture en haut.
 
 Tout l'état du filtre et du tri est persisté dans le hash URL, ce qui permet de sauvegarder ou partager une vue filtrée.
 
 **Cartes :**
 
 Chaque carte affiche :
-- Image d'en-tête du jeu
+- Image d'en-tête du jeu (ratio natif 460×215 — jamais étirée ni écrasée ; peut être légèrement rognée si l'image source a un ratio différent)
 - Nom + badge statut (Early Access, Sorti 1.0, À venir)
-- Score Metacritic coloré (vert ≥ 75 · orange ≥ 50 · rouge < 50)
+- Score Metacritic coloré (vert ≥ 75 · orange ≥ 50 · rouge < 50) — survol pour voir le score/100 et le label de qualité en infobulle
 - Icônes plateformes (Windows / Mac / Linux)
-- Genres
+- Développeur · Genres
 - 📅 Date de sortie · 📰 Date de la dernière news · 🕹 Temps de jeu _(ou 🎁 Wishlist / 👁 Suivi / 🎮 Epic)_
-- `#appid` cliquable → page Steam (ou survoler la carte pour voir l'indice du store)
 
 Un clic sur la carte ouvre la fiche Steam dans un nouvel onglet.
+
+Si un jeu a des news, une barre **▼ N mises à jour** apparaît en bas de la carte. Un clic dessus déploie la liste des news en **overlay flottant** au-dessus des tuiles inférieures — le reste de la grille s'assombrit et se floute pour focaliser l'attention. Une seule carte peut être ouverte à la fois ; cliquer ailleurs pour fermer.
 
 ### Page news (`steam_news.html`)
 
