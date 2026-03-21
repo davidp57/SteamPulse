@@ -1,6 +1,7 @@
 """HTML renderer: turns a list of GameRecords into a self-contained page."""
 from __future__ import annotations
 
+import contextlib
 import html
 import json
 import re
@@ -978,7 +979,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     <a class="nav-link" href="__NEWS_HREF__">🗞 __T_link_news__</a>
   </div>
   <div class="toolbar-filters" id="toolbarFilters">
-    <button class="filter-panel-close" id="filterPanelClose">__T_btn_filters__ <span>✕</span></button>
+    <button type="button" class="filter-panel-close" id="filterPanelClose">__T_btn_filters__ <span>✕</span></button>
     <div class="filter-group">
       <div class="filter-group-label">__T_filter_status__</div>
       <div class="filter-btns" id="filterBtns">
@@ -1835,32 +1836,32 @@ def _parse_release_ts(date_str: str) -> int:
             return int(datetime.strptime(s.strip(), fmt).replace(tzinfo=UTC).timestamp())
         except ValueError:
             continue
-    m = re.search(r"\b((?:19|20)\d{2})\b", s)
-    if m:
-        try:
+    if m := re.search(r"\b((?:19|20)\d{2})\b", s):
+        with contextlib.suppress(ValueError):
             return int(datetime(int(m.group()), 1, 1, tzinfo=UTC).timestamp())
-        except ValueError:
-            pass
     return 0
 
 
-def _metacritic_html(score: int, url: str) -> str:
+def _metacritic_html(score: int, url: str, t: Translator | None = None) -> str:
+    if t is None:
+        from .i18n import get_translator  # noqa: PLC0415
+        t = get_translator()
     if score <= 0:
         return ""
     if score >= 75:
         cls = "mc-green"
-        label = "Favorable"
+        label = t("tt_mc_favorable")
     elif score >= 50:
         cls = "mc-yellow"
-        label = "Mixed"
+        label = t("tt_mc_mixed")
     else:
         cls = "mc-red"
-        label = "Negative"
+        label = t("tt_mc_negative")
     badge = f'<span class="metacritic-badge {cls}">MC {score}</span>'
     tooltip = (
         f'<span class="mc-tt">'
         f'<span class="mc-tt-score">{score}\u00a0/\u00a0100</span>'
-        f'<span class="mc-tt-label">{label}</span>'
+        f'<span class="mc-tt-label">{html.escape(label)}</span>'
         f'</span>'
     )
     if url:
@@ -1897,17 +1898,20 @@ def _price_html(details: object, t: Translator | None = None) -> str:
     return f'<span class="price-tag" data-tooltip="{price_tip}">{final}</span>'
 
 
-def _platform_html(details: object) -> str:
+def _platform_html(details: object, t: Translator | None = None) -> str:
     from .models import AppDetails
+    if t is None:
+        from .i18n import get_translator  # noqa: PLC0415
+        t = get_translator()
     if not isinstance(details, AppDetails):
         return ""
     icons = []
     if details.platform_windows:
-        icons.append('<span data-tooltip="Windows">🪟</span>')
+        icons.append(f'<span data-tooltip="{html.escape(t("tt_platform_windows"))}">🪟</span>')
     if details.platform_mac:
-        icons.append('<span data-tooltip="Mac">🍎</span>')
+        icons.append(f'<span data-tooltip="{html.escape(t("tt_platform_mac"))}">🍎</span>')
     if details.platform_linux:
-        icons.append('<span data-tooltip="Linux">🐧</span>')
+        icons.append(f'<span data-tooltip="{html.escape(t("tt_platform_linux"))}">🐧</span>')
     return f'<span class="platform-icons">{"".join(icons)}</span>' if icons else ""
 
 
@@ -1957,10 +1961,10 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         detail_parts.append(
             f'<span class="dev-name" data-tooltip="{_tt_dev}">{html.escape(details.developers[0])}</span>'
         )
-    plat = _platform_html(details) if details else ""
+    plat = _platform_html(details, t) if details else ""
     if plat:
         detail_parts.append(plat)
-    mc = _metacritic_html(details.metacritic_score, details.metacritic_url) if details else ""
+    mc = _metacritic_html(details.metacritic_score, details.metacritic_url, t) if details else ""
     if mc:
         detail_parts.append(mc)
     price = _price_html(details, t) if details else ""
@@ -2021,10 +2025,9 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
             if _ts > last_patch_ts:
                 last_patch_ts = _ts
                 last_patch_date = _n.date.strftime("%d/%m/%Y")
-        else:
-            if _ts > last_other_ts:
-                last_other_ts = _ts
-                last_other_date = _n.date.strftime("%d/%m/%Y")
+        elif _ts > last_other_ts:
+            last_other_ts = _ts
+            last_other_date = _n.date.strftime("%d/%m/%Y")
     placeholder = html.escape(game.name[:2].upper())
     store_tag = "epic" if game.source == "epic" else "steam"
     lib_status_tag = "owned" if game.source in ("owned", "epic") else game.source
@@ -2192,8 +2195,7 @@ def generate_news_html(
     t = get_translator(lang)
     items: list[tuple[int, GameRecord, NewsItem]] = []
     for record in records:
-        for item in record.news:
-            items.append((int(item.date.timestamp()), record, item))
+        items.extend((int(item.date.timestamp()), record, item) for item in record.news)
     items.sort(key=lambda x: x[0], reverse=True)
 
     rows_html = "\n".join(make_news_row(rec, it, t) for _, rec, it in items)

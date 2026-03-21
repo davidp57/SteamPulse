@@ -290,7 +290,7 @@ Tout l'état du filtre et du tri est persisté dans le hash URL, ce qui permet d
 **Cartes :**
 
 Chaque carte affiche :
-- Image d'en-tête du jeu (ratio natif 460×215 — jamais rognée)
+- Image d'en-tête du jeu (ratio natif 460×215 — jamais étirée ni écrasée ; peut être légèrement rognée si l'image source a un ratio différent)
 - Nom + badge statut (Early Access, Sorti 1.0, À venir)
 - Score Metacritic coloré (vert ≥ 75 · orange ≥ 50 · rouge < 50) — survol pour voir le score/100 et le label de qualité en infobulle
 - Icônes plateformes (Windows / Mac / Linux)

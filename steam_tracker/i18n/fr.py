@@ -137,9 +137,20 @@ STRINGS: dict[str, str] = {
     "tt_badge_earlyaccess":  "En accès anticipé — pas encore v1.0",
     "tt_badge_released":     "Version finale (v1.0 ou ultérieure)",
     "tt_badge_unreleased":   "Pas encore sorti",
+    "tt_badge_unknown":      "Statut inconnu",
     "tt_developer":          "Développeur",
     "tt_price":              "Prix actuel sur Steam",
     "tt_release_date":       "Date de sortie",
     "tt_last_news":          "Date de la dernière actualité ou mise à jour",
     "tt_playtime":           "Temps de jeu total (depuis toujours)",
+
+    # ── Labels de qualité Metacritic ────────────────────────────────────────────
+    "tt_mc_favorable":       "Favorable",
+    "tt_mc_mixed":           "Mitigé",
+    "tt_mc_negative":        "Négatif",
+
+    # ── Infobulles des plateformes ───────────────────────────────────────────────
+    "tt_platform_windows":   "Windows",
+    "tt_platform_mac":       "Mac",
+    "tt_platform_linux":     "Linux",
 }

@@ -283,7 +283,7 @@ All filter and sort state is persisted in the URL hash so you can bookmark or sh
 **Cards:**
 
 Each card shows:
-- Game header image (native 460×215 aspect ratio — never cropped)
+- Game header image (native 460×215 aspect ratio — never stretched or squashed; may be cropped if the source image differs from this ratio)
 - Name + status badge (Early Access · Released 1.0 · Upcoming)
 - Metacritic score with colour coding (green ≥ 75 · orange ≥ 50 · red < 50) — hover to see the score/100 and quality label tooltip
 - Platform icons (Windows / Mac / Linux)
