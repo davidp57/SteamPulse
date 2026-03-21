@@ -33,6 +33,8 @@ STRINGS: dict[str, str] = {
     "alert_expand_all":      "Expand all",
     "alert_collapse_all":    "Collapse all",
     "alert_group_search":    "Search groups\u2026",
+    "alert_font_smaller":    "Decrease font size",
+    "alert_font_larger":     "Increase font size",
     "btn_mark_all_read":     "Mark all read",
     "btn_mark_rule_read":    "Mark rule read",
     "btn_mark_read":         "Mark as read",

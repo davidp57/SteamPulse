@@ -2398,10 +2398,6 @@ __SHARED_JS__
       cardsDiv.querySelectorAll('.alert-card').forEach(function(c) {
         if (!c.classList.contains('hidden')) visible++;
       });
-      // Also count in sub-section-cards (for by-rule-game view)
-      cardsDiv.querySelectorAll('.sub-section-cards .alert-card').forEach(function(c) {
-        if (!c.classList.contains('hidden')) visible++;
-      });
       var badge = h.querySelector('.section-badge');
       if (badge) badge.textContent = visible;
       var nameMatch = !groupQuery || h.textContent.toLowerCase().indexOf(groupQuery) !== -1;
@@ -2714,7 +2710,7 @@ __SHARED_JS__
       // Don't intercept clicks on links (they handle themselves)
       if (e.target.closest('a')) return;
       var url = c.getAttribute('data-news-url');
-      if (url) window.open(url, '_blank');
+      if (url) { var w = window.open(url, '_blank', 'noopener,noreferrer'); if (w) w.opener = null; }
     }
     if (titleEl) titleEl.addEventListener('click', openNews);
     if (detailsEl) detailsEl.addEventListener('click', openNews);
