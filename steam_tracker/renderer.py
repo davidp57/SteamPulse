@@ -1465,7 +1465,7 @@ document.querySelectorAll('.card').forEach(card => {
   card.addEventListener('click', e => {
     if (e.target.closest('.news-toggle') || e.target.closest('.news-list')) return;
     const appid = card.dataset.appid;
-    if (appid) window.open('https://store.steampowered.com/app/' + appid, '_blank');
+    if (appid) { var w = window.open('https://store.steampowered.com/app/' + appid, '_blank', 'noopener,noreferrer'); if (w) w.opener = null; }
   });
 });
 

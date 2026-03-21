@@ -260,6 +260,25 @@ HTTP 403/404 on news/details endpoints → logged at DEBUG (not a warning — St
 | `get_all_game_records()` | Full denormalised list for the renderer |
 | `get_appid_mapping(source, external_id)` | Cached Steam AppID for an external game, or `None` |
 | `upsert_appid_mapping(source, external_id, name, steam_appid, manual)` | Insert/update an AppID mapping; manual mappings protected from auto-overwrite |
+| `run_cleanup()` | Run all registered data-cleanup rules; returns total rows affected |
+
+#### Data cleanup system
+
+`Database.run_cleanup()` executes a list of cleanup rules stored in the class attribute `_CLEANUP_RULES`. Each rule is a method `_cleanup_*(self) -> int` that fixes or removes stale/broken data from previous runs. The method returns the total number of affected rows across all rules.
+
+Cleanup runs **automatically** at the beginning of every `cmd_fetch` / `cmd_run` invocation, before game discovery. If any rows were cleaned, a message is printed to the user.
+
+**Adding a new cleanup rule:**
+
+1. Add a private method `_cleanup_<description>(self) -> int` to the `Database` class
+2. The method should fix or remove bad data and return the number of affected rows
+3. Append the method reference to `_CLEANUP_RULES`
+
+**Current rules:**
+
+| Rule | Purpose |
+|---|---|
+| `_cleanup_epic_live_name` | Removes Epic games named `"Live"` (caused by a bug that used the `sandboxName` field — the deployment environment label — instead of the real game title). Also deletes the corresponding `appid_mappings` entries so that the resolver retries clean discovery on the next fetch. |
 
 ### `fetcher.py — SteamFetcher`
 

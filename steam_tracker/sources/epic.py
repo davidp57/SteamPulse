@@ -24,6 +24,53 @@ log = logging.getLogger(__name__)
 
 _HASH_APPID_RANGE = 100_000_000
 
+# Keys in sandboxName that indicate an environment label, not a real title.
+_SANDBOX_LABELS = frozenset({"Live", "Stage", "Dev", "Cert", "CI"})
+
+
+def _extract_epic_title(item: dict[str, object]) -> str:
+    """Extract the best human-readable title from an Epic library record.
+
+    The Epic library API exposes several name fields depending on version
+    and whether ``includeMetadata=true`` is set.  This helper tries them
+    in decreasing order of reliability:
+
+    1. ``catalogItem.title`` (metadata object when includeMetadata=true)
+    2. ``productName``
+    3. ``sandboxName`` — only if it is NOT a known environment label
+    4. falls back to empty string (caller should use ``appName``)
+
+    Args:
+        item: A single record dict from the Epic library response.
+
+    Returns:
+        The best title found, or empty string.
+    """
+    # catalogItem.title (most reliable when metadata is present)
+    catalog_item = item.get("catalogItem")
+    if isinstance(catalog_item, dict):
+        raw_title = catalog_item.get("title")
+        if isinstance(raw_title, str):
+            title = raw_title.strip()
+            if title:
+                return title
+
+    # productName (sometimes present at top level)
+    raw_product = item.get("productName")
+    if isinstance(raw_product, str):
+        product_name = raw_product.strip()
+        if product_name:
+            return product_name
+
+    # sandboxName — but only when it is a real title, not "Live"/"Stage"/…
+    raw_sandbox = item.get("sandboxName")
+    if isinstance(raw_sandbox, str):
+        sandbox_name = raw_sandbox.strip()
+        if sandbox_name and sandbox_name not in _SANDBOX_LABELS:
+            return sandbox_name
+
+    return ""
+
 
 def _hash_appid(catalog_item_id: str) -> int:
     """Generate a deterministic appid in the reserved range for unresolved games."""
@@ -142,9 +189,12 @@ class EpicSource:
         for idx, item in enumerate(library_items, 1):
             catalog_id = str(item.get("catalogItemId", ""))
             # `appName` is an internal codename (e.g. "Flier" for Gone Home).
-            # `sandboxName` is the human-readable display title.
+            # `sandboxName` is the sandbox environment label ("Live", "Stage"…)
+            #   — NOT the game title.
+            # With includeMetadata=true the human-readable title may appear
+            # in several places depending on API version; try them all.
             internal_name = str(item.get("appName", ""))
-            name = str(item.get("sandboxName", "") or internal_name)
+            name = _extract_epic_title(item) or internal_name
             if not catalog_id or not name:
                 continue
             log.debug("Epic item: internal=%r  title=%r", internal_name, name)

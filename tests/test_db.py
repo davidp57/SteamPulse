@@ -276,3 +276,74 @@ def test_upsert_game_owned_beats_epic(db: Database) -> None:
     records = {r.game.appid: r.game.source for r in db.get_all_game_records()}
     assert records[11] == "owned"
 
+
+# ─── run_cleanup ──────────────────────────────────────────────────────
+
+
+def test_cleanup_removes_epic_live_games(db: Database) -> None:
+    """Games named 'Live' with source='epic' must be deleted by cleanup."""
+    db.upsert_game(OwnedGame(appid=2_000_000_001, name="Live", source="epic",
+                              external_id="epic:cat1"))
+    db.upsert_game(OwnedGame(appid=2_000_000_002, name="Live", source="epic",
+                              external_id="epic:cat2"))
+    assert len(db.get_all_game_records()) == 2
+
+    cleaned = db.run_cleanup()
+    assert cleaned == 2
+    assert db.get_all_game_records() == []
+
+
+def test_cleanup_removes_matching_appid_mappings(db: Database) -> None:
+    """Cleanup must also delete appid_mappings for 'Live' Epic entries."""
+    db.upsert_game(OwnedGame(appid=2_000_000_001, name="Live", source="epic",
+                              external_id="epic:cat1"))
+    db.upsert_appid_mapping("epic", "epic:cat1", "Live", None)
+
+    # The mapping row exists (even though steam_appid is NULL)
+    with db._connect() as con:
+        count = con.execute(
+            "SELECT COUNT(*) FROM appid_mappings"
+            " WHERE external_source = 'epic' AND external_id = 'epic:cat1'",
+        ).fetchone()[0]
+    assert count == 1
+
+    db.run_cleanup()
+
+    # After cleanup, the mapping row itself must be gone
+    with db._connect() as con:
+        count = con.execute(
+            "SELECT COUNT(*) FROM appid_mappings"
+            " WHERE external_source = 'epic' AND external_id = 'epic:cat1'",
+        ).fetchone()[0]
+    assert count == 0
+    assert db.get_all_game_records() == []
+
+
+def test_cleanup_preserves_non_live_epic_games(db: Database) -> None:
+    """Epic games with a real title must NOT be deleted."""
+    db.upsert_game(OwnedGame(appid=2_000_000_001, name="Hades", source="epic",
+                              external_id="epic:cat_hades"))
+    db.upsert_game(OwnedGame(appid=2_000_000_002, name="Live", source="epic",
+                              external_id="epic:cat_bad"))
+
+    cleaned = db.run_cleanup()
+    assert cleaned == 1
+    records = db.get_all_game_records()
+    assert len(records) == 1
+    assert records[0].game.name == "Hades"
+
+
+def test_cleanup_preserves_non_epic_games(db: Database) -> None:
+    """Steam games named 'Live' (hypothetical) must NOT be touched."""
+    db.upsert_game(OwnedGame(appid=999, name="Live", source="owned"))
+
+    cleaned = db.run_cleanup()
+    assert cleaned == 0
+    assert len(db.get_all_game_records()) == 1
+
+
+def test_cleanup_noop_on_clean_db(db: Database) -> None:
+    """Cleanup on an empty or clean DB returns 0."""
+    assert db.run_cleanup() == 0
+    db.upsert_game(OwnedGame(appid=420, name="Half-Life 2", source="owned"))
+    assert db.run_cleanup() == 0
