@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **Epic refresh token lost on crash** — credentials (especially rotated Epic `refresh_token`) are now persisted immediately after game discovery, before the enrichment phase; previously they were only saved at the very end of the pipeline, so a crash during fetch/render would lose the new single-use token
+
 ---
 
 ## [1.5.0] — 2026-03-21

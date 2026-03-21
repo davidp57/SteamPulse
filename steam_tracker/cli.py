@@ -215,6 +215,12 @@ def cmd_fetch() -> None:
         if source.is_enabled(args):
             all_discovered.extend(source.discover_games(args, db=db))
 
+    # Persist credentials early so rotated tokens (e.g. Epic refresh_token)
+    # survive even if the enrichment phase crashes.
+    save_cli_credentials(
+        vars(args), existing=config, path=config_path, _explicit_keys=_get_explicit_cli_keys()
+    )
+
     # Upsert everything to DB (DB enforces source priority: owned = epic > wishlist > followed)
     for game in all_discovered:
         db.upsert_game(game)
@@ -277,10 +283,6 @@ def cmd_fetch() -> None:
     n_backfilled = engine.backfill()
     if n_backfilled:
         print(t("cli_backfill_alerts", count=n_backfilled))
-
-    save_cli_credentials(
-        vars(args), existing=config, path=config_path, _explicit_keys=_get_explicit_cli_keys()
-    )
 
 
 def cmd_render() -> None:
@@ -378,6 +380,12 @@ def cmd_run() -> None:
         if source.is_enabled(args):
             all_discovered.extend(source.discover_games(args, db=db))
 
+    # Persist credentials early so rotated tokens (e.g. Epic refresh_token)
+    # survive even if the enrichment phase crashes.
+    save_cli_credentials(
+        vars(args), existing=config, path=config_path, _explicit_keys=_get_explicit_cli_keys()
+    )
+
     # Upsert everything to DB (DB enforces source priority: owned = epic > wishlist > followed)
     for game in all_discovered:
         db.upsert_game(game)
@@ -452,6 +460,3 @@ def cmd_run() -> None:
                       library_href=out.name, lang=args.lang)
     print(t("cli_render_library", count=len(records), path=out.resolve()))
     print(t("cli_render_alerts", count=len(all_alerts), path=alerts_out.resolve()))
-    save_cli_credentials(
-        vars(args), existing=config, path=config_path, _explicit_keys=_get_explicit_cli_keys()
-    )
