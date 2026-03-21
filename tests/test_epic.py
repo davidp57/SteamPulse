@@ -432,6 +432,30 @@ def test_extract_title_ignores_none_values() -> None:
     assert _extract_epic_title(item) == ""
 
 
+def test_extract_title_rejects_live_in_catalog_title() -> None:
+    """catalogItem.title='Live' must be rejected as a sandbox label."""
+    from steam_tracker.sources.epic import _extract_epic_title
+
+    item: dict[str, object] = {
+        "appName": "InternalCode",
+        "catalogItem": {"title": "Live"},
+        "sandboxName": "Live",
+    }
+    assert _extract_epic_title(item) == ""
+
+
+def test_extract_title_rejects_live_in_product_name() -> None:
+    """productName='Live' must be rejected as a sandbox label."""
+    from steam_tracker.sources.epic import _extract_epic_title
+
+    item: dict[str, object] = {
+        "appName": "InternalCode",
+        "productName": "Live",
+        "sandboxName": "Live",
+    }
+    assert _extract_epic_title(item) == ""
+
+
 @resp_mock.activate
 def test_discover_games_sandbox_name_live_uses_appname() -> None:
     """When sandboxName='Live' and no metadata, fall back to appName."""

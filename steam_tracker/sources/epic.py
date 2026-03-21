@@ -37,8 +37,12 @@ def _extract_epic_title(item: dict[str, object]) -> str:
 
     1. ``catalogItem.title`` (metadata object when includeMetadata=true)
     2. ``productName``
-    3. ``sandboxName`` — only if it is NOT a known environment label
+    3. ``sandboxName``
     4. falls back to empty string (caller should use ``appName``)
+
+    All candidates are rejected when they match a known environment/sandbox
+    label (``"Live"``, ``"Stage"``…) to prevent deployment labels from
+    leaking through as game titles.
 
     Args:
         item: A single record dict from the Epic library response.
@@ -52,14 +56,14 @@ def _extract_epic_title(item: dict[str, object]) -> str:
         raw_title = catalog_item.get("title")
         if isinstance(raw_title, str):
             title = raw_title.strip()
-            if title:
+            if title and title not in _SANDBOX_LABELS:
                 return title
 
     # productName (sometimes present at top level)
     raw_product = item.get("productName")
     if isinstance(raw_product, str):
         product_name = raw_product.strip()
-        if product_name:
+        if product_name and product_name not in _SANDBOX_LABELS:
             return product_name
 
     # sandboxName — but only when it is a real title, not "Live"/"Stage"/…
@@ -195,7 +199,7 @@ class EpicSource:
             # in several places depending on API version; try them all.
             internal_name = str(item.get("appName", ""))
             name = _extract_epic_title(item) or internal_name
-            if not catalog_id or not name:
+            if not catalog_id or not name or name in _SANDBOX_LABELS:
                 continue
             log.debug("Epic item: internal=%r  title=%r", internal_name, name)
 

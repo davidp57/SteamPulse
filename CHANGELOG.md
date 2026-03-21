@@ -12,6 +12,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixed
 
 - **Epic refresh token lost on crash** — credentials (especially rotated Epic `refresh_token`) are now persisted immediately after game discovery, before the enrichment phase; previously they were only saved at the very end of the pipeline, so a crash during fetch/render would lose the new single-use token
+- **Epic games still named "Live" after fix** — sandbox label filtering (`_SANDBOX_LABELS`) now applies to ALL title fields (`catalogItem.title`, `productName`), not just `sandboxName`; the `appName` fallback is also rejected when it matches a sandbox label
 
 ---
 
