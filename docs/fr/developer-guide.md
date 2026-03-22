@@ -279,6 +279,9 @@ Le nettoyage s'exécute **automatiquement** au début de chaque invocation `cmd_
 | Règle | Objectif |
 |---|---|
 | `_cleanup_epic_live_name` | Supprime les jeux Epic nommés `"Live"` (causé par un bug qui utilisait le champ `sandboxName` — le label d'environnement de déploiement — au lieu du vrai titre du jeu). Supprime aussi les entrées `appid_mappings` correspondantes pour que le resolver re-tente une découverte propre au prochain fetch. |
+| `_cleanup_epic_hex_id_name` | Supprime les jeux Epic dont le nom est un identifiant hexadécimal de catalogue (24+ caractères hex minuscules, ex. `91eac4ac00304bcc…`). |
+| `_cleanup_epic_production_name` | Supprime les jeux Epic avec des noms de sandbox internes correspondant à `^\w+ Production$` (ex. « coffee Production », « boysenberry Production ») ainsi que leurs entrées `appid_mappings`. |
+| `_cleanup_epic_duplicate_external_id` | Supprime les doublons Epic lorsqu'une entrée avec un vrai appid (< 2 milliards) et une entrée avec un appid synthétique (≥ 2 milliards) existent pour le même `external_id` ; conserve l'entrée avec le vrai appid et supprime la synthétique avec ses `appid_mappings`. |
 
 ### `fetcher.py — SteamFetcher`
 
@@ -321,7 +324,7 @@ Le HTML est construit par interpolation de chaînes dans les raw strings `_HTML_
 
 `is_enabled(args)` retourne `True` si un code d'auth ou des credentials device complets sont fournis.
 
-`discover_games(args)` s'authentifie auprès d'Epic, récupère la bibliothèque, et pour chaque jeu :
+`discover_games(args)` s'authentifie auprès d'Epic, récupère la bibliothèque, interroge l'API Catalog pour **tous** les items afin d'obtenir les titres faisant autorité (en utilisant `_extract_epic_title()` uniquement comme fallback), et pour chaque jeu :
 - Résout l'AppID Steam via `resolve_steam_appid()` (fallback Steam Store Search)
 - Si résolu : définit `appid = steam_appid` pour enrichissement complet
 - Si non résolu : génère un appid déterministe basé sur un hash (≥ 2 000 000 000)
