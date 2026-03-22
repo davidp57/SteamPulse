@@ -942,3 +942,81 @@ class Database:
             )
             for r in rows
         ]
+
+    # ── Diagnostic methods ─────────────────────────────────────────────────
+
+    def get_all_appid_mappings(self) -> list[dict[str, object]]:
+        """Return all rows from the ``appid_mappings`` table.
+
+        Each dict contains: ``external_source``, ``external_id``,
+        ``external_name``, ``steam_appid`` (int|None), ``resolved_at``,
+        ``manual`` (bool).
+
+        Returns:
+            List of mapping dicts ordered by external_name.
+        """
+        with self._connect() as con:
+            rows = con.execute(
+                "SELECT external_source, external_id, external_name, "
+                "steam_appid, resolved_at, manual "
+                "FROM appid_mappings ORDER BY external_name COLLATE NOCASE"
+            ).fetchall()
+        return [
+            {
+                "external_source": str(r[0]),
+                "external_id": str(r[1]),
+                "external_name": str(r[2]),
+                "steam_appid": int(r[3]) if r[3] is not None else None,
+                "resolved_at": str(r[4]),
+                "manual": bool(r[5]),
+            }
+            for r in rows
+        ]
+
+    def get_diagnostic_summary(self) -> dict[str, object]:
+        """Return aggregate counts useful for the diagnostic page.
+
+        Returns:
+            Dict with keys: ``total_games``, ``by_source`` (dict),
+            ``enriched_count``, ``unenriched_count``, ``total_mappings``,
+            ``resolved_mappings``, ``unresolved_mappings``,
+            ``manual_mappings``, ``total_alerts``, ``total_news``.
+        """
+        with self._connect() as con:
+            total_games = con.execute("SELECT COUNT(*) FROM games").fetchone()[0]
+            by_source_rows = con.execute(
+                "SELECT source, COUNT(*) FROM games GROUP BY source"
+            ).fetchall()
+            by_source = {str(r[0]): int(r[1]) for r in by_source_rows}
+
+            enriched = con.execute(
+                "SELECT COUNT(*) FROM app_details"
+            ).fetchone()[0]
+            total_mappings = con.execute(
+                "SELECT COUNT(*) FROM appid_mappings"
+            ).fetchone()[0]
+            resolved_mappings = con.execute(
+                "SELECT COUNT(*) FROM appid_mappings WHERE steam_appid IS NOT NULL"
+            ).fetchone()[0]
+            manual_mappings = con.execute(
+                "SELECT COUNT(*) FROM appid_mappings WHERE manual = 1"
+            ).fetchone()[0]
+            total_alerts = con.execute(
+                "SELECT COUNT(*) FROM alerts"
+            ).fetchone()[0]
+            total_news = con.execute(
+                "SELECT COUNT(*) FROM news"
+            ).fetchone()[0]
+
+        return {
+            "total_games": int(total_games),
+            "by_source": by_source,
+            "enriched_count": int(enriched),
+            "unenriched_count": int(total_games) - int(enriched),
+            "total_mappings": int(total_mappings),
+            "resolved_mappings": int(resolved_mappings),
+            "unresolved_mappings": int(total_mappings) - int(resolved_mappings),
+            "manual_mappings": int(manual_mappings),
+            "total_alerts": int(total_alerts),
+            "total_news": int(total_news),
+        }

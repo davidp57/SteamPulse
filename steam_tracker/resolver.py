@@ -6,6 +6,7 @@ map a game name to a Steam AppID. The first successful result wins.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Sequence
 from difflib import SequenceMatcher
 from typing import Protocol
@@ -18,6 +19,33 @@ log = logging.getLogger(__name__)
 _IGDB_STEAM_CATEGORY = 1
 _SIMILARITY_THRESHOLD = 0.8
 
+# Word-boundary separators recognised after a prefix match.
+_WORD_SEP = re.compile(r"[\s:;\-–—/]")
+
+# Symbols stripped during normalisation (trademarks, copyright).
+_SYMBOLS_RE = re.compile(r"[™®©]")
+
+# Non-alphanumeric / non-space chars collapsed to a single space.
+_PUNCT_RE = re.compile(r"[^\w\s]+")
+
+# Whitespace collapsed to a single space.
+_SPACE_RE = re.compile(r"\s+")
+
+# Common edition / subtitle suffixes stripped before search retry.
+_EDITION_SUFFIX_RE = re.compile(
+    r"\s*[-–—:]\s*(?:"
+    r"(?:game of the year|goty|definitive|ultimate|deluxe|premium|complete|"
+    r"gold|enhanced|special|standard|legendary|platinum)\s+edition"
+    r"|director'?s?\s+cut"
+    r"|remaster(?:ed)?"
+    r"|\d+\s+year\s+(?:celebration|anniversary|edition)"
+    r")\s*$",
+    re.IGNORECASE,
+)
+
+# 4-digit year → 2-digit year (e.g. "2022" → "22").
+_YEAR_RE = re.compile(r"\b20(\d{2})\b")
+
 
 class AppIdResolver(Protocol):
     """Protocol for Steam AppID resolvers."""
@@ -27,21 +55,121 @@ class AppIdResolver(Protocol):
         ...
 
 
+def _normalize(text: str) -> str:
+    """Lowercase, strip ™®©, collapse punctuation + whitespace."""
+    text = _SYMBOLS_RE.sub("", text.lower())
+    text = _PUNCT_RE.sub(" ", text)
+    return _SPACE_RE.sub(" ", text).strip()
+
+
+def _is_word_contained(target_norm: str, candidate_norm: str) -> bool:
+    """Return True if *target_norm* appears at word boundaries inside *candidate_norm*.
+
+    Both arguments must already be normalised (via ``_normalize``).
+    """
+    idx = candidate_norm.find(target_norm)
+    if idx < 0:
+        return False
+    before_ok = idx == 0 or candidate_norm[idx - 1] == " "
+    end = idx + len(target_norm)
+    after_ok = end == len(candidate_norm) or candidate_norm[end] == " "
+    return before_ok and after_ok
+
+
+def _is_word_prefix(target: str, candidate: str) -> bool:
+    """Return True when *target* is a word-boundary prefix of *candidate*.
+
+    Handles cases like ``"Control"`` → ``"Control Ultimate Edition"``
+    or ``"Disco Elysium"`` → ``"Disco Elysium - The Final Cut"``.
+
+    Rejects numbered sequels: ``"Death Stranding"`` will **not** match
+    ``"DEATH STRANDING 2: ON THE BEACH"`` because the suffix starts
+    with a digit (indicating a different game, not an edition).
+    """
+    if not candidate.startswith(target):
+        return False
+    if len(candidate) == len(target):
+        return True
+    rest = candidate[len(target) :]
+    if not _WORD_SEP.match(rest):
+        return False
+    # Reject sequels: suffix starts with a digit after stripping separators.
+    stripped = rest.lstrip(" :;-–—/")
+    return not (stripped and stripped[0].isdigit())
+
+
 def _best_match(target: str, candidates: list[dict[str, object]]) -> dict[str, object] | None:
     """Pick the candidate whose 'name' field is most similar to *target*.
 
-    Returns the best match above the similarity threshold, or None.
+    Uses a three-strategy approach:
+    1. Standard SequenceMatcher similarity (threshold 0.8).
+    2. Fallback: first word-boundary prefix match in API result order,
+       for games whose Steam name contains an edition or subtitle suffix
+       (e.g. "Director's Cut", "Ultimate Edition").
+    3. Fallback: word-boundary containment — the target appears inside the
+       candidate after normalisation (handles missing franchise prefixes
+       such as ``"Tom Clancy's"``).
     """
+    target_lower = target.lower().strip()
     best: dict[str, object] | None = None
     best_ratio = 0.0
+
     for c in candidates:
         c_name = str(c.get("name", ""))
-        ratio = SequenceMatcher(None, target.lower(), c_name.lower()).ratio()
+        c_lower = c_name.lower().strip()
+        ratio = SequenceMatcher(None, target_lower, c_lower).ratio()
         if ratio > best_ratio:
             best_ratio = ratio
             best = c
+
     if best_ratio >= _SIMILARITY_THRESHOLD:
         return best
+
+    # Fallback 1: first prefix match in API result order.
+    for c in candidates:
+        c_name = str(c.get("name", ""))
+        c_lower = c_name.lower().strip()
+        if _is_word_prefix(target_lower, c_lower):
+            return c
+
+    # Fallback 2: first containment match (normalised).
+    target_norm = _normalize(target)
+    for c in candidates:
+        c_name = str(c.get("name", ""))
+        c_norm = _normalize(c_name)
+        if _is_word_contained(target_norm, c_norm):
+            return c
+
+    return None
+
+
+def _strip_edition(name: str) -> str | None:
+    """Remove common edition / subtitle suffixes from *name*.
+
+    Returns the shortened name if it differs from the original, else None.
+    Examples::
+
+        "LISA: The Joyful - Definitive Edition"  → "LISA: The Joyful"
+        "Rise of the Tomb Raider: 20 Year Celebration" → "Rise of the Tomb Raider"
+        "Hades"  → None  (no suffix to strip)
+    """
+    cleaned = _EDITION_SUFFIX_RE.sub("", name).strip()
+    if cleaned and cleaned != name:
+        return cleaned
+    return None
+
+
+def _shorten_year(name: str) -> str | None:
+    """Replace 4-digit years (20xx) with 2-digit forms.
+
+    Returns the modified name if it differs from the original, else None.
+    Example::
+
+        "Farming Simulator 2022" → "Farming Simulator 22"
+    """
+    shortened = _YEAR_RE.sub(r"\1", name)
+    if shortened != name:
+        return shortened
     return None
 
 
@@ -51,20 +179,47 @@ class SteamStoreResolver:
     _URL = "https://store.steampowered.com/api/storesearch/"
 
     def resolve(self, name: str, session: requests.Session | None = None) -> int | None:
-        """Search the Steam Store for *name* and return the best matching appid."""
+        """Search the Steam Store for *name* and return the best matching appid.
+
+        If the first search yields no match, retries with a cleaned name
+        (edition suffix stripped, or 4-digit year shortened).
+        """
         s = session or requests.Session()
+
+        result = self._search(name, s)
+        if result is not None:
+            return result
+
+        # Retry with edition suffix stripped.
+        stripped = _strip_edition(name)
+        if stripped:
+            result = self._search(stripped, s)
+            if result is not None:
+                return result
+
+        # Retry with 4-digit year shortened (2022 → 22).
+        shortened = _shorten_year(name)
+        if shortened:
+            result = self._search(shortened, s)
+            if result is not None:
+                return result
+
+        return None
+
+    def _search(self, term: str, session: requests.Session) -> int | None:
+        """Execute a single Steam Store search and return the best match."""
         try:
-            resp = s.get(self._URL, params={"term": name, "cc": "us"}, timeout=15)
+            resp = session.get(self._URL, params={"term": term, "cc": "us"}, timeout=15)
             resp.raise_for_status()
         except requests.RequestException:
-            log.debug("Steam Store search failed for %r", name)
+            log.debug("Steam Store search failed for %r", term)
             return None
 
         items: list[dict[str, object]] = resp.json().get("items", [])
         if not items:
             return None
 
-        match = _best_match(name, items)
+        match = _best_match(term, items)
         if match is None:
             return None
         try:

@@ -147,6 +147,31 @@ class GameStatus(BaseModel):
     release_date: str
 
 
+class SkippedItem(BaseModel):
+    """An Epic library item that was skipped during discovery."""
+
+    catalog_id: str
+    raw_name: str
+    reason: Literal[
+        "no_title",
+        "hex_id",
+        "sandbox_label",
+        "production_label",
+        "duplicate",
+    ]
+
+
+class DiscoveryStats(BaseModel):
+    """Statistics collected during Epic game discovery."""
+
+    source: str = "epic"
+    total_api_items: int = 0
+    accepted_count: int = 0
+    resolved_count: int = 0
+    unresolved_count: int = 0
+    skipped_items: list[SkippedItem] = Field(default_factory=list)
+
+
 class GameRecord(BaseModel):
     game: OwnedGame
     details: AppDetails | None = None

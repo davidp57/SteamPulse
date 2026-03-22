@@ -4,7 +4,16 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from steam_tracker.models import Alert, AppDetails, GameRecord, GameStatus, NewsItem, OwnedGame
+from steam_tracker.models import (
+    Alert,
+    AppDetails,
+    DiscoveryStats,
+    GameRecord,
+    GameStatus,
+    NewsItem,
+    OwnedGame,
+    SkippedItem,
+)
 from steam_tracker.renderer import (
     _metacritic_html,
     _parse_release_ts,
@@ -12,10 +21,12 @@ from steam_tracker.renderer import (
     _price_html,
     format_playtime,
     generate_alerts_html,
+    generate_diagnostic_html,
     generate_html,
     make_alert_card,
     make_card,
     write_alerts_html,
+    write_diagnostic_html,
     write_html,
 )
 
@@ -620,4 +631,111 @@ def test_write_alerts_html_creates_file(sample_record: GameRecord, tmp_path: Pat
     content = out.read_text(encoding="utf-8")
     assert "Half-Life 2" in content
     assert "Build 12345 deployed" in content
+
+
+# -- Diagnostic page --------------------------------------------------------
+
+_EMPTY_SUMMARY: dict[str, object] = {
+    "total_games": 0,
+    "enriched_count": 0,
+    "unenriched_count": 0,
+    "by_source": {},
+    "total_mappings": 0,
+    "resolved_mappings": 0,
+    "unresolved_mappings": 0,
+    "manual_mappings": 0,
+    "total_alerts": 0,
+    "total_news": 0,
+}
+
+
+def test_generate_diagnostic_html_basic() -> None:
+    """Diagnostic page should contain key section headings."""
+    html = generate_diagnostic_html(_EMPTY_SUMMARY, [], [])
+    assert "SteamPulse" in html
+    # No unresolved placeholders
+    assert "__T_" not in html
+
+
+def test_generate_diagnostic_html_with_mappings() -> None:
+    """Mapping rows should appear in the output."""
+    mappings: list[dict[str, object]] = [
+        {
+            "external_source": "epic",
+            "external_id": "cat1",
+            "external_name": "Hades",
+            "steam_appid": 1145360,
+            "resolved_at": "2025-01-01",
+            "manual": 0,
+        },
+    ]
+    html = generate_diagnostic_html(_EMPTY_SUMMARY, mappings, [])
+    assert "Hades" in html
+    assert "1145360" in html
+
+
+def test_generate_diagnostic_html_with_discovery_stats() -> None:
+    """Epic discovery stats should appear in the output."""
+    stats = [DiscoveryStats(
+        total_api_items=100,
+        accepted_count=80,
+        resolved_count=70,
+        unresolved_count=10,
+        skipped_items=[
+            SkippedItem(catalog_id="cat_x", raw_name="abc123def", reason="hex_id"),
+        ],
+    )]
+    html = generate_diagnostic_html(_EMPTY_SUMMARY, [], stats)
+    assert "100" in html
+    assert "abc123def" in html
+
+
+def test_generate_diagnostic_html_french() -> None:
+    """Page should use French translation when lang=fr."""
+    html = generate_diagnostic_html(_EMPTY_SUMMARY, [], [], lang="fr")
+    # French title from i18n
+    assert "Diagnostic" in html
+
+
+def test_write_diagnostic_html_creates_file(tmp_path: Path) -> None:
+    """write_diagnostic_html should create the output file."""
+    out = tmp_path / "steam_diagnostic.html"
+    write_diagnostic_html(_EMPTY_SUMMARY, [], out)
+    assert out.exists()
+    content = out.read_text(encoding="utf-8")
+    assert "SteamPulse" in content
+
+
+def test_generate_diagnostic_html_mapping_cards_have_data_filter() -> None:
+    """Mapping stat cards should have data-filter attributes for click filtering."""
+    summary = {**_EMPTY_SUMMARY, "total_mappings": 3, "resolved_mappings": 2,
+               "unresolved_mappings": 1, "manual_mappings": 0}
+    html = generate_diagnostic_html(summary, [], [])
+    assert 'data-filter="all"' in html
+    assert 'data-filter="resolved"' in html
+    assert 'data-filter="unresolved"' in html
+    assert 'data-filter="manual"' in html
+
+
+def test_generate_diagnostic_html_mapping_rows_have_data_status() -> None:
+    """Mapping table rows should have data-status for JS filtering."""
+    mappings: list[dict[str, object]] = [
+        {"external_source": "epic", "external_id": "c1", "external_name": "Hades",
+         "steam_appid": 1145360, "resolved_at": "2025-01-01", "manual": 0},
+        {"external_source": "epic", "external_id": "c2", "external_name": "Unknown",
+         "steam_appid": None, "resolved_at": "", "manual": 0},
+        {"external_source": "epic", "external_id": "c3", "external_name": "Custom",
+         "steam_appid": 999, "resolved_at": "2025-01-01", "manual": 1},
+    ]
+    html = generate_diagnostic_html(_EMPTY_SUMMARY, mappings, [])
+    assert 'data-status="resolved"' in html
+    assert 'data-status="unresolved"' in html
+    assert 'data-status="manual"' in html
+
+
+def test_generate_diagnostic_html_contains_toggle_script() -> None:
+    """The diagnostic page should include the toggleFilter JS function."""
+    html = generate_diagnostic_html(_EMPTY_SUMMARY, [], [])
+    assert "toggleFilter" in html
+    assert "activeFilter" in html
 

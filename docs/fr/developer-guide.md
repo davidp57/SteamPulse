@@ -332,7 +332,7 @@ Le HTML est construit par interpolation de chaînes dans les raw strings `_HTML_
 | Symbole | Description |
 |---|---|
 | `AppIdResolver` | Protocole — toute classe avec `resolve(name, session) → int \| None` le satisfait |
-| `SteamStoreResolver` | Résolution via l'API Steam Store Search avec correspondance floue (SequenceMatcher ≥ 0.8) |
+| `SteamStoreResolver` | Résolution via l'API Steam Store Search avec correspondance multi-stratégie : (1) similarité floue (SequenceMatcher ≥ 0.8), (2) préfixe mot-à-mot avec rejet de suites, (3) contenance normalisée ; relance avec suppression de suffixe d'édition et normalisation d'année |
 | `IGDBResolver(twitch_client_id, twitch_client_secret)` | Résolution via IGDB : OAuth Twitch → recherche de jeu → lookup external_games (category=Steam) |
 | `resolve_steam_appid(name, resolvers, session)` | Itère les resolvers dans l'ordre ; le premier résultat l'emporte |
 
@@ -343,6 +343,7 @@ Le HTML est construit par interpolation de chaînes dans les raw strings `_HTML_
 | `epic_auth_with_code(auth_code)` | Échange un code d'autorisation Epic contre un token d'accès |
 | `epic_auth_with_device(device_id, account_id, secret)` | Authentification via credentials device persistants |
 | `epic_get_library(access_token)` | Récupère la bibliothèque Epic de l'utilisateur avec pagination |
+| `epic_get_catalog_titles(items, session=None)` | Résolution par lot des IDs d'éléments de catalogue vers des titres lisibles via l'endpoint public du catalogue Epic (lots de 50) ; regroupe les éléments par namespace en interne |
 
 ### `i18n/__init__.py`
 

@@ -21,7 +21,7 @@ steampulse.exe  →  Steam API  →  SQLite  →  steam_library.html
 - **Smart cache** — app details only re-fetched for new games; news refreshed after 24 h (configurable)
 - **Static HTML** — filterable/sortable cards by source, status, genre, Metacritic, playtime; no server required
 - **Multilingual** — UI in English or French; auto-detected from system locale, or forced with `--lang`
-- **Quality** — ruff, strict mypy, pytest (297 tests)
+- **Quality** — ruff, strict mypy, pytest (376 tests)
 
 ### Quick start
 
@@ -92,7 +92,7 @@ steampulse.exe  →  API Steam  →  SQLite  →  steam_library.html
 - **Cache intelligent** — app_details rechargées uniquement pour les nouveaux jeux ; news rafraîchies après 24 h (configurable)
 - **HTML statique** — cartes filtrables/triables par source, statut, genre, Metacritic, temps de jeu ; aucun serveur requis
 - **Multilingue** — interface en anglais ou en français ; détectée automatiquement ou forcée avec `--lang`
-- **Qualité** — ruff, mypy strict, pytest (297 tests)
+- **Qualité** — ruff, mypy strict, pytest (376 tests)
 
 ### Guide rapide
 
