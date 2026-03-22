@@ -1,6 +1,7 @@
 """English translation strings."""
 STRINGS: dict[str, str] = {
     # ── CLI ──────────────────────────────────────────────────────────────────
+    "cli_banner":            "🚀 SteamPulse v{version}",
     "cli_fetching_library":  "📦 Fetching Steam library...",
     "cli_owned_count":       "   ✅ {count} game(s) owned",
     "cli_fetching_wishlist": "🎁 Fetching wishlist...",

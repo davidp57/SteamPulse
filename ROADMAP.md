@@ -59,6 +59,21 @@
 - **Epic title fix** — robust fallback chain (`catalogItem.title` → `productName` → filtered `sandboxName` → `appName`)
 - 295 tests total
 
+### v1.6.0 — Diagnostic page, Epic enrichment & resolver improvements
+- **Diagnostic page** — `steam_diagnostic.html` with database stats, per-source game counts, AppID mapping table, Epic discovery stats, and skipped items table
+- **Diagnostic interactive filters** — clickable stat cards to filter the mapping table by status (resolved / unresolved / manual)
+- **Epic hex-ID filtering** — automatic filtering of hex catalog IDs during Epic library discovery
+- **Epic Catalog API enrichment** — batch title resolution via Epic's public catalog endpoint (batches of 50)
+- **Epic library deduplication** — duplicate game name detection and skip tracking
+- **Resolver word-prefix matching** — `_is_word_prefix()` with sequel rejection
+- **Resolver word-containment matching** — `_is_word_contained()` with word-boundary checks
+- **Resolver edition-suffix stripping** — `_strip_edition()` removes GOTY, Definitive, Ultimate, etc.
+- **Resolver year normalization** — `_shorten_year()` converts 4-digit to 2-digit years
+- **Epic refresh token persistence** — credentials saved immediately after game discovery
+- **Sandbox label filtering hardened** — `_SANDBOX_LABELS` applied to all title fields
+- **Version display** — `--version` flag; startup banner prints version at launch
+- 378 tests total
+
 ---
 
 ## 🔵 Planned / Not yet started
