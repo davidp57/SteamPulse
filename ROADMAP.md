@@ -67,7 +67,8 @@
 - **Unknown games diagnostic section** — unknown games listed in diagnostic page with name, source, external ID, AppID
 - **Cross-source duplicate cleanup** — duplicate external_id detection works across sources (owned + epic)
 - **Same-name duplicate cleanup** — new `_cleanup_epic_duplicate_name` rule removes synthetic duplicates matching real games by name
-- 404 tests total
+- **Unknown filter covers delisted games** — resolved games without `app_details` (delisted from Steam Store) are now correctly caught by the unknown toggle
+- 406 tests total
 
 ### v1.6.1 — Post-deployment fixes
 - **Diagnostic page nav link** — 🔍 link added to library and alerts page toolbars

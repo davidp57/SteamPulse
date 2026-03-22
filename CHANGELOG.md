@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [1.6.4] — 2026-03-22
+
 ### Fixed
 
 - **Unknown games filter missed resolved games without details** — games with a valid Steam AppID but no `app_details` (e.g. delisted games like Dishonored - Definitive Edition) were tagged INCONNU but not caught by the unknown toggle filter; `data-unknown` attribute now also checks `status.badge == "unknown"`
