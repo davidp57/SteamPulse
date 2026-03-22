@@ -1113,6 +1113,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     <button class="view-toggle" id="viewToggle" title="__T_title_view_toggle__">☰ __T_btn_list_view__</button>
     <span class="count-label" id="countLabel"></span>
     <a class="nav-link" href="__ALERTS_HREF__">🔔 __T_link_alerts__</a>
+    <a class="nav-link" href="__DIAG_HREF__">🔍 __T_link_diagnostic__</a>
   </div>
   <div class="toolbar-filters" id="toolbarFilters">
     <button type="button" class="filter-panel-close" id="filterPanelClose">__T_btn_filters__ <span>✕</span></button>
@@ -1785,6 +1786,7 @@ def generate_html(
     records: list[GameRecord],
     steam_id: str,
     alerts_href: str = "steam_alerts.html",
+    diag_href: str = "steam_diagnostic.html",
     lang: str | None = None,
 ) -> str:
     """Render the full HTML page from a list of game records."""
@@ -1810,7 +1812,8 @@ def generate_html(
         .replace("__UNREL__", str(unrel))
         .replace("__PLAYTIME__", f"{total_playtime_h:,}h".replace(",", "\u202f"))
         .replace("__CARDS__", cards_html)
-        .replace("__ALERTS_HREF__", html.escape(alerts_href)),
+        .replace("__ALERTS_HREF__", html.escape(alerts_href))
+        .replace("__DIAG_HREF__", html.escape(diag_href)),
         t,
     )
 
@@ -1820,10 +1823,11 @@ def write_html(
     steam_id: str,
     output_path: Path,
     alerts_href: str = "steam_alerts.html",
+    diag_href: str = "steam_diagnostic.html",
     lang: str | None = None,
 ) -> None:
     """Write the rendered HTML page to *output_path*."""
-    output_path.write_text(generate_html(records, steam_id, alerts_href, lang), encoding="utf-8")
+    output_path.write_text(generate_html(records, steam_id, alerts_href, diag_href, lang), encoding="utf-8")
 
 
 
@@ -2093,6 +2097,7 @@ __SHARED_FILTER_CSS__
     </div>
     <span class="count-label" id="countLabel"></span>
     <a class="nav-link" href="__LIB_HREF__">📚 __T_link_library__</a>
+    <a class="nav-link" href="__DIAG_HREF__">🔍 __T_link_diagnostic__</a>
   </div>
   <div class="toolbar-filters" id="toolbarFilters">
     <button type="button" class="filter-panel-close" id="filterPanelClose">__T_btn_filters__ <span>✕</span></button>
@@ -2754,6 +2759,7 @@ def generate_alerts_html(
     records: list[GameRecord],
     steam_id: str,
     library_href: str = "steam_library.html",
+    diag_href: str = "steam_diagnostic.html",
     lang: str | None = None,
 ) -> str:
     """Render the alerts page from a list of Alert objects.
@@ -2784,6 +2790,7 @@ def generate_alerts_html(
         .replace("__GENERATED_AT__", now_str)
         .replace("__STEAM_ID__", html.escape(steam_id))
         .replace("__LIB_HREF__", html.escape(library_href))
+        .replace("__DIAG_HREF__", html.escape(diag_href))
         .replace("__ALERTS__", cards_html)
         .replace("__I18N_COUNT1__", t("alert_count_1").replace("'", "\\'"))
         .replace("__I18N_COUNTN__", t("alert_count_n").replace("'", "\\'"))
@@ -2803,6 +2810,7 @@ def write_alerts_html(
     steam_id: str,
     output_path: Path,
     library_href: str = "steam_library.html",
+    diag_href: str = "steam_diagnostic.html",
     lang: str | None = None,
 ) -> None:
     """Write the rendered alerts page to *output_path*.
@@ -2813,10 +2821,11 @@ def write_alerts_html(
         steam_id: User's SteamID64.
         output_path: Destination file path.
         library_href: URL of the library page.
+        diag_href: URL of the diagnostic page.
         lang: Language code.
     """
     output_path.write_text(
-        generate_alerts_html(alerts, records, steam_id, library_href, lang), encoding="utf-8"
+        generate_alerts_html(alerts, records, steam_id, library_href, diag_href, lang), encoding="utf-8"
     )
 
 

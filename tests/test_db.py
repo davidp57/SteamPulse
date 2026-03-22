@@ -342,6 +342,66 @@ def test_cleanup_preserves_non_epic_games(db: Database) -> None:
     assert len(db.get_all_game_records()) == 1
 
 
+def test_cleanup_removes_epic_hex_id_games(db: Database) -> None:
+    """Games with hex-ID names (24+ lowercase hex chars) and source='epic' must be deleted."""
+    db.upsert_game(OwnedGame(appid=2_000_000_010, name="0074f9a408204f1f869d9d6f26b99521",
+                              source="epic", external_id="epic:hex1"))
+    db.upsert_game(OwnedGame(appid=2_000_000_011, name="002b000085aeb49b1a3f3c42e3f918f2f",
+                              source="epic", external_id="epic:hex2"))
+    assert len(db.get_all_game_records()) == 2
+
+    cleaned = db.run_cleanup()
+    assert cleaned == 2
+    assert db.get_all_game_records() == []
+
+
+def test_cleanup_hex_id_removes_appid_mappings(db: Database) -> None:
+    """Cleanup must also delete appid_mappings for hex-ID Epic entries."""
+    db.upsert_game(OwnedGame(appid=2_000_000_010, name="0074f9a408204f1f869d9d6f26b99521",
+                              source="epic", external_id="epic:hex1"))
+    db.upsert_appid_mapping("epic", "epic:hex1", "0074f9a408204f1f869d9d6f26b99521", None)
+
+    db.run_cleanup()
+
+    with db._connect() as con:
+        count = con.execute(
+            "SELECT COUNT(*) FROM appid_mappings"
+            " WHERE external_source = 'epic' AND external_id = 'epic:hex1'",
+        ).fetchone()[0]
+    assert count == 0
+    assert db.get_all_game_records() == []
+
+
+def test_cleanup_preserves_non_hex_epic_games(db: Database) -> None:
+    """Epic games with a real title must NOT be deleted by hex-ID rule."""
+    db.upsert_game(OwnedGame(appid=2_000_000_010, name="Hades", source="epic",
+                              external_id="epic:cat_hades"))
+    db.upsert_game(OwnedGame(appid=2_000_000_011, name="0074f9a408204f1f869d9d6f26b99521",
+                              source="epic", external_id="epic:hex_bad"))
+
+    cleaned = db.run_cleanup()
+    assert cleaned == 1
+    records = db.get_all_game_records()
+    assert len(records) == 1
+    assert records[0].game.name == "Hades"
+
+
+def test_cleanup_hex_id_preserves_short_hex(db: Database) -> None:
+    """Hex strings shorter than 24 chars must NOT be cleaned up."""
+    db.upsert_game(OwnedGame(appid=2_000_000_010, name="abcdef1234567890abcdef12",
+                              source="epic", external_id="epic:short"))
+    # 24 chars exactly — should match
+    cleaned = db.run_cleanup()
+    assert cleaned == 1
+
+    db.upsert_game(OwnedGame(appid=2_000_000_011, name="abcdef12345678",
+                              source="epic", external_id="epic:tooshort"))
+    # 14 chars — should NOT match
+    cleaned = db.run_cleanup()
+    assert cleaned == 0
+    assert len(db.get_all_game_records()) == 1
+
+
 def test_cleanup_noop_on_clean_db(db: Database) -> None:
     """Cleanup on an empty or clean DB returns 0."""
     assert db.run_cleanup() == 0
