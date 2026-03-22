@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .models import Alert, DiscoveryStats, GameRecord, SkippedItem
+from .models import SYNTHETIC_APPID_BASE, Alert, DiscoveryStats, GameRecord, SkippedItem
 
 if TYPE_CHECKING:
     from .i18n import Translator
@@ -223,6 +223,8 @@ function saveFilterState() {
     if (getMcFilter() !== 'all') state.mc = getMcFilter();
     if (getRecentFilter() !== 'all') state.recent = getRecentFilter();
     if (getTagFilter() !== 'all') state.tag = getTagFilter();
+    var ukEl = document.getElementById('unknownToggle');
+    if (ukEl && ukEl.classList.contains('active')) state.unknown = '1';
     var json = JSON.stringify(state);
     window.name = SP_WIN_PREFIX + json;
     try { localStorage.setItem(SP_FILTER_KEY, json); } catch(e2) {}
@@ -262,6 +264,10 @@ function loadFilterState() {
     }
     if (state.tag) {
       activateBtn('#tagBtns .tag-btn', 'tag', state.tag);
+    }
+    if (state.unknown === '1') {
+      var ukEl = document.getElementById('unknownToggle');
+      if (ukEl) { ukEl.classList.add('active'); }
     }
   } catch(e) {}
 }"""
@@ -1180,6 +1186,12 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         <button class="filter-btn" data-recent="30" data-tooltip="__T_tt_filter_recent_30__">__T_lbl_30_days__</button>
       </div>
     </div>
+    <div class="filter-group">
+      <div class="filter-group-label">__T_filter_unknown__</div>
+      <div class="filter-btns">
+        <button class="filter-btn" id="unknownToggle" data-tooltip="__T_tt_filter_unknown__">👻 __T_lbl_show_unknown__</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1209,6 +1221,7 @@ function getSort()      { return document.getElementById('sortBy').value; }
 function isDefaultState() {
   return getStatusFilter() === 'all' && allStoresActive() && getLibStatusFilter() === 'all' && getTagFilter() === 'all'
     && getPtFilter() === 'all' && getMcFilter() === 'all' && getRecentFilter() === 'all'
+    && !document.getElementById('unknownToggle').classList.contains('active')
     && !getSearch() && getSort() === 'name';
 }
 
@@ -1221,6 +1234,7 @@ function updateFilterBadge() {
   if (getPtFilter() !== 'all')       n++;
   if (getMcFilter() !== 'all')       n++;
   if (getRecentFilter() !== 'all')   n++;
+  if (document.getElementById('unknownToggle').classList.contains('active')) n++;
   const badge = document.getElementById('filterBadge');
   badge.textContent = n;
   badge.classList.toggle('show', n > 0);
@@ -1236,6 +1250,7 @@ function saveStateToHash() {
   if (getPtFilter() !== 'all')        s.pt = getPtFilter();
   if (getMcFilter() !== 'all')        s.mc = getMcFilter();
   if (getRecentFilter() !== 'all')    s.recent = getRecentFilter();
+  if (document.getElementById('unknownToggle').classList.contains('active')) s.unknown = '1';
   if (getSearch())                    s.q = getSearch();
   if (getSort() !== 'name')           s.sort = getSort();
   const grid = document.getElementById('grid');
@@ -1288,6 +1303,7 @@ function loadStateFromHash() {
   if (p.get('pt'))     { activateBtn('#playtimeBtns .filter-btn', 'pt', p.get('pt')); }
   if (p.get('mc'))     { activateBtn('#mcBtns .filter-btn', 'mc', p.get('mc')); }
   if (p.get('recent')) { activateBtn('#recentBtns .filter-btn', 'recent', p.get('recent')); }
+  if (p.get('unknown') === '1') { document.getElementById('unknownToggle').classList.add('active'); document.getElementById('unknownToggle').textContent = '👻 ' + I18N.hide_unknown; }
   if (p.get('q'))      { document.getElementById('search').value = p.get('q'); }
   if (p.get('sort'))   { document.getElementById('sortBy').value = p.get('sort'); }
   if (p.get('view') === 'list') {
@@ -1312,6 +1328,7 @@ function updateGrid() {
 
   const mcFilter     = getMcFilter();
   const recentFilter  = getRecentFilter();
+  const showUnknown = document.getElementById('unknownToggle').classList.contains('active');
   let visible = allCards.filter(c => {
     const badgeOk     = filter === 'all' || c.dataset.status === filter;
     const storeOk     = activeStores.has(c.dataset.store);
@@ -1320,7 +1337,8 @@ function updateGrid() {
     const ptOk        = checkPtFilter(ptFilter, c);
     const mcOk        = checkMcFilter(mcFilter, c);
     const recentOk    = checkRecentFilter(recentFilter, c);
-    return badgeOk && storeOk && libStatusOk && searchOk && ptOk && mcOk && recentOk;
+    const unknownOk   = showUnknown || c.dataset.unknown !== 'true';
+    return badgeOk && storeOk && libStatusOk && searchOk && ptOk && mcOk && recentOk && unknownOk;
   });
 
   visible.sort((a, b) => {
@@ -1415,6 +1433,12 @@ setupFilterGroup('#tagBtns .tag-btn');
 setupFilterGroup('#playtimeBtns .filter-btn');
 setupFilterGroup('#mcBtns .filter-btn');
 setupFilterGroup('#recentBtns .filter-btn');
+document.getElementById('unknownToggle').addEventListener('click', () => {
+  const btn = document.getElementById('unknownToggle');
+  btn.classList.toggle('active');
+  btn.textContent = btn.classList.contains('active') ? '👻 ' + I18N.hide_unknown : '👻 ' + I18N.show_unknown;
+  updateGrid();
+});
 
 // Reset
 document.getElementById('resetBtn').addEventListener('click', () => {
@@ -1426,6 +1450,9 @@ document.getElementById('resetBtn').addEventListener('click', () => {
     const first = document.querySelector(sel);
     if (first) first.classList.add('active');
   });
+  const ukBtn = document.getElementById('unknownToggle');
+  ukBtn.classList.remove('active');
+  ukBtn.textContent = '👻 ' + I18N.show_unknown;
   updateGrid();
 });
 
@@ -1494,6 +1521,8 @@ def _build_i18n_js(t: Translator) -> str:
         "count_game_n":   t("js_count_game_n"),
         "no_match_news":  t("js_no_match_news"),
         "count_news":     t("js_count_news"),
+        "show_unknown":   t("lbl_show_unknown"),
+        "hide_unknown":   t("lbl_hide_unknown"),
     }
     entries = ", ".join(f"{k}: {json.dumps(v)}" for k, v in data.items())
     return f"const I18N = {{{entries}}};"
@@ -1743,6 +1772,7 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
     metacritic_score = details.metacritic_score if details else 0
     store_hint = "🎮 Epic" if game.source == "epic" else "↗ Steam"
     _pt_attr = f' data-tooltip="{_tt_pt}"' if game.source == "owned" else ""
+    _unknown_attr = ' data-unknown="true"' if appid >= SYNTHETIC_APPID_BASE else ""
     return (
         f'<div class="card" data-appid="{appid}" data-status="{status.badge}" '
         f'data-store="{store_tag}" data-lib-status="{lib_status_tag}" data-name="{name.lower()}" '
@@ -1750,7 +1780,8 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         f'data-metacritic="{metacritic_score}" '
         f'data-release="{rel_date}" data-release-ts="{release_ts}" '
         f'data-last-update="{last_update_ts}" '
-        f'data-last-patch-ts="{last_patch_ts}" data-last-other-ts="{last_other_ts}">\n'
+        f'data-last-patch-ts="{last_patch_ts}" data-last-other-ts="{last_other_ts}"'
+        f'{_unknown_attr}>\n'
         f'  <span class="card-ext-hint">{store_hint}</span>\n'
         f'  <img class="card-img" src="{html.escape(img_url)}" alt="" loading="lazy"'
         f"    onerror=\"this.style.display='none';this.nextElementSibling.style.display='flex'\">\n"
@@ -1904,6 +1935,7 @@ def make_alert_card(
             tag_val = "patchnotes"
     store_url = f"https://store.steampowered.com/app/{alert.appid}"
     news_url_attr = f' data-news-url="{html.escape(alert.url)}"' if alert.url else ""
+    _unknown_attr = ' data-unknown="true"' if alert.appid >= SYNTHETIC_APPID_BASE else ""
     return (
         f'<div class="alert-card" data-id="{html.escape(alert.id)}" '
         f'data-rule="{html.escape(alert.rule_name)}" '
@@ -1915,7 +1947,8 @@ def make_alert_card(
         f'data-status="{status_tag}" data-playtime="{playtime_val}" '
         f'data-metacritic="{metacritic_val}" data-last-patch-ts="{last_patch_ts}" '
         f'data-tag="{tag_val}" data-store-url="{html.escape(store_url)}"'
-        f'{news_url_attr}>\n'
+        f'{news_url_attr}'
+        f'{_unknown_attr}>\n'
         f'  <a class="alert-thumb-link" href="{html.escape(store_url)}" target="_blank" rel="noopener">'
         f'<img class="alert-thumb" src="{html.escape(img_url)}" alt="" loading="lazy"></a>\n'
         f'  <div class="alert-body">\n'
@@ -2164,6 +2197,12 @@ __SHARED_FILTER_CSS__
         <button class="filter-btn" data-recent="30" data-tooltip="__T_tt_filter_recent_30__">__T_lbl_30_days__</button>
       </div>
     </div>
+    <div class="filter-group">
+      <div class="filter-group-label">__T_filter_unknown__</div>
+      <div class="filter-btns">
+        <button class="filter-btn" id="unknownToggle" data-tooltip="__T_tt_filter_unknown__">👻 __T_lbl_show_unknown__</button>
+      </div>
+    </div>
   </div>
 </div>
 <main>
@@ -2186,7 +2225,9 @@ __SHARED_JS__
     showUnread: '__I18N_SHOW_UNREAD__',
     noAlerts: '__I18N_NO_ALERTS__',
     expandAll: '__I18N_EXPAND_ALL__',
-    collapseAll: '__I18N_COLLAPSE_ALL__'
+    collapseAll: '__I18N_COLLAPSE_ALL__',
+    show_unknown: '__I18N_SHOW_UNKNOWN__',
+    hide_unknown: '__I18N_HIDE_UNKNOWN__'
   };
   function getRead() {
     try { return new Set(JSON.parse(localStorage.getItem(READ_KEY) || '[]')); }
@@ -2240,7 +2281,8 @@ __SHARED_JS__
   function isDefaultState() {
     return getStatusFilter() === 'all' && allStoresActive() && getLibStatusFilter() === 'all'
       && getTagFilter() === 'all' && getPtFilter() === 'all' && getMcFilter() === 'all'
-      && getRecentFilter() === 'all' && !getSearch() && getSort() === 'date'
+      && getRecentFilter() === 'all' && !document.getElementById('unknownToggle').classList.contains('active')
+      && !getSearch() && getSort() === 'date'
       && !unreadOnly && !getGroupSearch();
   }
   window.isDefaultState = isDefaultState;
@@ -2254,6 +2296,7 @@ __SHARED_JS__
     if (getPtFilter() !== 'all')       n++;
     if (getMcFilter() !== 'all')       n++;
     if (getRecentFilter() !== 'all')   n++;
+    if (document.getElementById('unknownToggle').classList.contains('active')) n++;
     var badge = document.getElementById('filterBadge');
     badge.textContent = n;
     badge.classList.toggle('show', n > 0);
@@ -2349,6 +2392,7 @@ __SHARED_JS__
     var recentF = getRecentFilter();
     var search = getSearch();
     var sort = getSort();
+    var showUnknown = document.getElementById('unknownToggle').classList.contains('active');
     var allCards = Array.from(document.querySelectorAll('.alert-card'));
     allCards.forEach(function(c) {
       var isRead = readSet.has(c.getAttribute('data-id'));
@@ -2360,7 +2404,8 @@ __SHARED_JS__
       var mcOk = checkMcFilter(mcF, c);
       var recentOk = checkRecentFilter(recentF, c);
       var searchOk = !search || (c.getAttribute('data-name') || '').indexOf(search) !== -1;
-      var shouldHide = (unreadOnly && isRead) || !storeOk || !collectionOk || !statusOk || !tagOk || !ptOk || !mcOk || !recentOk || !searchOk;
+      var unknownOk = showUnknown || (c.getAttribute('data-unknown') || '') !== 'true';
+      var shouldHide = (unreadOnly && isRead) || !storeOk || !collectionOk || !statusOk || !tagOk || !ptOk || !mcOk || !recentOk || !searchOk || !unknownOk;
       c.classList.toggle('hidden', shouldHide);
     });
     if (currentView === 'combined') {
@@ -2388,6 +2433,7 @@ __SHARED_JS__
       if (ptF !== 'all') nf.pt = ptF;
       if (mcF !== 'all') nf.mc = mcF;
       if (recentF !== 'all') nf.recent = recentF;
+      if (showUnknown) nf.unknown = '1';
       var nh = new URLSearchParams(nf).toString();
       navLink.href = 'steam_library.html' + (nh ? '#' + nh : '');
     }
@@ -2662,6 +2708,13 @@ __SHARED_JS__
   // Sort
   var sortEl = document.getElementById('sortBy');
   if (sortEl) { sortEl.addEventListener('change', function() { applyFilters(); }); }
+  // Unknown toggle
+  document.getElementById('unknownToggle').addEventListener('click', function() {
+    var btn = document.getElementById('unknownToggle');
+    btn.classList.toggle('active');
+    btn.textContent = btn.classList.contains('active') ? '👻 ' + I18N.hide_unknown : '👻 ' + I18N.show_unknown;
+    applyFilters();
+  });
   // Group search
   if (groupSearchEl) { groupSearchEl.addEventListener('input', function() { updateSections(); updateCount(); updateResetBtn(); }); }
   // Toggle all sections
@@ -2692,6 +2745,9 @@ __SHARED_JS__
     if (groupSearchClearBtn) groupSearchClearBtn.style.display = 'none';
     unreadOnly = false;
     document.getElementById('unreadToggle').textContent = I18N.showUnread;
+    var ukBtn = document.getElementById('unknownToggle');
+    ukBtn.classList.remove('active');
+    ukBtn.textContent = '👻 ' + I18N.show_unknown;
     closeAutocomplete();
     applyFilters();
   });
@@ -2737,6 +2793,7 @@ __SHARED_JS__
     if (p.get('pt'))     { activateBtn('#playtimeBtns .filter-btn', 'pt', p.get('pt')); }
     if (p.get('mc'))     { activateBtn('#mcBtns .filter-btn', 'mc', p.get('mc')); }
     if (p.get('recent')) { activateBtn('#recentBtns .filter-btn', 'recent', p.get('recent')); }
+    if (p.get('unknown') === '1') { document.getElementById('unknownToggle').classList.add('active'); document.getElementById('unknownToggle').textContent = '👻 ' + I18N.hide_unknown; }
     if (p.get('q') && searchEl)   { searchEl.value = p.get('q'); }
     if (p.get('sort') && sortEl)  { sortEl.value = p.get('sort'); }
   } else {
@@ -2799,7 +2856,9 @@ def generate_alerts_html(
         .replace("__I18N_SHOW_UNREAD__", t("btn_show_unread_only").replace("'", "\\'"))
         .replace("__I18N_NO_ALERTS__", t("alert_no_alerts").replace("'", "\\'"))
         .replace("__I18N_EXPAND_ALL__", t("alert_expand_all").replace("'", "\\'"))
-        .replace("__I18N_COLLAPSE_ALL__", t("alert_collapse_all").replace("'", "\\'")),
+        .replace("__I18N_COLLAPSE_ALL__", t("alert_collapse_all").replace("'", "\\'"))
+        .replace("__I18N_SHOW_UNKNOWN__", t("lbl_show_unknown").replace("'", "\\'"))
+        .replace("__I18N_HIDE_UNKNOWN__", t("lbl_hide_unknown").replace("'", "\\'")),
         t,
     )
 
@@ -2918,6 +2977,12 @@ tr:hover td{background:rgba(88,166,255,.04)}
     <div class="section-body">__SKIPPED_CONTENT__</div>
   </div>
 
+  <!-- Unknown games -->
+  <div class="section">
+    <div class="section-header">👻 __T_diag_section_unknown__</div>
+    <div class="section-body">__UNKNOWN_CONTENT__</div>
+  </div>
+
   <!-- AppID mappings -->
   <div class="section">
     <div class="section-header">
@@ -3022,6 +3087,7 @@ def generate_diagnostic_html(
     summary: dict[str, object],
     mappings: list[dict[str, object]],
     discovery_stats: list[DiscoveryStats] | None = None,
+    unknown_games: list[GameRecord] | None = None,
     library_href: str = "steam_library.html",
     alerts_href: str = "steam_alerts.html",
     lang: str | None = None,
@@ -3032,6 +3098,7 @@ def generate_diagnostic_html(
         summary: Dict from :meth:`Database.get_diagnostic_summary`.
         mappings: List from :meth:`Database.get_all_appid_mappings`.
         discovery_stats: Optional list of :class:`DiscoveryStats` from sources.
+        unknown_games: Optional list of :class:`GameRecord` for unresolved games.
         library_href: URL of the library page.
         alerts_href: URL of the alerts page.
         lang: Language code.
@@ -3089,6 +3156,28 @@ def generate_diagnostic_html(
     else:
         skipped_html = f'<p class="info-msg">{t("diag_no_skipped")}</p>'
 
+    # ── Unknown games ──────────────────────────────────────────────────
+    if unknown_games:
+        unknown_rows = "".join(
+            f"<tr><td>{html.escape(r.game.name)}</td>"
+            f"<td>{html.escape(r.game.source)}</td>"
+            f"<td>{html.escape(r.game.external_id or '—')}</td>"
+            f"<td>{r.game.appid}</td></tr>"
+            for r in sorted(unknown_games, key=lambda r: r.game.name.lower())
+        )
+        unknown_html = (
+            f'<p style="margin-bottom:12px"><span class="badge badge-unresolved">'
+            f'{len(unknown_games)} {t("diag_unknown_count")}</span></p>'
+            '<div class="table-wrap"><table>'
+            f"<thead><tr><th>{t('diag_col_name')}</th>"
+            f"<th>{t('diag_col_source')}</th>"
+            f"<th>{t('diag_col_external_id')}</th>"
+            f"<th>AppID</th></tr></thead>"
+            f"<tbody>{unknown_rows}</tbody></table></div>"
+        )
+    else:
+        unknown_html = f'<p class="info-msg">{t("diag_no_unknown")}</p>'
+
     # ── Mappings ───────────────────────────────────────────────────────
     mapping_stats = "".join([
         _make_stat_card(summary["total_mappings"], t("diag_total_mappings"), data_filter="all"),
@@ -3109,6 +3198,7 @@ def generate_diagnostic_html(
         .replace("__SOURCE_CHIPS__", source_chips)
         .replace("__EPIC_STATS__", epic_html)
         .replace("__SKIPPED_CONTENT__", skipped_html)
+        .replace("__UNKNOWN_CONTENT__", unknown_html)
         .replace("__MAPPING_STATS__", mapping_stats)
         .replace("__MAPPING_ROWS__", mapping_rows),
         t,
@@ -3120,6 +3210,7 @@ def write_diagnostic_html(
     mappings: list[dict[str, object]],
     output_path: Path,
     discovery_stats: list[DiscoveryStats] | None = None,
+    unknown_games: list[GameRecord] | None = None,
     library_href: str = "steam_library.html",
     alerts_href: str = "steam_alerts.html",
     lang: str | None = None,
@@ -3131,13 +3222,15 @@ def write_diagnostic_html(
         mappings: List from :meth:`Database.get_all_appid_mappings`.
         output_path: Destination file path.
         discovery_stats: Optional list of :class:`DiscoveryStats` from sources.
+        unknown_games: Optional list of :class:`GameRecord` for unresolved games.
         library_href: URL of the library page.
         alerts_href: URL of the alerts page.
         lang: Language code.
     """
     output_path.write_text(
         generate_diagnostic_html(
-            summary, mappings, discovery_stats, library_href, alerts_href, lang
+            summary, mappings, discovery_stats, unknown_games,
+            library_href, alerts_href, lang,
         ),
         encoding="utf-8",
     )

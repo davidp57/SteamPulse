@@ -278,6 +278,7 @@ Pour chaque jeu **Epic** : le jeu est résolu vers un AppID Steam si possible �
 | **Temps de jeu** | Tous · Jamais joué · < 1 h · 1–10 h · > 10 h | Sélection unique |
 | **Metacritic** | Tous · Sans score · < 50 · 50–75 · > 75 | Sélection unique |
 | **Màj récente** | Tous · 2 jours · 5 jours · 15 jours · 30 jours (basé sur la date du dernier patch note) | Sélection unique |
+| **Inconnus** | Afficher inconnus / Masquer inconnus | Toggle — masqués par défaut ; affiche les jeux sans AppID Steam résolu |
 
 > Survol d'un bouton de filtre pour afficher une infobulle expliquant ce qu'il filtre.
 
@@ -332,6 +333,7 @@ Si un jeu a des news, une barre **▼ N mises à jour** apparaît en bas de la c
 | **Temps de jeu** | Tous · Jamais joué · < 1 h · 1–10 h · > 10 h | Sélection unique |
 | **Metacritic** | Tous · Sans score · < 50 · 50–75 · > 75 | Sélection unique |
 | **Màj récente** | Tous · 2 jours · 5 jours · 15 jours · 30 jours | Sélection unique |
+| **Inconnus** | Afficher inconnus / Masquer inconnus | Toggle — masqués par défaut |
 
 > Le panneau de filtres est partagé entre la bibliothèque et la page alertes. Les filtres **Store** et **Bibliothèque** sélectionnés sur une page sont reportés automatiquement lors de la navigation vers l’autre.
 
@@ -374,6 +376,7 @@ Page technique générée en même temps que la bibliothèque et les alertes. El
 - **Table des mappings AppID** — toutes les résolutions externe→Steam AppID avec statut (résolu, non résolu, manuel) ; champ de recherche inclus ; les cartes de statistiques sont cliquables pour filtrer la table par statut
 - **Statistiques de découverte Epic** — éléments API totaux, acceptés, résolus, non résolus et ignorés (affiché uniquement quand la source Epic a été utilisée lors du fetch)
 - **Table des éléments ignorés** — éléments filtrés pendant la découverte Epic, avec la raison (pas de titre, ID hexadécimal, label sandbox, doublon)
+- **Liste des jeux inconnus** — tous les jeux avec un AppID Steam non résolu (appid synthétique ≥ 2B), triés alphabétiquement avec nom, source, ID externe et AppID
 
 Cette page est utile pour diagnostiquer les problèmes de qualité de données, vérifier quels jeux Epic ont été résolus vers des AppID Steam, et identifier les éléments filtrés.
 ---

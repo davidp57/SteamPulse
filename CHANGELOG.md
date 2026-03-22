@@ -9,6 +9,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Unknown games toggle filter** — games with unresolved Steam AppIDs (synthetic appid ≥ 2B) are now hidden by default in both the library and alerts pages; a new toggle button in the filter panel lets users show/hide them; state is persisted in URL hash and localStorage
+- **Unknown games in diagnostic page** — new section listing all unknown/unresolved games with name, source, external ID, and synthetic AppID; sorted alphabetically with a count badge
+- **Cross-source duplicate cleanup** — `_cleanup_epic_duplicate_external_id` now catches duplicates across sources (e.g. owned + epic with same external_id), not just epic↔epic
+- **Same-name duplicate cleanup** — new `_cleanup_epic_duplicate_name` rule removes synthetic-appid games whose name exactly matches a real-appid game (e.g. Death Stranding ×5)
+
 ---
 
 ## [1.6.2] — 2026-03-22

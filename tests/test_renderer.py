@@ -563,6 +563,79 @@ def test_make_alert_card_has_news_url_attr() -> None:
     assert 'data-news-url="https://example.com/news"' in card
 
 
+# -- data-unknown attribute -------------------------------------------------
+
+
+def test_make_card_unknown_flag_set_for_synthetic_appid() -> None:
+    """Cards with synthetic appid (>= 2B) must have data-unknown='true'."""
+    record = GameRecord(
+        game=OwnedGame(appid=2_000_000_001, name="Unknown Game", source="epic",
+                        external_id="epic:cat1"),
+        status=GameStatus(label="—", badge="unknown", release_date="—"),
+    )
+    card = make_card(record)
+    assert 'data-unknown="true"' in card
+
+
+def test_make_card_unknown_flag_absent_for_real_appid() -> None:
+    """Cards with real appid (< 2B) must NOT have data-unknown."""
+    record = GameRecord(
+        game=OwnedGame(appid=420, name="Half-Life 2"),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+    )
+    card = make_card(record)
+    assert "data-unknown" not in card
+
+
+def test_make_alert_card_unknown_flag_set_for_synthetic_appid() -> None:
+    """Alert cards with synthetic appid must have data-unknown='true'."""
+    alert = Alert(
+        id="a1", appid=2_000_000_001, game_name="Unknown Game",
+        rule_name="version_update", rule_icon="🔧",
+        title="Version Update", details="v1→v2",
+        source_type="field_change",
+        timestamp=datetime(2024, 1, 15, tzinfo=UTC),
+    )
+    card = make_alert_card(alert)
+    assert 'data-unknown="true"' in card
+
+
+def test_make_alert_card_unknown_flag_absent_for_real_appid() -> None:
+    """Alert cards with real appid must NOT have data-unknown."""
+    card = make_alert_card(_sample_alert())
+    assert "data-unknown" not in card
+
+
+# -- Diagnostic page with unknown games -------------------------------------
+
+
+def test_generate_diagnostic_html_with_unknown_games() -> None:
+    """Unknown games should appear in the diagnostic output."""
+    unknown = [
+        GameRecord(
+            game=OwnedGame(appid=2_000_000_001, name="Mystery Game", source="epic",
+                            external_id="epic:cat99"),
+            status=GameStatus(label="—", badge="unknown", release_date="—"),
+        ),
+    ]
+    html = generate_diagnostic_html(_EMPTY_SUMMARY, [], unknown_games=unknown)
+    assert "Mystery Game" in html
+    assert "epic:cat99" in html
+    assert "2000000001" in html
+
+
+def test_generate_diagnostic_html_no_unknown_games() -> None:
+    """When no unknown games, the 'no unknown' message should appear."""
+    html = generate_diagnostic_html(_EMPTY_SUMMARY, [], unknown_games=[])
+    assert "No unknown games" in html or "Aucun jeu inconnu" in html
+
+
+def test_generate_diagnostic_html_unknown_games_none() -> None:
+    """When unknown_games is None, no error should occur."""
+    html = generate_diagnostic_html(_EMPTY_SUMMARY, [])
+    assert "__UNKNOWN_CONTENT__" not in html
+
+
 def test_make_alert_card_no_news_url_when_empty() -> None:
     """Card without alert.url must not have data-news-url."""
     alert = _sample_alert()

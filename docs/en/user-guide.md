@@ -271,6 +271,7 @@ For each **Epic** game: the game is resolved to a Steam AppID when possible — 
 | **Playtime** | All · Never played · < 1 h · 1–10 h · > 10 h | Single-select |
 | **Metacritic** | All · No score · < 50 · 50–75 · > 75 | Single-select |
 | **Recent update** | All · 2 days · 5 days · 15 days · 30 days (based on last patch note date) | Single-select |
+| **Unknown** | Show unknown / Hide unknown | Toggle — hidden by default; shows games with unresolved Steam AppIDs |
 
 > Hover any filter button to see a tooltip explaining what it filters.
 
@@ -325,6 +326,7 @@ If a game has news, a **▼ N updates** bar appears at the bottom of the card. C
 | **Playtime** | All · Never played · < 1 h · 1–10 h · > 10 h | Single-select |
 | **Metacritic** | All · No score · < 50 · 50–75 · > 75 | Single-select |
 | **Recent update** | All · 2 days · 5 days · 15 days · 30 days | Single-select |
+| **Unknown** | Show unknown / Hide unknown | Toggle — hidden by default |
 
 > The filter panel is shared between the library and alerts pages. **Store** and **Collection** filters selected on one page are carried over when navigating to the other.
 
@@ -368,6 +370,7 @@ A technical page generated alongside the library and alerts pages. It provides:
 - **AppID mappings table** — all external-to-Steam AppID resolutions with status (resolved, unresolved, manual); includes a search field; stat cards are clickable to filter the table by status
 - **Epic discovery statistics** — total API items, accepted, resolved, unresolved, and skipped counts (only shown when Epic source was used during fetch)
 - **Skipped items table** — items filtered out during Epic discovery, with reason (no title, hex ID, sandbox label, duplicate)
+- **Unknown games list** — all games with unresolved Steam AppIDs (synthetic appid ≥ 2B), sorted alphabetically with name, source, external ID, and AppID
 
 This page is useful for diagnosing data quality issues, checking which Epic games were resolved to Steam AppIDs, and identifying items that were filtered out.
 
