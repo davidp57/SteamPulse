@@ -2998,6 +2998,8 @@ def _make_skipped_row(item: SkippedItem, t: Translator) -> str:
         "no_title": ("badge-notitle", t("diag_reason_no_title")),
         "hex_id": ("badge-hex", t("diag_reason_hex_id")),
         "sandbox_label": ("badge-sandbox", t("diag_reason_sandbox")),
+        "production_label": ("badge-sandbox", t("diag_reason_production_label")),
+        "duplicate": ("badge-hex", t("diag_reason_duplicate")),
     }
     badge_cls, reason_text = reason_map.get(item.reason, ("badge-notitle", item.reason))
     return (

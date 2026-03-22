@@ -344,7 +344,7 @@ The HTML is built by string interpolation into `_HTML_TEMPLATE` and `_ALERTS_TEM
 | `epic_auth_with_refresh(refresh_token)` | Renew the session using a saved refresh token (valid 30 days, auto-renewed on each use) |
 | `epic_auth_with_device(device_id, account_id, secret)` | Authenticate using persistent device credentials (kept for advanced use) |
 | `epic_get_library(access_token)` | Fetch the user's Epic library with pagination |
-| `epic_get_catalog_titles(namespace, items, session)` | Batch-resolve catalog item IDs to human-readable titles via Epic's public catalog endpoint (batches of 50) |
+| `epic_get_catalog_titles(items, session=None)` | Batch-resolve catalog item IDs to human-readable titles via Epic's public catalog endpoint (batches of 50); groups items by namespace internally |
 
 ### `i18n/__init__.py`
 

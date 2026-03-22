@@ -218,6 +218,8 @@ STRINGS: dict[str, str] = {
     "diag_reason_no_title":  "Pas de titre utilisable",
     "diag_reason_hex_id":    "ID hex (pas un nom de jeu)",
     "diag_reason_sandbox":   "Label sandbox",
+    "diag_reason_production_label": "Label production",
+    "diag_reason_duplicate": "Doublon (déjà présent)",
     "diag_no_skipped":       "Aucun élément ignoré lors du dernier fetch.",
     "diag_section_epic":     "Stats découverte Epic",
     "diag_api_items":        "Éléments reçus de l'API",

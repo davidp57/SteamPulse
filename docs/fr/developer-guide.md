@@ -343,7 +343,7 @@ Le HTML est construit par interpolation de chaînes dans les raw strings `_HTML_
 | `epic_auth_with_code(auth_code)` | Échange un code d'autorisation Epic contre un token d'accès |
 | `epic_auth_with_device(device_id, account_id, secret)` | Authentification via credentials device persistants |
 | `epic_get_library(access_token)` | Récupère la bibliothèque Epic de l'utilisateur avec pagination |
-| `epic_get_catalog_titles(namespace, items, session)` | Résolution par lot des IDs d'éléments catalog vers des titres lisibles via l'endpoint public du catalogue Epic (lots de 50) |
+| `epic_get_catalog_titles(items, session=None)` | Résolution par lot des IDs d'éléments de catalogue vers des titres lisibles via l'endpoint public du catalogue Epic (lots de 50) ; regroupe les éléments par namespace en interne |
 
 ### `i18n/__init__.py`
 

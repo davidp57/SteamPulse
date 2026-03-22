@@ -152,7 +152,13 @@ class SkippedItem(BaseModel):
 
     catalog_id: str
     raw_name: str
-    reason: str  # "no_title" | "hex_id" | "sandbox_label"
+    reason: Literal[
+        "no_title",
+        "hex_id",
+        "sandbox_label",
+        "production_label",
+        "duplicate",
+    ]
 
 
 class DiscoveryStats(BaseModel):
