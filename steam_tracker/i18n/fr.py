@@ -1,6 +1,7 @@
 """French translation strings."""
 STRINGS: dict[str, str] = {
     # ── CLI ──────────────────────────────────────────────────────────────────
+    "cli_banner":            "🚀 SteamPulse v{version}",
     "cli_fetching_library":  "📦 Récupération de la bibliothèque Steam...",
     "cli_owned_count":       "   ✅ {count} jeu(x) possédé(s)",
     "cli_fetching_wishlist": "🎁 Récupération de la wishlist...",

@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [1.6.0] — 2026-03-22
+
 ### Added
 
 - **Diagnostic page** — new `steam_diagnostic.html` page generated alongside library and alerts pages; provides database summary stats, per-source game counts, AppID mapping table with search, Epic discovery statistics, and skipped items table with skip reasons
@@ -20,6 +24,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Resolver word-containment matching** — new `_is_word_contained()` strategy after prefix: matches when the Epic name is fully contained within the Steam name with word-boundary checks (e.g. "Ghost Recon Breakpoint" inside "Tom Clancy's Ghost Recon® Breakpoint")
 - **Resolver edition-suffix stripping** — `_strip_edition()` removes common edition suffixes (GOTY, Definitive, Ultimate, Director's Cut…) and retries Steam search when the original name returns no suitable match
 - **Resolver year normalization** — `_shorten_year()` converts 4-digit years to 2-digit (e.g. "Farming Simulator 2022" → "Farming Simulator 22") and retries search as a last resort
+- **Version display** — `--version` flag on all CLI commands; startup banner prints `SteamPulse vX.Y.Z` at launch
+- 378 tests total
 
 ### Fixed
 

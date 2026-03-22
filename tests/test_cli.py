@@ -1,6 +1,7 @@
 """Tests for steam_tracker.cli helpers."""
 from __future__ import annotations
 
+from steam_tracker import __version__
 from steam_tracker.cli import _build_enrichment_queue
 from steam_tracker.models import SYNTHETIC_APPID_BASE, OwnedGame
 
@@ -102,3 +103,21 @@ def test_appid_just_below_boundary_included() -> None:
     result = _build_enrichment_queue([edge])
     assert len(result) == 1
     assert result[0].appid == SYNTHETIC_APPID_BASE - 1
+
+
+# ---------------------------------------------------------------------------
+# __version__
+# ---------------------------------------------------------------------------
+
+
+def test_version_is_string() -> None:
+    """__version__ must be a non-empty string."""
+    assert isinstance(__version__, str)
+    assert len(__version__) > 0
+
+
+def test_version_matches_semver() -> None:
+    """__version__ must look like a semver (X.Y.Z)."""
+    parts = __version__.split(".")
+    assert len(parts) == 3
+    assert all(p.isdigit() for p in parts)

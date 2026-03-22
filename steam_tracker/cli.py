@@ -6,6 +6,7 @@ import logging
 import sys
 from pathlib import Path
 
+from . import __version__
 from .config import get_config_path, load_alert_rules, load_config, save_cli_credentials
 from .db import Database
 from .fetcher import SteamFetcher
@@ -176,6 +177,7 @@ def cmd_fetch() -> None:
     parser = argparse.ArgumentParser(
         description="Fetch Steam library — store details & news into a local DB",
     )
+    parser.add_argument("--version", action="version", version=f"SteamPulse {__version__}")
     parser.add_argument("--db", default="steam_library.db", help="SQLite DB path")
     parser.add_argument("--max", type=int, default=None, help="Limit to N games (testing)")
     parser.add_argument("--workers", type=int, default=4, help="Thread pool size")
@@ -203,6 +205,7 @@ def cmd_fetch() -> None:
     _require_steam_credentials(args, parser)
 
     t = get_translator(args.lang)
+    print(t("cli_banner", version=__version__))
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.WARNING,
@@ -300,6 +303,7 @@ def cmd_render() -> None:
     parser = argparse.ArgumentParser(
         description="Render Steam library HTML from a local DB",
     )
+    parser.add_argument("--version", action="version", version=f"SteamPulse {__version__}")
     parser.add_argument("--db", default="steam_library.db", help="SQLite DB path")
     parser.add_argument(
         "--steamid",
@@ -320,6 +324,7 @@ def cmd_render() -> None:
         )
 
     t = get_translator(args.lang)
+    print(t("cli_banner", version=__version__))
     db = Database(Path(args.db))
     records = db.get_all_game_records()
     out = Path(args.output)
@@ -347,6 +352,7 @@ def cmd_run() -> None:
     parser = argparse.ArgumentParser(
         description="Fetch Steam library data and render the HTML dashboard in one step",
     )
+    parser.add_argument("--version", action="version", version=f"SteamPulse {__version__}")
     parser.add_argument("--db", default="steam_library.db", help="SQLite DB path")
     parser.add_argument("--output", default="steam_library.html", help="HTML output path")
     parser.add_argument("--max", type=int, default=None, help="Limit to N games (testing)")
@@ -375,6 +381,7 @@ def cmd_run() -> None:
     _require_steam_credentials(args, parser)
 
     t = get_translator(args.lang)
+    print(t("cli_banner", version=__version__))
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.WARNING,
