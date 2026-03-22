@@ -20,6 +20,10 @@ _EPIC_LIBRARY_URL = (
     "https://library-service.live.use1a.on.epicgames.com"
     "/library/api/public/items"
 )
+_EPIC_CATALOG_URL = (
+    "https://catalog-public-service-prod06.ol.epicgames.com"
+    "/catalog/api/shared/namespace"
+)
 # EOS overlay / game client used by Legendary and HeroicGamesLauncher.
 # This client has the 'deviceAuths CREATE' permission and is used for all
 # Epic OAuth operations in SteamPulse.
@@ -176,3 +180,103 @@ def epic_get_library(
         cursor = str(next_cursor)
 
     return all_items
+
+
+# Maximum number of catalog IDs per batch request.
+_CATALOG_BATCH_SIZE = 50
+
+
+def _epic_client_token(
+    session: requests.Session | None = None,
+) -> str:
+    """Obtain a short-lived client_credentials token for public catalog queries.
+
+    Args:
+        session: Optional requests session.
+
+    Returns:
+        Access token string.
+
+    Raises:
+        requests.HTTPError: If the token request fails.
+    """
+    s = session or requests.Session()
+    resp = s.post(
+        _EPIC_OAUTH_URL,
+        data={"grant_type": "client_credentials"},
+        auth=_EPIC_BASIC_AUTH,
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return str(resp.json()["access_token"])
+
+
+def epic_get_catalog_titles(
+    items: list[dict[str, Any]],
+    session: requests.Session | None = None,
+) -> dict[str, str]:
+    """Fetch real game titles from the Epic Catalog API.
+
+    The library endpoint does not always return human-readable titles.
+    This function queries the public Catalog bulk-items endpoint to
+    resolve ``catalogItemId`` → title for items that need it.
+
+    Items are grouped by ``namespace`` and batched to respect API limits.
+
+    Args:
+        items: Library item dicts, each containing ``catalogItemId``
+            and ``namespace`` keys.
+        session: Optional requests session.
+
+    Returns:
+        Mapping of ``catalogItemId`` → title for all successfully
+        resolved items.
+    """
+    if not items:
+        return {}
+
+    s = session or requests.Session()
+
+    try:
+        token = _epic_client_token(s)
+    except Exception:  # noqa: BLE001
+        log.warning("Failed to get Epic client token for catalog API")
+        return {}
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Group catalog IDs by namespace.
+    by_namespace: dict[str, list[str]] = {}
+    for item in items:
+        ns = str(item.get("namespace", ""))
+        cid = str(item.get("catalogItemId", ""))
+        if ns and cid:
+            by_namespace.setdefault(ns, []).append(cid)
+
+    result: dict[str, str] = {}
+
+    for ns, cids in by_namespace.items():
+        # Process in batches of _CATALOG_BATCH_SIZE.
+        for i in range(0, len(cids), _CATALOG_BATCH_SIZE):
+            batch = cids[i : i + _CATALOG_BATCH_SIZE]
+            url = f"{_EPIC_CATALOG_URL}/{ns}/bulk/items"
+            try:
+                resp = s.get(
+                    url,
+                    params={"id": ",".join(batch), "country": "US"},
+                    headers=headers,
+                    timeout=15,
+                )
+                resp.raise_for_status()
+            except Exception:  # noqa: BLE001
+                log.debug("Catalog API failed for ns=%s batch=%d", ns, i)
+                continue
+
+            data = resp.json()
+            for _key, val in data.items():
+                title = val.get("title")
+                item_id = val.get("id", _key)
+                if isinstance(title, str) and title.strip():
+                    result[str(item_id)] = title.strip()
+
+    return result

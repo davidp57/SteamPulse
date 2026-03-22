@@ -476,8 +476,394 @@ def test_discover_games_sandbox_name_live_uses_appname() -> None:
     args = _make_args(epic_auth_code="code123")
     with patch(
         "steam_tracker.sources.epic.resolve_steam_appid", return_value=None
+    ), patch(
+        "steam_tracker.sources.epic.epic_get_catalog_titles", return_value={}
     ):
         games = EpicSource().discover_games(args)
 
     assert len(games) == 1
     assert games[0].name == "GoneHomeFallback"
+
+
+# -- _is_hex_id unit tests --------------------------------------------------
+
+
+def test_is_hex_id_rejects_valid_hex() -> None:
+    """A 32-char lowercase hex string should be detected as a hex ID."""
+    from steam_tracker.sources.epic import _is_hex_id
+
+    assert _is_hex_id("91eac4ac00304bcc9d7d4a55a95894b3") is True
+
+
+def test_is_hex_id_accepts_real_game_name() -> None:
+    """A real game title should not be rejected."""
+    from steam_tracker.sources.epic import _is_hex_id
+
+    assert _is_hex_id("Hades") is False
+    assert _is_hex_id("Amnesia: The Dark Descent") is False
+
+
+def test_is_hex_id_requires_minimum_length() -> None:
+    """Short hex strings (< 24 chars) are not flagged."""
+    from steam_tracker.sources.epic import _is_hex_id
+
+    assert _is_hex_id("abc123") is False
+    assert _is_hex_id("deadbeef") is False
+
+
+def test_is_hex_id_rejects_uppercase() -> None:
+    """Uppercase letters are not matched by the hex regex."""
+    from steam_tracker.sources.epic import _is_hex_id
+
+    assert _is_hex_id("91EAC4AC00304BCC9D7D4A55A95894B3") is False
+
+
+# -- discover_games hex ID filtering ----------------------------------------
+
+
+@resp_mock.activate
+def test_discover_games_filters_hex_id_names() -> None:
+    """Items whose only name is a hex ID should be filtered out."""
+    from steam_tracker.sources.epic import EpicSource
+
+    resp_mock.add(resp_mock.POST, _EPIC_OAUTH, json=_oauth_token_response())
+    resp_mock.add(
+        resp_mock.GET,
+        _EPIC_LIBRARY,
+        json=_library_response([
+            # Real game — should be kept
+            _library_item("cat1", "Hades"),
+            # Hex ID as appName, no title — should be filtered
+            {
+                "catalogItemId": "cat_hex",
+                "namespace": "ns1",
+                "appName": "91eac4ac00304bcc9d7d4a55a95894b3",
+                "sandboxName": "Live",
+            },
+        ]),
+    )
+
+    args = _make_args(epic_auth_code="code123")
+    with patch(
+        "steam_tracker.sources.epic.resolve_steam_appid", return_value=None
+    ), patch(
+        "steam_tracker.sources.epic.epic_get_catalog_titles", return_value={}
+    ):
+        source = EpicSource()
+        games = source.discover_games(args)
+
+    assert len(games) == 1
+    assert games[0].name == "Hades"
+
+
+# -- last_stats (DiscoveryStats) --------------------------------------------
+
+
+@resp_mock.activate
+def test_discover_games_populates_last_stats() -> None:
+    """After discover_games(), source.last_stats contains discovery statistics."""
+    from steam_tracker.sources.epic import EpicSource
+
+    resp_mock.add(resp_mock.POST, _EPIC_OAUTH, json=_oauth_token_response())
+    resp_mock.add(
+        resp_mock.GET,
+        _EPIC_LIBRARY,
+        json=_library_response([
+            _library_item("cat1", "Hades"),
+            _library_item("cat2", "Celeste"),
+            {
+                "catalogItemId": "cat_hex",
+                "namespace": "ns1",
+                "appName": "91eac4ac00304bcc9d7d4a55a95894b3",
+                "sandboxName": "Live",
+            },
+        ]),
+    )
+
+    args = _make_args(epic_auth_code="code123")
+    with patch(
+        "steam_tracker.sources.epic.resolve_steam_appid", return_value=1145360
+    ), patch(
+        "steam_tracker.sources.epic.epic_get_catalog_titles", return_value={}
+    ):
+        source = EpicSource()
+        games = source.discover_games(args)
+
+    assert len(games) == 2
+    assert source.last_stats is not None
+    assert source.last_stats.total_api_items == 3
+    assert source.last_stats.accepted_count == 2
+    assert source.last_stats.resolved_count == 2
+    assert source.last_stats.unresolved_count == 0
+    assert len(source.last_stats.skipped_items) == 1
+    assert source.last_stats.skipped_items[0].reason == "hex_id"
+
+
+# -- Catalog API title enrichment -------------------------------------------
+
+_EPIC_CATALOG_BASE = (
+    "https://catalog-public-service-prod06.ol.epicgames.com"
+    "/catalog/api/shared/namespace"
+)
+
+
+@resp_mock.activate
+def test_epic_get_catalog_titles_resolves_titles() -> None:
+    """Catalog API returns real game titles for library items."""
+    from steam_tracker.epic_api import epic_get_catalog_titles
+
+    # Client credentials token
+    resp_mock.add(resp_mock.POST, _EPIC_OAUTH, json={"access_token": "client_tok"})
+    # Catalog bulk query
+    resp_mock.add(
+        resp_mock.GET,
+        f"{_EPIC_CATALOG_BASE}/ns1/bulk/items",
+        json={
+            "cat1": {"id": "cat1", "title": "Guacamelee! 2"},
+            "cat2": {"id": "cat2", "title": "Shadow Tactics"},
+        },
+    )
+
+    items = [
+        {"catalogItemId": "cat1", "namespace": "ns1"},
+        {"catalogItemId": "cat2", "namespace": "ns1"},
+    ]
+    result = epic_get_catalog_titles(items)
+
+    assert result["cat1"] == "Guacamelee! 2"
+    assert result["cat2"] == "Shadow Tactics"
+
+
+@resp_mock.activate
+def test_epic_get_catalog_titles_empty_input() -> None:
+    """Empty input returns empty dict without making any requests."""
+    from steam_tracker.epic_api import epic_get_catalog_titles
+
+    result = epic_get_catalog_titles([])
+    assert result == {}
+    assert len(resp_mock.calls) == 0
+
+
+@resp_mock.activate
+def test_epic_get_catalog_titles_groups_by_namespace() -> None:
+    """Items from different namespaces produce separate API calls."""
+    from steam_tracker.epic_api import epic_get_catalog_titles
+
+    resp_mock.add(resp_mock.POST, _EPIC_OAUTH, json={"access_token": "client_tok"})
+    resp_mock.add(
+        resp_mock.GET,
+        f"{_EPIC_CATALOG_BASE}/ns_a/bulk/items",
+        json={"c1": {"id": "c1", "title": "Game A"}},
+    )
+    resp_mock.add(
+        resp_mock.GET,
+        f"{_EPIC_CATALOG_BASE}/ns_b/bulk/items",
+        json={"c2": {"id": "c2", "title": "Game B"}},
+    )
+
+    items = [
+        {"catalogItemId": "c1", "namespace": "ns_a"},
+        {"catalogItemId": "c2", "namespace": "ns_b"},
+    ]
+    result = epic_get_catalog_titles(items)
+
+    assert len(result) == 2
+    assert result["c1"] == "Game A"
+    assert result["c2"] == "Game B"
+
+
+@resp_mock.activate
+def test_epic_get_catalog_titles_handles_api_failure() -> None:
+    """If the catalog API fails, return whatever was resolved so far."""
+    from steam_tracker.epic_api import epic_get_catalog_titles
+
+    resp_mock.add(resp_mock.POST, _EPIC_OAUTH, json={"access_token": "client_tok"})
+    resp_mock.add(resp_mock.GET, f"{_EPIC_CATALOG_BASE}/ns1/bulk/items", status=500)
+
+    items = [{"catalogItemId": "c1", "namespace": "ns1"}]
+    result = epic_get_catalog_titles(items)
+    assert result == {}
+
+
+@resp_mock.activate
+def test_epic_get_catalog_titles_client_token_failure() -> None:
+    """If client_credentials fails, return empty dict."""
+    from steam_tracker.epic_api import epic_get_catalog_titles
+
+    resp_mock.add(resp_mock.POST, _EPIC_OAUTH, status=500)
+
+    items = [{"catalogItemId": "c1", "namespace": "ns1"}]
+    result = epic_get_catalog_titles(items)
+    assert result == {}
+
+
+@resp_mock.activate
+def test_epic_client_token() -> None:
+    """_epic_client_token obtains a token via client_credentials grant."""
+    from steam_tracker.epic_api import _epic_client_token
+
+    resp_mock.add(
+        resp_mock.POST, _EPIC_OAUTH, json={"access_token": "cred_tok_abc"}
+    )
+    token = _epic_client_token()
+    assert token == "cred_tok_abc"
+
+
+# -- Catalog enrichment in discover_games -----------------------------------
+
+
+@resp_mock.activate
+def test_discover_games_catalog_enriches_hex_items() -> None:
+    """Items with hex appName + Live sandbox get their title from Catalog API."""
+    from steam_tracker.sources.epic import EpicSource
+
+    resp_mock.add(resp_mock.POST, _EPIC_OAUTH, json=_oauth_token_response())
+    resp_mock.add(
+        resp_mock.GET,
+        _EPIC_LIBRARY,
+        json=_library_response([
+            {
+                "catalogItemId": "cat_hex",
+                "namespace": "ns1",
+                "appName": "91eac4ac00304bcc9d7d4a55a95894b3",
+                "sandboxName": "Live",
+            },
+        ]),
+    )
+
+    args = _make_args(epic_auth_code="code123")
+    with patch(
+        "steam_tracker.sources.epic.resolve_steam_appid", return_value=None
+    ), patch(
+        "steam_tracker.sources.epic.epic_get_catalog_titles",
+        return_value={"cat_hex": "Guacamelee! 2"},
+    ):
+        source = EpicSource()
+        games = source.discover_games(args)
+
+    assert len(games) == 1
+    assert games[0].name == "Guacamelee! 2"
+
+
+@resp_mock.activate
+def test_discover_games_catalog_enriches_production_items() -> None:
+    """Items with 'Production' sandbox name get their title from Catalog API."""
+    from steam_tracker.sources.epic import EpicSource
+
+    resp_mock.add(resp_mock.POST, _EPIC_OAUTH, json=_oauth_token_response())
+    resp_mock.add(
+        resp_mock.GET,
+        _EPIC_LIBRARY,
+        json=_library_response([
+            {
+                "catalogItemId": "cat_prod",
+                "namespace": "ns1",
+                "appName": "dd75b5c168d546cc869582c0389f0a1d",
+                "sandboxName": "oxygen Production",
+            },
+        ]),
+    )
+
+    args = _make_args(epic_auth_code="code123")
+    with patch(
+        "steam_tracker.sources.epic.resolve_steam_appid", return_value=None
+    ), patch(
+        "steam_tracker.sources.epic.epic_get_catalog_titles",
+        return_value={"cat_prod": "Train Sim World 2"},
+    ):
+        source = EpicSource()
+        games = source.discover_games(args)
+
+    assert len(games) == 1
+    assert games[0].name == "Train Sim World 2"
+
+
+# -- Production sandbox label filtering -------------------------------------
+
+
+def test_production_regex_matches_sandbox_names() -> None:
+    """_PRODUCTION_RE matches internal sandbox names ending with 'Production'."""
+    from steam_tracker.sources.epic import _PRODUCTION_RE
+
+    assert _PRODUCTION_RE.search("oxygen Production")
+    assert _PRODUCTION_RE.search("boysenberry Production")
+    assert _PRODUCTION_RE.search("shoal Production")
+
+
+def test_production_regex_does_not_match_real_titles() -> None:
+    """_PRODUCTION_RE does NOT match real game titles."""
+    from steam_tracker.sources.epic import _PRODUCTION_RE
+
+    assert _PRODUCTION_RE.search("Factorio") is None
+    assert _PRODUCTION_RE.search("Hades") is None
+    assert _PRODUCTION_RE.search("Production Line") is None
+    assert _PRODUCTION_RE.search("Movie Production Tycoon") is None
+
+
+@resp_mock.activate
+def test_discover_games_filters_production_names() -> None:
+    """Items with 'Production' sandbox names are skipped when catalog fails."""
+    from steam_tracker.sources.epic import EpicSource
+
+    resp_mock.add(resp_mock.POST, _EPIC_OAUTH, json=_oauth_token_response())
+    resp_mock.add(
+        resp_mock.GET,
+        _EPIC_LIBRARY,
+        json=_library_response([
+            _library_item("cat1", "Hades"),
+            {
+                "catalogItemId": "cat_prod",
+                "namespace": "ns1",
+                "appName": "dd75b5c168d546cc869582c0389f0a1d",
+                "sandboxName": "oxygen Production",
+            },
+        ]),
+    )
+
+    args = _make_args(epic_auth_code="code123")
+    with patch(
+        "steam_tracker.sources.epic.resolve_steam_appid", return_value=None
+    ), patch(
+        "steam_tracker.sources.epic.epic_get_catalog_titles", return_value={}
+    ):
+        source = EpicSource()
+        games = source.discover_games(args)
+
+    assert len(games) == 1
+    assert games[0].name == "Hades"
+    assert source.last_stats is not None
+    skipped_reasons = [s.reason for s in source.last_stats.skipped_items]
+    assert "production_label" in skipped_reasons
+
+
+@resp_mock.activate
+def test_discover_games_deduplicates_by_name() -> None:
+    """Multiple library entries with the same title produce only one game."""
+    from steam_tracker.sources.epic import EpicSource
+
+    resp_mock.add(resp_mock.POST, _EPIC_OAUTH, json=_oauth_token_response())
+    resp_mock.add(
+        resp_mock.GET,
+        _EPIC_LIBRARY,
+        json=_library_response([
+            _library_item("cat1", "Death Stranding"),
+            _library_item("cat2", "Death Stranding"),
+            _library_item("cat3", "Death Stranding"),
+            _library_item("cat4", "Hades"),
+        ]),
+    )
+
+    args = _make_args(epic_auth_code="code123")
+    with patch(
+        "steam_tracker.sources.epic.resolve_steam_appid", return_value=None
+    ):
+        source = EpicSource()
+        games = source.discover_games(args)
+
+    assert len(games) == 2
+    names = [g.name for g in games]
+    assert names.count("Death Stranding") == 1
+    assert "Hades" in names
+    assert source.last_stats is not None
+    dup_count = sum(1 for s in source.last_stats.skipped_items if s.reason == "duplicate")
+    assert dup_count == 2

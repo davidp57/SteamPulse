@@ -173,7 +173,7 @@ Pour une meilleure résolution des AppIDs Steam, fournis des credentials Twitch 
 1. Crée une app sur <https://dev.twitch.tv/console/apps>
 2. Passe `--twitch-client-id` et `--twitch-client-secret`
 
-Sans IGDB, SteamPulse utilise la correspondance floue via l'API de recherche Steam Store.
+Sans IGDB, SteamPulse utilise une correspondance multi-stratégie via l'API de recherche Steam Store (similarité floue, préfixe mot-à-mot, contenance, suppression de suffixe d'édition, normalisation d'année).
 
 ---
 
@@ -365,7 +365,17 @@ Chaque carte affiche :
 - Utilise « Tout marquer comme lu » pour tout marquer d’un coup
 
 Les règles d’alerte sont configurées dans `config.toml` sous les sections `[[alerts]]`. Lance `steam-setup` pour voir et éditer les règles par défaut.
+### Page diagnostic (`steam_diagnostic.html`)
 
+Page technique générée en même temps que la bibliothèque et les alertes. Elle fournit :
+
+- **Résumé de la base de données** — nombre total de jeux, enrichis/non enrichis, alertes et news
+- **Répartition par source** — nombre de jeux par source (Steam, Epic)
+- **Table des mappings AppID** — toutes les résolutions externe→Steam AppID avec statut (résolu, non résolu, manuel) ; champ de recherche inclus ; les cartes de statistiques sont cliquables pour filtrer la table par statut
+- **Statistiques de découverte Epic** — éléments API totaux, acceptés, résolus, non résolus et ignorés (affiché uniquement quand la source Epic a été utilisée lors du fetch)
+- **Table des éléments ignorés** — éléments filtrés pendant la découverte Epic, avec la raison (pas de titre, ID hexadécimal, label sandbox, doublon)
+
+Cette page est utile pour diagnostiquer les problèmes de qualité de données, vérifier quels jeux Epic ont été résolus vers des AppID Steam, et identifier les éléments filtrés.
 ---
 
 ## 9. Stratégie de cache et rafraîchissement
