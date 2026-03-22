@@ -88,10 +88,17 @@ def test_generate_html_replaces_all_placeholders(sample_record: GameRecord) -> N
     placeholders = [
         "__SHARED_JS__", "__GENERATED_AT__", "__STEAM_ID__", "__TOTAL__",
         "__EA__", "__REL__", "__UNREL__", "__CARDS__", "__I18N_JS__",
+        "__DIAG_HREF__",
     ]
     for ph in placeholders:
         assert ph not in page, f"Placeholder {ph} not replaced"
     assert "__T_" not in page, "Some __T_ i18n placeholder was not replaced"
+
+
+def test_generate_html_has_diagnostic_nav_link(sample_record: GameRecord) -> None:
+    """Library page should contain a nav link to the diagnostic page."""
+    page = generate_html([sample_record], "76561198000000000", diag_href="my_diag.html")
+    assert 'href="my_diag.html"' in page
 
 
 def test_generate_html_stat_counts(sample_record: GameRecord) -> None:
@@ -610,8 +617,15 @@ def test_generate_alerts_html_has_collection_filter_buttons(sample_record: GameR
 def test_generate_alerts_html_replaces_all_placeholders(sample_record: GameRecord) -> None:
     page = generate_alerts_html([_sample_alert()], [sample_record], "76561198000000000")
     for ph in ["__GENERATED_AT__", "__STEAM_ID__", "__LIB_HREF__", "__ALERTS__",
-               "__T_", "__I18N_"]:
+               "__T_", "__I18N_", "__DIAG_HREF__"]:
         assert ph not in page, f"Placeholder {ph!r} still present in output"
+
+
+def test_generate_alerts_html_has_diagnostic_nav_link(sample_record: GameRecord) -> None:
+    """Alerts page should contain a nav link to the diagnostic page."""
+    page = generate_alerts_html([_sample_alert()], [sample_record], "76561198000000000",
+                                diag_href="my_diag.html")
+    assert 'href="my_diag.html"' in page
 
 
 def test_generate_alerts_html_contains_alert_title(sample_record: GameRecord) -> None:

@@ -11,6 +11,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.6.1] — 2026-03-22
+
+### Added
+
+- **Diagnostic page nav link** — library and alerts pages now include a 🔍 navigation link to the diagnostic page in their toolbars
+
+### Fixed
+
+- **Epic hex-ID cleanup rule** — existing games with hex catalog ID names (imported before hex-ID filtering was added) are now automatically cleaned up from the database on the next fetch run
+
+---
+
 ## [1.6.0] — 2026-03-22
 
 ### Added
