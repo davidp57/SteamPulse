@@ -587,6 +587,17 @@ def test_make_card_unknown_flag_absent_for_real_appid() -> None:
     assert "data-unknown" not in card
 
 
+def test_make_card_unknown_flag_set_for_real_appid_no_details() -> None:
+    """Cards with real appid but badge='unknown' (no details) must have data-unknown."""
+    record = GameRecord(
+        game=OwnedGame(appid=31292, name="Dishonored - Definitive Edition",
+                        source="epic", external_id="epic:abc123"),
+        status=GameStatus(label="Inconnu", badge="unknown", release_date="—"),
+    )
+    card = make_card(record)
+    assert 'data-unknown="true"' in card
+
+
 def test_make_alert_card_unknown_flag_set_for_synthetic_appid() -> None:
     """Alert cards with synthetic appid must have data-unknown='true'."""
     alert = Alert(
@@ -604,6 +615,24 @@ def test_make_alert_card_unknown_flag_absent_for_real_appid() -> None:
     """Alert cards with real appid must NOT have data-unknown."""
     card = make_alert_card(_sample_alert())
     assert "data-unknown" not in card
+
+
+def test_make_alert_card_unknown_flag_set_for_real_appid_unknown_status() -> None:
+    """Alert cards with real appid but unknown status must have data-unknown."""
+    alert = Alert(
+        id="a2", appid=31292, game_name="Dishonored - Definitive Edition",
+        rule_name="version_update", rule_icon="🔧",
+        title="Version Update", details="v1→v2",
+        source_type="field_change",
+        timestamp=datetime(2024, 1, 15, tzinfo=UTC),
+    )
+    record = GameRecord(
+        game=OwnedGame(appid=31292, name="Dishonored - Definitive Edition",
+                        source="epic", external_id="epic:abc123"),
+        status=GameStatus(label="Inconnu", badge="unknown", release_date="—"),
+    )
+    card = make_alert_card(alert, record=record)
+    assert 'data-unknown="true"' in card
 
 
 # -- Diagnostic page with unknown games -------------------------------------

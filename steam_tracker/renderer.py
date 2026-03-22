@@ -1772,7 +1772,8 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
     metacritic_score = details.metacritic_score if details else 0
     store_hint = "🎮 Epic" if game.source == "epic" else "↗ Steam"
     _pt_attr = f' data-tooltip="{_tt_pt}"' if game.source == "owned" else ""
-    _unknown_attr = ' data-unknown="true"' if appid >= SYNTHETIC_APPID_BASE else ""
+    _is_unknown = appid >= SYNTHETIC_APPID_BASE or status.badge == "unknown"
+    _unknown_attr = ' data-unknown="true"' if _is_unknown else ""
     return (
         f'<div class="card" data-appid="{appid}" data-status="{status.badge}" '
         f'data-store="{store_tag}" data-lib-status="{lib_status_tag}" data-name="{name.lower()}" '
@@ -1935,7 +1936,8 @@ def make_alert_card(
             tag_val = "patchnotes"
     store_url = f"https://store.steampowered.com/app/{alert.appid}"
     news_url_attr = f' data-news-url="{html.escape(alert.url)}"' if alert.url else ""
-    _unknown_attr = ' data-unknown="true"' if alert.appid >= SYNTHETIC_APPID_BASE else ""
+    _is_unknown = alert.appid >= SYNTHETIC_APPID_BASE or status_tag == "unknown"
+    _unknown_attr = ' data-unknown="true"' if _is_unknown else ""
     return (
         f'<div class="alert-card" data-id="{html.escape(alert.id)}" '
         f'data-rule="{html.escape(alert.rule_name)}" '

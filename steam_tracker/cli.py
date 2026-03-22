@@ -337,7 +337,10 @@ def cmd_render() -> None:
     )
     write_alerts_html(all_alerts, records, args.steamid, alerts_out,
                       library_href=out.name, diag_href=diag_out.name, lang=args.lang)
-    unknown_games = [r for r in records if r.game.appid >= SYNTHETIC_APPID_BASE]
+    unknown_games = [
+        r for r in records
+        if r.game.appid >= SYNTHETIC_APPID_BASE or r.status.badge == "unknown"
+    ]
     write_diagnostic_html(
         db.get_diagnostic_summary(), db.get_all_appid_mappings(), diag_out,
         unknown_games=unknown_games,
@@ -491,7 +494,10 @@ def cmd_run() -> None:
     )
     write_alerts_html(all_alerts, records, args.steamid, alerts_out,
                       library_href=out.name, diag_href=diag_out.name, lang=args.lang)
-    unknown_games = [r for r in records if r.game.appid >= SYNTHETIC_APPID_BASE]
+    unknown_games = [
+        r for r in records
+        if r.game.appid >= SYNTHETIC_APPID_BASE or r.status.badge == "unknown"
+    ]
     write_diagnostic_html(
         db.get_diagnostic_summary(), db.get_all_appid_mappings(), diag_out,
         discovery_stats=all_discovery_stats,
