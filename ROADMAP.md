@@ -63,7 +63,11 @@
 - **Epic "Production" name cleanup rule** — removes sandbox names matching `^\w+ Production$`
 - **Epic duplicate external_id cleanup rule** — removes synthetic-appid duplicates when real-appid entry exists
 - **Systematic Catalog API enrichment** — all Epic library items are now sent to the Catalog API for authoritative title resolution; `_extract_epic_title()` kept as fallback only
-- 393 tests total
+- **Unknown games toggle filter** — games with unresolved AppIDs (≥ 2B) hidden by default in library and alerts; toggle to show/hide; persisted in URL hash + localStorage
+- **Unknown games diagnostic section** — unknown games listed in diagnostic page with name, source, external ID, AppID
+- **Cross-source duplicate cleanup** — duplicate external_id detection works across sources (owned + epic)
+- **Same-name duplicate cleanup** — new `_cleanup_epic_duplicate_name` rule removes synthetic duplicates matching real games by name
+- 404 tests total
 
 ### v1.6.1 — Post-deployment fixes
 - **Diagnostic page nav link** — 🔍 link added to library and alerts page toolbars

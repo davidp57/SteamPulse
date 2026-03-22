@@ -85,6 +85,7 @@ STRINGS: dict[str, str] = {
     "filter_playtime":       "Temps de jeu",
     "filter_metacritic":     "Metacritic",
     "filter_recent":         "Màj récente",
+    "filter_unknown":        "Inconnus",
     "lbl_all":               "Tous",
     "lbl_released":          "Sortis",
     "lbl_upcoming":          "À venir",
@@ -166,6 +167,9 @@ STRINGS: dict[str, str] = {
     "tt_filter_recent_5":    "Jeux avec une news dans les 5 derniers jours",
     "tt_filter_recent_15":   "Jeux avec une news dans les 15 derniers jours",
     "tt_filter_recent_30":   "Jeux avec une news dans les 30 derniers jours",
+    "tt_filter_unknown":     "Afficher les jeux non trouvés sur Steam (non résolus)",
+    "lbl_show_unknown":      "Afficher inconnus",
+    "lbl_hide_unknown":      "Masquer inconnus",
 
     # ── Infobulles des éléments de tuile ───────────────────────────────────────
     "tt_badge_earlyaccess":  "En accès anticipé — pas encore v1.0",
@@ -229,5 +233,8 @@ STRINGS: dict[str, str] = {
     "diag_unresolved_appids":"Non résolus (AppID hash)",
     "diag_skipped":          "Ignorés",
     "diag_no_epic":          "Aucune statistique de découverte Epic disponible.",
+    "diag_section_unknown":  "Jeux inconnus",
+    "diag_unknown_count":    "Jeux inconnus",
+    "diag_no_unknown":       "Aucun jeu inconnu dans la bibliothèque.",
     "diag_search":           "Chercher un mappage…",
 }

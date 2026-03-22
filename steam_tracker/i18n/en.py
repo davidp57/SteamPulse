@@ -85,6 +85,7 @@ STRINGS: dict[str, str] = {
     "filter_playtime":       "Playtime",
     "filter_metacritic":     "Metacritic",
     "filter_recent":         "Recent update",
+    "filter_unknown":        "Unknown",
     "lbl_all":               "All",
     "lbl_released":          "Released",
     "lbl_upcoming":          "Upcoming",
@@ -166,6 +167,9 @@ STRINGS: dict[str, str] = {
     "tt_filter_recent_5":    "Games with news in the last 5 days",
     "tt_filter_recent_15":   "Games with news in the last 15 days",
     "tt_filter_recent_30":   "Games with news in the last 30 days",
+    "tt_filter_unknown":     "Show games not found on Steam (unresolved)",
+    "lbl_show_unknown":      "Show unknown",
+    "lbl_hide_unknown":      "Hide unknown",
 
     # ── Card element tooltips ───────────────────────────────────────────────────
     "tt_badge_earlyaccess":  "Currently in Early Access — not yet v1.0",
@@ -229,5 +233,8 @@ STRINGS: dict[str, str] = {
     "diag_unresolved_appids":"Unresolved (hash AppID)",
     "diag_skipped":          "Skipped",
     "diag_no_epic":          "No Epic discovery statistics available.",
+    "diag_section_unknown":  "Unknown Games",
+    "diag_unknown_count":    "Unknown games",
+    "diag_no_unknown":       "No unknown games in the library.",
     "diag_search":           "Search mappings…",
 }

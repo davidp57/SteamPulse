@@ -505,6 +505,66 @@ def test_cleanup_noop_on_clean_db(db: Database) -> None:
     assert db.run_cleanup() == 0
 
 
+def test_cleanup_duplicate_external_id_cross_source(db: Database) -> None:
+    """Cross-source duplicate: owned real-appid + epic synthetic with same external_id."""
+    db.upsert_game(OwnedGame(appid=632470, name="Disco Elysium", source="owned",
+                              external_id="epic:disco_cat"))
+    db.upsert_game(OwnedGame(appid=2_000_000_040, name="Disco Elysium", source="epic",
+                              external_id="epic:disco_cat"))
+    assert len(db.get_all_game_records()) == 2
+
+    cleaned = db.run_cleanup()
+    assert cleaned == 1
+    records = db.get_all_game_records()
+    assert len(records) == 1
+    assert records[0].game.appid == 632470
+    assert records[0].game.source == "owned"
+
+
+def test_cleanup_removes_duplicate_name_games(db: Database) -> None:
+    """Synthetic-appid games whose name matches a real-appid game must be removed."""
+    db.upsert_game(OwnedGame(appid=1190460, name="Death Stranding", source="owned"))
+    db.upsert_game(OwnedGame(appid=2_000_000_050, name="Death Stranding", source="epic",
+                              external_id="epic:ds1"))
+    db.upsert_game(OwnedGame(appid=2_000_000_051, name="Death Stranding", source="epic",
+                              external_id="epic:ds2"))
+    assert len(db.get_all_game_records()) == 3
+
+    cleaned = db.run_cleanup()
+    assert cleaned == 2
+    records = db.get_all_game_records()
+    assert len(records) == 1
+    assert records[0].game.appid == 1190460
+
+
+def test_cleanup_duplicate_name_removes_appid_mappings(db: Database) -> None:
+    """Cleanup must also delete appid_mappings for name-duplicate entries."""
+    db.upsert_game(OwnedGame(appid=1190460, name="Death Stranding", source="owned"))
+    db.upsert_game(OwnedGame(appid=2_000_000_050, name="Death Stranding", source="epic",
+                              external_id="epic:ds1"))
+    db.upsert_appid_mapping("epic", "epic:ds1", "Death Stranding", 1190460)
+
+    db.run_cleanup()
+
+    with db._connect() as con:
+        count = con.execute(
+            "SELECT COUNT(*) FROM appid_mappings"
+            " WHERE external_source = 'epic' AND external_id = 'epic:ds1'",
+        ).fetchone()[0]
+    assert count == 0
+
+
+def test_cleanup_duplicate_name_preserves_unique_synthetics(db: Database) -> None:
+    """Synthetic-appid games with unique names must NOT be deleted by name rule."""
+    db.upsert_game(OwnedGame(appid=420, name="Half-Life 2", source="owned"))
+    db.upsert_game(OwnedGame(appid=2_000_000_060, name="Some Unique Epic Game", source="epic",
+                              external_id="epic:unique"))
+
+    cleaned = db.run_cleanup()
+    assert cleaned == 0
+    assert len(db.get_all_game_records()) == 2
+
+
 # -- get_diagnostic_summary -------------------------------------------------
 
 

@@ -345,18 +345,24 @@ class Database:
         the synthetic duplicate is redundant.  This rule keeps only the
         entry with the smallest AppID and deletes the rest.
 
+        Also handles cross-source duplicates: e.g. a game with source='owned'
+        (real appid) and source='epic' (synthetic appid) sharing the same
+        external_id.
+
         Returns:
             Number of games deleted.
         """
         with self._connect() as con:
-            # Find external_ids that have at least one real appid and at
-            # least one synthetic appid (>= 2 000 000 000).
+            # Find synthetic-appid rows whose external_id also appears on a
+            # real-appid row (regardless of source).
             dup_rows = con.execute(
                 "SELECT g2.appid, g2.external_id FROM games g2 "
-                "WHERE g2.source = 'epic' AND g2.appid >= 2000000000 "
+                "WHERE g2.appid >= 2000000000 "
+                "AND g2.external_id IS NOT NULL "
+                "AND g2.external_id != '' "
                 "AND g2.external_id IN ("
                 "  SELECT g1.external_id FROM games g1 "
-                "  WHERE g1.source = 'epic' AND g1.appid < 2000000000"
+                "  WHERE g1.appid < 2000000000"
                 ")",
             ).fetchall()
             if not dup_rows:
@@ -375,11 +381,47 @@ class Database:
             )
             return len(appids)
 
+    def _cleanup_epic_duplicate_name(self) -> int:
+        """Remove synthetic-appid duplicates when a real-appid entry shares the same name.
+
+        When an Epic game appears multiple times with different external_ids
+        but the same display name (e.g. Death Stranding ×5), only the entry
+        with the lowest appid (the real one) should be kept.
+
+        Returns:
+            Number of games deleted.
+        """
+        with self._connect() as con:
+            dup_rows = con.execute(
+                "SELECT g2.appid, g2.external_id FROM games g2 "
+                "WHERE g2.appid >= 2000000000 "
+                "AND g2.name IN ("
+                "  SELECT g1.name FROM games g1 "
+                "  WHERE g1.appid < 2000000000 AND g1.name != ''"
+                ")",
+            ).fetchall()
+            if not dup_rows:
+                return 0
+            appids = [int(r[0]) for r in dup_rows]
+            ext_ids = [str(r[1]) for r in dup_rows if r[1]]
+            con.executemany("DELETE FROM games WHERE appid = ?", [(a,) for a in appids])
+            if ext_ids:
+                con.executemany(
+                    "DELETE FROM appid_mappings "
+                    "WHERE external_source = 'epic' AND external_id = ?",
+                    [(e,) for e in ext_ids],
+                )
+            log.info(
+                "cleanup: removed %d Epic same-name duplicate(s)", len(appids),
+            )
+            return len(appids)
+
     _CLEANUP_RULES: list[Callable[[Database], int]] = [
         _cleanup_epic_live_name,
         _cleanup_epic_hex_id_name,
         _cleanup_epic_production_name,
         _cleanup_epic_duplicate_external_id,
+        _cleanup_epic_duplicate_name,
     ]
 
     def upsert_game(self, game: OwnedGame) -> None:
