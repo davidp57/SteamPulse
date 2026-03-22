@@ -402,6 +402,102 @@ def test_cleanup_hex_id_preserves_short_hex(db: Database) -> None:
     assert len(db.get_all_game_records()) == 1
 
 
+def test_cleanup_removes_epic_production_names(db: Database) -> None:
+    """Games named '<word> Production' with source='epic' must be deleted."""
+    db.upsert_game(OwnedGame(appid=2_000_000_020, name="ashishim Production",
+                              source="epic", external_id="epic:prod1"))
+    db.upsert_game(OwnedGame(appid=2_000_000_021, name="blackcoral Production",
+                              source="epic", external_id="epic:prod2"))
+    assert len(db.get_all_game_records()) == 2
+
+    cleaned = db.run_cleanup()
+    assert cleaned == 2
+    assert db.get_all_game_records() == []
+
+
+def test_cleanup_production_name_removes_appid_mappings(db: Database) -> None:
+    """Cleanup must also delete appid_mappings for Production-name entries."""
+    db.upsert_game(OwnedGame(appid=2_000_000_020, name="yorkie Production",
+                              source="epic", external_id="epic:prod3"))
+    db.upsert_appid_mapping("epic", "epic:prod3", "yorkie Production", 12345)
+
+    db.run_cleanup()
+
+    with db._connect() as con:
+        count = con.execute(
+            "SELECT COUNT(*) FROM appid_mappings"
+            " WHERE external_source = 'epic' AND external_id = 'epic:prod3'",
+        ).fetchone()[0]
+    assert count == 0
+    assert db.get_all_game_records() == []
+
+
+def test_cleanup_preserves_non_production_epic_games(db: Database) -> None:
+    """Epic games whose name doesn't match '*Production' must NOT be deleted."""
+    db.upsert_game(OwnedGame(appid=2_000_000_020, name="Hades", source="epic",
+                              external_id="epic:cat_hades"))
+    db.upsert_game(OwnedGame(appid=2_000_000_021, name="ashishim Production",
+                              source="epic", external_id="epic:prod_bad"))
+
+    cleaned = db.run_cleanup()
+    assert cleaned == 1
+    records = db.get_all_game_records()
+    assert len(records) == 1
+    assert records[0].game.name == "Hades"
+
+
+def test_cleanup_production_name_ignores_non_epic(db: Database) -> None:
+    """Steam games matching the pattern must NOT be touched."""
+    db.upsert_game(OwnedGame(appid=999, name="My Production", source="owned"))
+
+    cleaned = db.run_cleanup()
+    assert cleaned == 0
+    assert len(db.get_all_game_records()) == 1
+
+
+def test_cleanup_removes_epic_duplicate_external_id(db: Database) -> None:
+    """When both a real-appid and a synthetic-appid share external_id, remove the synthetic."""
+    db.upsert_game(OwnedGame(appid=570, name="Dota 2", source="epic",
+                              external_id="epic:dota_cat"))
+    db.upsert_game(OwnedGame(appid=2_000_000_030, name="Dota 2", source="epic",
+                              external_id="epic:dota_cat"))
+    assert len(db.get_all_game_records()) == 2
+
+    cleaned = db.run_cleanup()
+    assert cleaned == 1
+    records = db.get_all_game_records()
+    assert len(records) == 1
+    assert records[0].game.appid == 570
+
+
+def test_cleanup_duplicate_external_id_removes_appid_mappings(db: Database) -> None:
+    """Cleanup must also delete appid_mappings for duplicate synthetic entries."""
+    db.upsert_game(OwnedGame(appid=570, name="Dota 2", source="epic",
+                              external_id="epic:dota_cat"))
+    db.upsert_game(OwnedGame(appid=2_000_000_030, name="Dota 2", source="epic",
+                              external_id="epic:dota_cat"))
+    db.upsert_appid_mapping("epic", "epic:dota_cat", "Dota 2", 570)
+
+    db.run_cleanup()
+
+    with db._connect() as con:
+        count = con.execute(
+            "SELECT COUNT(*) FROM appid_mappings"
+            " WHERE external_source = 'epic' AND external_id = 'epic:dota_cat'",
+        ).fetchone()[0]
+    assert count == 0
+
+
+def test_cleanup_preserves_orphan_synthetic_epic_games(db: Database) -> None:
+    """Synthetic-appid games without a real-appid counterpart must NOT be deleted."""
+    db.upsert_game(OwnedGame(appid=2_000_000_030, name="Some Indie Game", source="epic",
+                              external_id="epic:indie_cat"))
+
+    cleaned = db.run_cleanup()
+    assert cleaned == 0
+    assert len(db.get_all_game_records()) == 1
+
+
 def test_cleanup_noop_on_clean_db(db: Database) -> None:
     """Cleanup on an empty or clean DB returns 0."""
     assert db.run_cleanup() == 0

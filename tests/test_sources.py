@@ -524,3 +524,70 @@ def test_epic_discover_games_keeps_token_when_response_omits_it() -> None:
     EpicSource().discover_games(args)
 
     assert args.epic_refresh_token == "rt_original"
+
+
+_EPIC_CATALOG_BASE = (
+    "https://catalog-public-service-prod06.ol.epicgames.com"
+    "/catalog/api/shared/namespace"
+)
+
+
+@resp_mock.activate
+def test_epic_discover_games_catalog_title_overrides_local() -> None:
+    """Catalog API title must take priority over appName / sandboxName."""
+    resp_mock.add(resp_mock.POST, _EPIC_TOKEN_URL, json=_token_response())
+    resp_mock.add(
+        resp_mock.GET,
+        _EPIC_LIBRARY_URL,
+        json=_library_response([
+            {
+                "catalogItemId": "cat_abc",
+                "appName": "BrilliantRose",          # codename — wrong title
+                "namespace": "ns_abc",
+                "sandboxName": "BrilliantRose",
+            },
+        ]),
+    )
+    # Catalog API returns the real title
+    resp_mock.add(
+        resp_mock.GET,
+        f"{_EPIC_CATALOG_BASE}/ns_abc/bulk/items",
+        json={
+            "cat_abc": {"id": "cat_abc", "title": "Gone Home"},
+        },
+    )
+    # Steam resolver
+    resp_mock.add(resp_mock.GET, _STEAM_STORE_SEARCH, json={"total": 0, "items": []})
+
+    games = EpicSource().discover_games(_epic_args(epic_auth_code="code1"))
+    assert len(games) == 1
+    assert games[0].name == "Gone Home"
+
+
+@resp_mock.activate
+def test_epic_discover_games_catalog_fallback_to_local() -> None:
+    """When Catalog API returns nothing, local extraction is used as fallback."""
+    resp_mock.add(resp_mock.POST, _EPIC_TOKEN_URL, json=_token_response())
+    resp_mock.add(
+        resp_mock.GET,
+        _EPIC_LIBRARY_URL,
+        json=_library_response([
+            {
+                "catalogItemId": "cat_xyz",
+                "appName": "MyEpicGame",
+                "namespace": "ns_xyz",
+                "sandboxName": "MyEpicGame",
+            },
+        ]),
+    )
+    # Catalog API returns empty (title not found)
+    resp_mock.add(
+        resp_mock.GET,
+        f"{_EPIC_CATALOG_BASE}/ns_xyz/bulk/items",
+        json={},
+    )
+    resp_mock.add(resp_mock.GET, _STEAM_STORE_SEARCH, json={"total": 0, "items": []})
+
+    games = EpicSource().discover_games(_epic_args(epic_auth_code="code1"))
+    assert len(games) == 1
+    assert games[0].name == "MyEpicGame"

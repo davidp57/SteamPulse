@@ -62,7 +62,10 @@
 ### v1.6.1 — Post-deployment fixes
 - **Diagnostic page nav link** — 🔍 link added to library and alerts page toolbars
 - **Epic hex-ID cleanup rule** — automatic cleanup of existing hex-ID games from the database
-- 384 tests total
+- **Epic "Production" name cleanup rule** — removes sandbox names matching `^\w+ Production$`
+- **Epic duplicate external_id cleanup rule** — removes synthetic-appid duplicates when real-appid entry exists
+- **Systematic Catalog API enrichment** — all Epic library items are now sent to the Catalog API for authoritative title resolution; `_extract_epic_title()` kept as fallback only
+- 393 tests total
 
 ### v1.6.0 — Diagnostic page, Epic enrichment & resolver improvements
 - **Diagnostic page** — `steam_diagnostic.html` with database stats, per-source game counts, AppID mapping table, Epic discovery stats, and skipped items table

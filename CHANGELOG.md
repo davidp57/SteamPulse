@@ -9,6 +9,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Epic "Production" name cleanup rule** — `_cleanup_epic_production_name` removes Epic games with sandbox names matching `^\w+ Production$` (e.g. "coffee Production", "boysenberry Production") and their `appid_mappings` entries
+- **Epic duplicate external_id cleanup rule** — `_cleanup_epic_duplicate_external_id` removes duplicate Epic entries where both a real-appid and a synthetic-appid row exist for the same `external_id`; keeps the real-appid entry
+- **Systematic Catalog API enrichment** — `EpicSource.discover_games()` now queries the Epic Catalog API for ALL library items (not just those missing titles), ensuring codename-only items (e.g. "BrilliantRose" → "Gone Home") get their real titles; `_extract_epic_title()` is kept as fallback only
+
 ---
 
 ## [1.6.1] — 2026-03-22

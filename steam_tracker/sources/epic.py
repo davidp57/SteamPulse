@@ -197,21 +197,17 @@ class EpicSource:
         print(t("cli_epic_library_count", count=len(library_items)))
 
         # ── Catalog enrichment ─────────────────────────────────────────
-        # Items with sandbox labels ("Live") or hex appNames lack a
-        # human-readable title.  Query the Catalog API to resolve them.
-        needs_title: list[dict[str, object]] = []
-        for item in library_items:
-            title = _extract_epic_title(item)
-            if not title or _PRODUCTION_RE.search(title):
-                needs_title.append(item)
+        # Always query the Catalog API for ALL items to get authoritative
+        # titles.  Local extraction (_extract_epic_title) serves only as
+        # fallback for items the Catalog API cannot resolve.
         catalog_titles: dict[str, str] = {}
-        if needs_title:
-            print(t("cli_epic_catalog_lookup", count=len(needs_title)))
-            catalog_titles = epic_get_catalog_titles(needs_title)
+        if library_items:
+            print(t("cli_epic_catalog_lookup", count=len(library_items)))
+            catalog_titles = epic_get_catalog_titles(library_items)
             log.info(
                 "Catalog API resolved %d / %d titles",
                 len(catalog_titles),
-                len(needs_title),
+                len(library_items),
             )
 
         # ── Build resolver chain ───────────────────────────────────────

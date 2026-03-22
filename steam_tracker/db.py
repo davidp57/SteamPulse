@@ -300,9 +300,86 @@ class Database:
             log.info("cleanup: removed %d Epic game(s) with hex-ID names", len(appids))
             return len(appids)
 
+    # Pattern matching Epic sandbox deployment names (e.g. "ashishim Production").
+    _PRODUCTION_NAME_RE = re.compile(r"^\w+ Production$")
+
+    def _cleanup_epic_production_name(self) -> int:
+        """Remove Epic games whose name matches '<word> Production'.
+
+        These entries correspond to Epic sandbox deployment environment
+        labels (e.g. 'ashishim Production', 'blackcoral Production') that
+        were incorrectly stored as game titles.  Removing them forces a
+        clean re-discovery on the next fetch.
+
+        Returns:
+            Number of games deleted.
+        """
+        with self._connect() as con:
+            rows = con.execute(
+                "SELECT appid, name, external_id FROM games WHERE source = 'epic'",
+            ).fetchall()
+            prod_rows = [
+                (int(r[0]), str(r[2]))
+                for r in rows
+                if self._PRODUCTION_NAME_RE.match(str(r[1]))
+            ]
+            if not prod_rows:
+                return 0
+            appids = [a for a, _ in prod_rows]
+            ext_ids = [e for _, e in prod_rows if e]
+            con.executemany("DELETE FROM games WHERE appid = ?", [(a,) for a in appids])
+            if ext_ids:
+                con.executemany(
+                    "DELETE FROM appid_mappings "
+                    "WHERE external_source = 'epic' AND external_id = ?",
+                    [(e,) for e in ext_ids],
+                )
+            log.info("cleanup: removed %d Epic game(s) with Production names", len(appids))
+            return len(appids)
+
+    def _cleanup_epic_duplicate_external_id(self) -> int:
+        """Remove synthetic-appid duplicates when a real-appid entry exists.
+
+        When an Epic game was imported multiple times (once with a real
+        Steam AppID < 2 000 000 000 and once with a synthetic AppID),
+        the synthetic duplicate is redundant.  This rule keeps only the
+        entry with the smallest AppID and deletes the rest.
+
+        Returns:
+            Number of games deleted.
+        """
+        with self._connect() as con:
+            # Find external_ids that have at least one real appid and at
+            # least one synthetic appid (>= 2 000 000 000).
+            dup_rows = con.execute(
+                "SELECT g2.appid, g2.external_id FROM games g2 "
+                "WHERE g2.source = 'epic' AND g2.appid >= 2000000000 "
+                "AND g2.external_id IN ("
+                "  SELECT g1.external_id FROM games g1 "
+                "  WHERE g1.source = 'epic' AND g1.appid < 2000000000"
+                ")",
+            ).fetchall()
+            if not dup_rows:
+                return 0
+            appids = [int(r[0]) for r in dup_rows]
+            ext_ids = [str(r[1]) for r in dup_rows if r[1]]
+            con.executemany("DELETE FROM games WHERE appid = ?", [(a,) for a in appids])
+            if ext_ids:
+                con.executemany(
+                    "DELETE FROM appid_mappings "
+                    "WHERE external_source = 'epic' AND external_id = ?",
+                    [(e,) for e in ext_ids],
+                )
+            log.info(
+                "cleanup: removed %d Epic synthetic-appid duplicate(s)", len(appids),
+            )
+            return len(appids)
+
     _CLEANUP_RULES: list[Callable[[Database], int]] = [
         _cleanup_epic_live_name,
         _cleanup_epic_hex_id_name,
+        _cleanup_epic_production_name,
+        _cleanup_epic_duplicate_external_id,
     ]
 
     def upsert_game(self, game: OwnedGame) -> None:

@@ -279,6 +279,9 @@ Cleanup runs **automatically** at the beginning of every `cmd_fetch` / `cmd_run`
 | Rule | Purpose |
 |---|---|
 | `_cleanup_epic_live_name` | Removes Epic games named `"Live"` (caused by a bug that used the `sandboxName` field — the deployment environment label — instead of the real game title). Also deletes the corresponding `appid_mappings` entries so that the resolver retries clean discovery on the next fetch. |
+| `_cleanup_epic_hex_id_name` | Removes Epic games whose name is a long hex catalog ID (24+ lowercase hex chars, e.g. `91eac4ac00304bcc…`). |
+| `_cleanup_epic_production_name` | Removes Epic games with internal sandbox names matching `^\w+ Production$` (e.g. "coffee Production", "boysenberry Production") and their `appid_mappings` entries. |
+| `_cleanup_epic_duplicate_external_id` | Removes duplicate Epic entries where both a real-appid (< 2 billion) and a synthetic-appid (≥ 2 billion) row exist for the same `external_id`; keeps the real-appid entry and deletes the synthetic one along with its `appid_mappings`. |
 
 ### `fetcher.py — SteamFetcher`
 
@@ -321,7 +324,7 @@ The HTML is built by string interpolation into `_HTML_TEMPLATE` and `_ALERTS_TEM
 
 `is_enabled(args)` returns `True` if an auth code, or a refresh token together with an account ID, is provided.
 
-`discover_games(args)` authenticates with Epic, fetches the library, and for each game:
+`discover_games(args)` authenticates with Epic, fetches the library, queries the Catalog API for **all** items to get authoritative titles (using `_extract_epic_title()` only as fallback), and for each game:
 - Resolves the Steam AppID via `resolve_steam_appid()` (Steam Store Search fallback)
 - If resolved: sets `appid = steam_appid` for full enrichment
 - If unresolved: generates a deterministic hash-based appid (≥ 2,000,000,000)
