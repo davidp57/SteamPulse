@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
@@ -268,7 +269,41 @@ class Database:
             log.info("cleanup: removed %d Epic game(s) named 'Live'", len(appids))
             return len(appids)
 
-    _CLEANUP_RULES: list[Callable[[Database], int]] = [_cleanup_epic_live_name]
+    # Pattern matching hex-like identifiers (24+ lowercase hex chars).
+    _HEX_ID_RE = re.compile(r"^[a-f0-9]{24,}$")
+
+    def _cleanup_epic_hex_id_name(self) -> int:
+        """Remove Epic games whose name is a raw hex catalog identifier.
+
+        These entries were imported before hex-ID filtering was added.
+        Removing them forces a clean re-discovery on the next fetch.
+
+        Returns:
+            Number of games deleted.
+        """
+        with self._connect() as con:
+            rows = con.execute(
+                "SELECT appid, name, external_id FROM games WHERE source = 'epic'",
+            ).fetchall()
+            hex_rows = [(int(r[0]), str(r[2])) for r in rows if self._HEX_ID_RE.match(str(r[1]))]
+            if not hex_rows:
+                return 0
+            appids = [a for a, _ in hex_rows]
+            ext_ids = [e for _, e in hex_rows if e]
+            con.executemany("DELETE FROM games WHERE appid = ?", [(a,) for a in appids])
+            if ext_ids:
+                con.executemany(
+                    "DELETE FROM appid_mappings "
+                    "WHERE external_source = 'epic' AND external_id = ?",
+                    [(e,) for e in ext_ids],
+                )
+            log.info("cleanup: removed %d Epic game(s) with hex-ID names", len(appids))
+            return len(appids)
+
+    _CLEANUP_RULES: list[Callable[[Database], int]] = [
+        _cleanup_epic_live_name,
+        _cleanup_epic_hex_id_name,
+    ]
 
     def upsert_game(self, game: OwnedGame) -> None:
         with self._connect() as con:
