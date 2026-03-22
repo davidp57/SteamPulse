@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [1.6.2] — 2026-03-22
+
 ### Added
 
 - **Epic "Production" name cleanup rule** — `_cleanup_epic_production_name` removes Epic games with sandbox names matching `^\w+ Production$` (e.g. "coffee Production", "boysenberry Production") and their `appid_mappings` entries
