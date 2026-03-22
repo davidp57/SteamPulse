@@ -59,6 +59,11 @@
 - **Epic title fix** — robust fallback chain (`catalogItem.title` → `productName` → filtered `sandboxName` → `appName`)
 - 295 tests total
 
+### v1.6.1 — Post-deployment fixes
+- **Diagnostic page nav link** — 🔍 link added to library and alerts page toolbars
+- **Epic hex-ID cleanup rule** — automatic cleanup of existing hex-ID games from the database
+- 384 tests total
+
 ### v1.6.0 — Diagnostic page, Epic enrichment & resolver improvements
 - **Diagnostic page** — `steam_diagnostic.html` with database stats, per-source game counts, AppID mapping table, Epic discovery stats, and skipped items table
 - **Diagnostic interactive filters** — clickable stat cards to filter the mapping table by status (resolved / unresolved / manual)

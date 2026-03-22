@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [1.6.1] — 2026-03-22
+
 ### Added
 
 - **Diagnostic page nav link** — library and alerts pages now include a 🔍 navigation link to the diagnostic page in their toolbars
