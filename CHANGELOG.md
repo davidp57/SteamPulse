@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [1.6.3] — 2026-03-22
+
 ### Added
 
 - **Unknown games toggle filter** — games with unresolved Steam AppIDs (synthetic appid ≥ 2B) are now hidden by default in both the library and alerts pages; a new toggle button in the filter panel lets users show/hide them; state is persisted in URL hash and localStorage
