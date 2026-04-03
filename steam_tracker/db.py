@@ -832,12 +832,13 @@ class Database:
         if not appids:
             return 0
         now = _now()
-        placeholders = ",".join("?" * len(appids))
+        safe_ids = [int(a) for a in appids]
+        placeholders = ",".join("?" * len(safe_ids))
         with self._connect() as con:
             con.execute(
                 f"UPDATE games SET removed_at = ? "
                 f"WHERE appid IN ({placeholders}) AND removed_at IS NULL",
-                [now, *appids],
+                [now, *safe_ids],
             )
             count = con.execute("SELECT changes()").fetchone()
         return int(count[0]) if count else 0
@@ -853,12 +854,13 @@ class Database:
         """
         if not appids:
             return 0
-        placeholders = ",".join("?" * len(appids))
+        safe_ids = [int(a) for a in appids]
+        placeholders = ",".join("?" * len(safe_ids))
         with self._connect() as con:
             con.execute(
                 f"UPDATE games SET removed_at = NULL "
                 f"WHERE appid IN ({placeholders}) AND removed_at IS NOT NULL",
-                [*appids],
+                [*safe_ids],
             )
             count = con.execute("SELECT changes()").fetchone()
         return int(count[0]) if count else 0
@@ -877,11 +879,12 @@ class Database:
         """
         if not appids:
             return 0
-        placeholders = ",".join("?" * len(appids))
+        safe_ids = [int(a) for a in appids]
+        placeholders = ",".join("?" * len(safe_ids))
         with self._connect() as con:
             con.execute(
                 f"DELETE FROM games WHERE appid IN ({placeholders})",
-                [*appids],
+                [*safe_ids],
             )
             count = con.execute("SELECT changes()").fetchone()
         return int(count[0]) if count else 0
