@@ -1814,10 +1814,13 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         _date_added_html = ""
     _removed_attr = ' data-removed="1"' if record.removed_at else ""
     if record.removed_at:
-        _removed_date_str = html.escape(
-            datetime.fromisoformat(record.removed_at).strftime("%d/%m/%y")
-        )
-        _tt_removed = html.escape(f"{t('tt_removed_at')} {_removed_date_str}")
+        try:
+            _removed_date_str = html.escape(
+                datetime.fromisoformat(record.removed_at).strftime("%d/%m/%y")
+            )
+        except ValueError:
+            _removed_date_str = ""
+        _tt_removed = html.escape(f"{t('tt_removed_at')} {_removed_date_str}".strip())
         _removed_badge_html = (
             f'      <span class="badge badge-removed" data-tooltip="{_tt_removed}">'
             f"{html.escape(t('badge_removed'))}</span>\n"

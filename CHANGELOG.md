@@ -11,7 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
-- **Soft-delete for removed games** — when a game disappears from all sources during a fetch, it is automatically tagged `removed_at` (ISO timestamp) rather than deleted; re-appearing games are automatically reactivated
+- **Soft-delete for removed games** — when a game disappears from all sources during a fetch, it is automatically tagged `removed_at` (ISO timestamp) rather than deleted; reappearing games are automatically reactivated
 - **Availability filter** — new filter group in the library page lets users show "Active" games only (default), all games, or "Removed" games only; filter state is saved in the URL hash and local storage
 - **`--mark-removed <APPID>`** — CLI flag to manually mark a game as removed (soft-delete) without running a full fetch
 - **`--delete <APPID>`** — CLI flag to permanently delete a game and all its associated data from the database
