@@ -158,6 +158,8 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("app_details", "build_timeupdated", "INTEGER NOT NULL DEFAULT 0"),
     ("app_details", "depot_size_bytes", "INTEGER NOT NULL DEFAULT 0"),
     ("app_details", "branch_names", "TEXT NOT NULL DEFAULT '[]'"),
+    # Date-added tracking
+    ("games", "time_added", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 
@@ -425,14 +427,15 @@ class Database:
     ]
 
     def upsert_game(self, game: OwnedGame) -> None:
+        now_ts = int(datetime.now(tz=UTC).timestamp())
         with self._connect() as con:
             con.execute(
                 """
                 INSERT INTO games
                     (appid, name, playtime_forever, playtime_2weeks,
                      rtime_last_played, img_icon_url, img_logo_url, last_seen_at, source,
-                     external_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     external_id, time_added)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(appid) DO UPDATE SET
                     name = CASE WHEN excluded.name != ''
                         THEN excluded.name ELSE name END,
@@ -470,6 +473,7 @@ class Database:
                     _now(),
                     game.source,
                     game.external_id,
+                    now_ts,
                 ),
             )
 
@@ -804,7 +808,8 @@ class Database:
         with self._connect() as con:
             games_rows = con.execute(
                 "SELECT appid, name, playtime_forever, playtime_2weeks, "
-                "rtime_last_played, img_icon_url, img_logo_url, source, external_id "
+                "rtime_last_played, img_icon_url, img_logo_url, source, external_id, "
+                "time_added "
                 "FROM games ORDER BY name COLLATE NOCASE"
             ).fetchall()
 
@@ -822,6 +827,7 @@ class Database:
                     source=str(row[7]),
                     external_id=str(row[8]),
                 )
+                time_added = int(row[9]) if row[9] else 0
 
                 det = con.execute(
                     "SELECT name, app_type, short_description, supported_languages, "
@@ -896,7 +902,13 @@ class Database:
                 ]
 
                 records.append(
-                    GameRecord(game=game, details=details, news=news, status=infer_status(details))
+                    GameRecord(
+                        game=game,
+                        details=details,
+                        news=news,
+                        status=infer_status(details),
+                        time_added=time_added,
+                    )
                 )
 
         return records

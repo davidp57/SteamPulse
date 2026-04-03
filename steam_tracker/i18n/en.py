@@ -113,6 +113,8 @@ STRINGS: dict[str, str] = {
     "sort_release":          "Sort: Release date ↓",
     "sort_lastupdate":       "Sort: Last update ↓",
     "sort_metacritic":       "Sort: Metacritic ↓",
+    "sort_dateadded":        "Sort: Date added ↓",
+    "tt_date_added":          "Date added to library",
     "col_game":              "Game",
     "col_dev_score":         "Developer / Score",
     "col_playtime_date":     "Playtime · Date",

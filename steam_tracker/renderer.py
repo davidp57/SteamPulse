@@ -1113,6 +1113,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <option value="release">__T_sort_release__</option>
       <option value="lastupdate">__T_sort_lastupdate__</option>
       <option value="metacritic">__T_sort_metacritic__</option>
+      <option value="dateadded">__T_sort_dateadded__</option>
     </select>
     <button class="filter-toggle-btn" id="filtersToggle" title="__T_title_btn_filters__">⚙ __T_btn_filters__<span class="filter-badge" id="filterBadge"></span></button>
     <button class="reset-btn" id="resetBtn" title="__T_title_btn_reset__">✕ __T_btn_reset__</button>
@@ -1356,6 +1357,7 @@ function updateGrid() {
                 : parseInt(b.dataset.lastUpdate) || 0;
       return tsB - tsA;
     }
+    if (sort === 'dateadded') return (parseInt(b.dataset.timeAdded) || 0) - (parseInt(a.dataset.timeAdded) || 0);
     return 0;
   });
 
@@ -1710,7 +1712,7 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         for n in news_list:
             _ntag = "patchnotes" if n.tags and n.tags[0].lower() == "patchnotes" else "other"
             _rows.append(                f'<div class="news-item" data-news-tag="{_ntag}">'
-                f'  <span class="news-date">{html.escape(n.date.strftime("%d/%m/%Y"))}</span>'
+                f'  <span class="news-date">{html.escape(n.date.strftime("%d/%m/%y"))}</span>'
                 f'  <span class="news-item-title">'
                 f'    <a href="{html.escape(n.url)}" target="_blank" rel="noopener">'
                 f"{html.escape(n.title)}</a>"
@@ -1744,8 +1746,13 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
     ) if nc > 0 else ""
 
     release_ts = _parse_release_ts(status.release_date)
+    rel_date_display = (
+        datetime.fromtimestamp(release_ts, tz=UTC).strftime("%d/%m/%y")
+        if release_ts > 0
+        else html.escape(status.release_date) or "—"
+    )
     last_update_ts = int(news_list[0].date.timestamp()) if news_list else 0
-    last_all_date = news_list[0].date.strftime("%d/%m/%Y") if news_list else ""
+    last_all_date = news_list[0].date.strftime("%d/%m/%y") if news_list else ""
     last_patch_ts, last_other_ts = 0, 0
     last_patch_date, last_other_date = "", ""
     for _n in news_list:
@@ -1754,10 +1761,10 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         if _primary == "patchnotes":
             if _ts > last_patch_ts:
                 last_patch_ts = _ts
-                last_patch_date = _n.date.strftime("%d/%m/%Y")
+                last_patch_date = _n.date.strftime("%d/%m/%y")
         elif _ts > last_other_ts:
             last_other_ts = _ts
-            last_other_date = _n.date.strftime("%d/%m/%Y")
+            last_other_date = _n.date.strftime("%d/%m/%y")
     placeholder = html.escape(game.name[:2].upper())
     store_tag = "epic" if game.source == "epic" else "steam"
     lib_status_tag = "owned" if game.source in ("owned", "epic") else game.source
@@ -1774,6 +1781,12 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
     _pt_attr = f' data-tooltip="{_tt_pt}"' if game.source == "owned" else ""
     _is_unknown = appid >= SYNTHETIC_APPID_BASE or status.badge == "unknown"
     _unknown_attr = ' data-unknown="true"' if _is_unknown else ""
+    _tt_date_added = html.escape(t("tt_date_added"))
+    if record.time_added > 0:
+        _date_added_str = datetime.fromtimestamp(record.time_added, tz=UTC).strftime("%d/%m/%y")
+        _date_added_html = f'      <span data-tooltip="{_tt_date_added}">➕ {_date_added_str}</span>\n'
+    else:
+        _date_added_html = ""
     return (
         f'<div class="card" data-appid="{appid}" data-status="{status.badge}" '
         f'data-store="{store_tag}" data-lib-status="{lib_status_tag}" data-name="{name.lower()}" '
@@ -1781,7 +1794,8 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         f'data-metacritic="{metacritic_score}" '
         f'data-release="{rel_date}" data-release-ts="{release_ts}" '
         f'data-last-update="{last_update_ts}" '
-        f'data-last-patch-ts="{last_patch_ts}" data-last-other-ts="{last_other_ts}"'
+        f'data-last-patch-ts="{last_patch_ts}" data-last-other-ts="{last_other_ts}" '
+        f'data-time-added="{record.time_added}"'
         f'{_unknown_attr}>\n'
         f'  <span class="card-ext-hint">{store_hint}</span>\n'
         f'  <img class="card-img" src="{html.escape(img_url)}" alt="" loading="lazy"'
@@ -1798,12 +1812,13 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         f'    <div class="col-genres">{genres_html}</div>\n'
         f'    <div class="col-meta">\n'
         f'    <div class="card-meta">\n'
-        f'      <span data-tooltip="{_tt_rel}">📅 {rel_date}</span>\n'
+        f'      <span data-tooltip="{_tt_rel}">📅 {rel_date_display}</span>\n'
         f'      <span class="news-date-display" data-tooltip="{_tt_news}"'
         f' data-date-all="{html.escape(last_all_date)}"'
         f' data-date-patch="{html.escape(last_patch_date)}"'
         f' data-date-other="{html.escape(last_other_date)}">'
         f'\U0001f4f0 {html.escape(last_all_date) or "—"}</span>\n'
+        f"{_date_added_html}"
         f'      <span{_pt_attr}>{pt_display}</span>\n'
         f"    </div>\n"
         f"    </div>\n"

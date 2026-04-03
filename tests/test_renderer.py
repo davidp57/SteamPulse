@@ -563,6 +563,8 @@ def test_make_alert_card_has_news_url_attr() -> None:
     assert 'data-news-url="https://example.com/news"' in card
 
 
+
+
 # -- data-unknown attribute -------------------------------------------------
 
 
@@ -663,6 +665,22 @@ def test_generate_diagnostic_html_unknown_games_none() -> None:
     """When unknown_games is None, no error should occur."""
     html = generate_diagnostic_html(_EMPTY_SUMMARY, [])
     assert "__UNKNOWN_CONTENT__" not in html
+
+
+# -- date-added attribute ---------------------------------------------------
+
+
+def test_make_card_contains_time_added_attribute(sample_record: GameRecord) -> None:
+    """Game card must carry a data-time-added attribute."""
+    record = sample_record.model_copy(update={"time_added": 1700000000})
+    card = make_card(record)
+    assert 'data-time-added="1700000000"' in card
+
+
+def test_generate_html_has_dateadded_sort_option(sample_record: GameRecord) -> None:
+    """The sort dropdown must include a 'dateadded' option."""
+    html = generate_html([sample_record], steam_id="123")
+    assert 'value="dateadded"' in html
 
 
 def test_make_alert_card_no_news_url_when_empty() -> None:
