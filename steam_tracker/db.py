@@ -832,14 +832,14 @@ class Database:
         if not appids:
             return 0
         now = _now()
+        placeholders = ",".join("?" * len(appids))
         with self._connect() as con:
-            con.executemany(
-                "UPDATE games SET removed_at = ? WHERE appid = ? AND removed_at IS NULL",
-                [(now, a) for a in appids],
+            con.execute(
+                f"UPDATE games SET removed_at = ? "
+                f"WHERE appid IN ({placeholders}) AND removed_at IS NULL",
+                [now, *appids],
             )
-            count = con.execute(
-                "SELECT changes()"
-            ).fetchone()
+            count = con.execute("SELECT changes()").fetchone()
         return int(count[0]) if count else 0
 
     def mark_active(self, appids: set[int]) -> int:
@@ -853,14 +853,14 @@ class Database:
         """
         if not appids:
             return 0
+        placeholders = ",".join("?" * len(appids))
         with self._connect() as con:
-            con.executemany(
-                "UPDATE games SET removed_at = NULL WHERE appid = ? AND removed_at IS NOT NULL",
-                [(a,) for a in appids],
+            con.execute(
+                f"UPDATE games SET removed_at = NULL "
+                f"WHERE appid IN ({placeholders}) AND removed_at IS NOT NULL",
+                [*appids],
             )
-            count = con.execute(
-                "SELECT changes()"
-            ).fetchone()
+            count = con.execute("SELECT changes()").fetchone()
         return int(count[0]) if count else 0
 
     def delete_games(self, appids: set[int]) -> int:
@@ -877,14 +877,13 @@ class Database:
         """
         if not appids:
             return 0
+        placeholders = ",".join("?" * len(appids))
         with self._connect() as con:
-            con.executemany(
-                "DELETE FROM games WHERE appid = ?",
-                [(a,) for a in appids],
+            con.execute(
+                f"DELETE FROM games WHERE appid IN ({placeholders})",
+                [*appids],
             )
-            count = con.execute(
-                "SELECT changes()"
-            ).fetchone()
+            count = con.execute("SELECT changes()").fetchone()
         return int(count[0]) if count else 0
 
     def get_all_game_records(self) -> list[GameRecord]:
