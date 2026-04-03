@@ -165,6 +165,10 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
 ]
 
 
+# SQLite limits bound parameters per statement; keep chunks safely below that limit.
+_SQLITE_MAX_PARAMS = 900
+
+
 def _now() -> str:
     return datetime.now(tz=UTC).isoformat()
 
@@ -703,6 +707,8 @@ class Database:
 
         Only updates games whose ``removed_at`` is currently NULL so that
         the timestamp of first removal is preserved on subsequent calls.
+        Processes ``appids`` in chunks to stay within SQLite's bound-parameter
+        limit.
 
         Args:
             appids: Set of appids to mark as removed.
@@ -714,18 +720,25 @@ class Database:
             return 0
         now = _now()
         safe_ids = [int(a) for a in appids]
-        placeholders = ",".join("?" * len(safe_ids))
+        total = 0
         with self._connect() as con:
-            con.execute(
-                f"UPDATE games SET removed_at = ? "
-                f"WHERE appid IN ({placeholders}) AND removed_at IS NULL",
-                [now, *safe_ids],
-            )
-            count = con.execute("SELECT changes()").fetchone()
-        return int(count[0]) if count else 0
+            for i in range(0, len(safe_ids), _SQLITE_MAX_PARAMS):
+                chunk = safe_ids[i : i + _SQLITE_MAX_PARAMS]
+                placeholders = ",".join("?" * len(chunk))
+                con.execute(
+                    f"UPDATE games SET removed_at = ? "
+                    f"WHERE appid IN ({placeholders}) AND removed_at IS NULL",
+                    [now, *chunk],
+                )
+                row = con.execute("SELECT changes()").fetchone()
+                total += int(row[0]) if row else 0
+        return total
 
     def mark_active(self, appids: set[int]) -> int:
         """Clear the soft-delete flag for games that have reappeared in a store.
+
+        Processes ``appids`` in chunks to stay within SQLite's bound-parameter
+        limit.
 
         Args:
             appids: Set of appids to reactivate.
@@ -736,21 +749,26 @@ class Database:
         if not appids:
             return 0
         safe_ids = [int(a) for a in appids]
-        placeholders = ",".join("?" * len(safe_ids))
+        total = 0
         with self._connect() as con:
-            con.execute(
-                f"UPDATE games SET removed_at = NULL "
-                f"WHERE appid IN ({placeholders}) AND removed_at IS NOT NULL",
-                [*safe_ids],
-            )
-            count = con.execute("SELECT changes()").fetchone()
-        return int(count[0]) if count else 0
+            for i in range(0, len(safe_ids), _SQLITE_MAX_PARAMS):
+                chunk = safe_ids[i : i + _SQLITE_MAX_PARAMS]
+                placeholders = ",".join("?" * len(chunk))
+                con.execute(
+                    f"UPDATE games SET removed_at = NULL "
+                    f"WHERE appid IN ({placeholders}) AND removed_at IS NOT NULL",
+                    [*chunk],
+                )
+                row = con.execute("SELECT changes()").fetchone()
+                total += int(row[0]) if row else 0
+        return total
 
     def delete_games(self, appids: set[int]) -> int:
         """Permanently delete games and all their associated data.
 
         Cascades to ``app_details``, ``news``, ``alerts``, and
-        ``field_history`` via foreign-key constraints.
+        ``field_history`` via foreign-key constraints.  Processes ``appids``
+        in chunks to stay within SQLite's bound-parameter limit.
 
         Args:
             appids: Set of appids to hard-delete.
@@ -761,14 +779,18 @@ class Database:
         if not appids:
             return 0
         safe_ids = [int(a) for a in appids]
-        placeholders = ",".join("?" * len(safe_ids))
+        total = 0
         with self._connect() as con:
-            con.execute(
-                f"DELETE FROM games WHERE appid IN ({placeholders})",
-                [*safe_ids],
-            )
-            count = con.execute("SELECT changes()").fetchone()
-        return int(count[0]) if count else 0
+            for i in range(0, len(safe_ids), _SQLITE_MAX_PARAMS):
+                chunk = safe_ids[i : i + _SQLITE_MAX_PARAMS]
+                placeholders = ",".join("?" * len(chunk))
+                con.execute(
+                    f"DELETE FROM games WHERE appid IN ({placeholders})",
+                    [*chunk],
+                )
+                row = con.execute("SELECT changes()").fetchone()
+                total += int(row[0]) if row else 0
+        return total
 
     def get_all_game_records(self) -> list[GameRecord]:
         """Return all games with their details and latest news, sorted by name."""

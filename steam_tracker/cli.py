@@ -168,6 +168,29 @@ def _run_cleanup(db: Database, t: object) -> None:
         log.debug("cleanup: nothing to clean")
 
 
+def _reconcile_removed(
+    db: Database,
+    pre_active: set[int],
+    discovered: list[OwnedGame],
+    t: object,
+) -> None:
+    """Mark newly-missing games as removed and reactivate returned games.
+
+    Args:
+        db: Open database instance.
+        pre_active: Set of appids that were active before this fetch run.
+        discovered: All games discovered during this fetch run.
+        t: Translator callable.
+    """
+    discovered_appids = {g.appid for g in discovered}
+    reactivated = db.mark_active(discovered_appids)
+    removed = db.mark_removed(pre_active - discovered_appids)
+    if reactivated:
+        print(t("cli_reactivated_count", count=reactivated))  # type: ignore[operator]
+    if removed:
+        print(t("cli_removed_count", count=removed))  # type: ignore[operator]
+
+
 def cmd_fetch() -> None:
     """Fetch Steam library data and persist it to a local SQLite database."""
     config_path, setup_requested = _pre_parse_config()
@@ -237,13 +260,7 @@ def cmd_fetch() -> None:
         db.upsert_game(game)
 
     # ── Soft-delete reconciliation ─────────────────────────────────────────
-    discovered_appids = {g.appid for g in all_discovered}
-    reactivated = db.mark_active(discovered_appids)
-    removed = db.mark_removed(pre_active_appids - discovered_appids)
-    if reactivated:
-        print(t("cli_reactivated_count", count=reactivated))
-    if removed:
-        print(t("cli_removed_count", count=removed))
+    _reconcile_removed(db, pre_active_appids, all_discovered, t)
 
     games = _build_enrichment_queue(all_discovered)
 
@@ -429,13 +446,7 @@ def cmd_run() -> None:
         db.upsert_game(game)
 
     # ── Soft-delete reconciliation ───────────────────────────────────────
-    discovered_appids_run = {g.appid for g in all_discovered}
-    reactivated_run = db.mark_active(discovered_appids_run)
-    removed_run = db.mark_removed(pre_active_appids_run - discovered_appids_run)
-    if reactivated_run:
-        print(t("cli_reactivated_count", count=reactivated_run))
-    if removed_run:
-        print(t("cli_removed_count", count=removed_run))
+    _reconcile_removed(db, pre_active_appids_run, all_discovered, t)
 
     games = _build_enrichment_queue(all_discovered)
 
