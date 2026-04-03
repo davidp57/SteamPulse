@@ -9,6 +9,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Date-added tracking** — database column `time_added` (unix timestamp) records when a game is first inserted; preserved on subsequent upserts
+- **Sort by date added** — new "Date d'ajout ↓" / "Sort: Date added ↓" option in the library sort dropdown; games with no tracked date sort to the bottom
+- **Date-added display on cards** — cards show ➕ date when a `time_added` value is available (new games only; existing games show nothing until they are re-encountered on a new fetch)
+- **Short date format on cards** — all dates on game cards (release date, last news, date added, in-card news list) now use `dd/mm/yy` instead of a long locale string; news dates on the alerts page are unchanged
+
 ---
 
 ## [1.6.1] — 2026-03-22

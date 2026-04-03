@@ -467,3 +467,23 @@ def test_get_all_appid_mappings_returns_rows(db: Database) -> None:
     assert resolved[0]["external_name"] == "Hades"
     assert len(unresolved) == 1
     assert unresolved[0]["external_name"] == "Celeste"
+
+
+# ─── time_added ────────────────────────────────────────────────────────
+
+
+def test_upsert_game_sets_time_added(db: Database, sample_game: OwnedGame) -> None:
+    """First insert must populate time_added with a positive unix timestamp."""
+    db.upsert_game(sample_game)
+    rec = db.get_all_game_records()[0]
+    assert rec.time_added > 0
+
+
+def test_upsert_game_preserves_time_added(db: Database, sample_game: OwnedGame) -> None:
+    """Subsequent upserts must NOT overwrite the original time_added."""
+    db.upsert_game(sample_game)
+    original_ts = db.get_all_game_records()[0].time_added
+
+    updated = sample_game.model_copy(update={"playtime_forever": 9999})
+    db.upsert_game(updated)
+    assert db.get_all_game_records()[0].time_added == original_ts

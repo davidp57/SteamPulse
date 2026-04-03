@@ -62,7 +62,8 @@
 ### v1.6.1 — Post-deployment fixes
 - **Diagnostic page nav link** — 🔍 link added to library and alerts page toolbars
 - **Epic hex-ID cleanup rule** — automatic cleanup of existing hex-ID games from the database
-- 384 tests total
+- **Date-added tracking** — `time_added` column records first-seen timestamp per game; sort by date added in library dashboard; cards display ➕ date for newly discovered games; all card dates now `dd/mm/yy`
+- 388 tests total
 
 ### v1.6.0 — Diagnostic page, Epic enrichment & resolver improvements
 - **Diagnostic page** — `steam_diagnostic.html` with database stats, per-source game counts, AppID mapping table, Epic discovery stats, and skipped items table
