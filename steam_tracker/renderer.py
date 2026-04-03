@@ -167,6 +167,7 @@ function getTagFilter()    { var b = document.querySelector('#tagBtns .tag-btn.a
 function getPtFilter()     { var b = document.querySelector('#playtimeBtns .filter-btn.active'); return b ? b.dataset.pt : 'all'; }
 function getMcFilter()     { var b = document.querySelector('#mcBtns .filter-btn.active'); return b ? b.dataset.mc : 'all'; }
 function getRecentFilter() { var b = document.querySelector('#recentBtns .filter-btn.active'); return b ? b.dataset.recent : 'all'; }
+function getAvailFilter()  { var b = document.querySelector('#availBtns .filter-btn.active'); return b ? b.dataset.avail : 'active'; }
 function checkMcFilter(mc, card) {
   if (mc === 'all') return true;
   var s = parseInt(card.dataset.metacritic) || 0;
@@ -223,6 +224,7 @@ function saveFilterState() {
     if (getMcFilter() !== 'all') state.mc = getMcFilter();
     if (getRecentFilter() !== 'all') state.recent = getRecentFilter();
     if (getTagFilter() !== 'all') state.tag = getTagFilter();
+    if (getAvailFilter() !== 'active') state.avail = getAvailFilter();
     var json = JSON.stringify(state);
     window.name = SP_WIN_PREFIX + json;
     try { localStorage.setItem(SP_FILTER_KEY, json); } catch(e2) {}
@@ -262,6 +264,9 @@ function loadFilterState() {
     }
     if (state.tag) {
       activateBtn('#tagBtns .tag-btn', 'tag', state.tag);
+    }
+    if (state.avail) {
+      activateBtn('#availBtns .filter-btn', 'avail', state.avail);
     }
   } catch(e) {}
 }"""
@@ -566,6 +571,9 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   .badge-released    { background: rgba(61,214,140,.12); color: var(--released); border: 1px solid rgba(61,214,140,.25); }
   .badge-unreleased  { background: rgba(123,127,255,.12); color: var(--unreleased); border: 1px solid rgba(123,127,255,.25); }
   .badge-unknown     { background: rgba(90,113,153,.12); color: var(--unknown); border: 1px solid rgba(90,113,153,.25); }
+  .badge-removed     { background: rgba(160,80,80,.15); color: #c06060; border: 1px solid rgba(160,80,80,.3); }
+
+  .card[data-removed="1"] { opacity: 0.5; filter: grayscale(60%); }
 
   .card-meta {
     display: flex;
@@ -1181,6 +1189,14 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         <button class="filter-btn" data-recent="30" data-tooltip="__T_tt_filter_recent_30__">__T_lbl_30_days__</button>
       </div>
     </div>
+    <div class="filter-group">
+      <div class="filter-group-label">__T_filter_availability__</div>
+      <div class="filter-btns" id="availBtns">
+        <button class="filter-btn active" data-avail="active" data-tooltip="__T_tt_filter_avail_active__">__T_lbl_active__</button>
+        <button class="filter-btn" data-avail="all">__T_lbl_all__</button>
+        <button class="filter-btn" data-avail="removed" data-tooltip="__T_tt_filter_avail_removed__">🗑 __T_lbl_removed__</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1210,6 +1226,7 @@ function getSort()      { return document.getElementById('sortBy').value; }
 function isDefaultState() {
   return getStatusFilter() === 'all' && allStoresActive() && getLibStatusFilter() === 'all' && getTagFilter() === 'all'
     && getPtFilter() === 'all' && getMcFilter() === 'all' && getRecentFilter() === 'all'
+    && getAvailFilter() === 'active'
     && !getSearch() && getSort() === 'name';
 }
 
@@ -1222,6 +1239,7 @@ function updateFilterBadge() {
   if (getPtFilter() !== 'all')       n++;
   if (getMcFilter() !== 'all')       n++;
   if (getRecentFilter() !== 'all')   n++;
+  if (getAvailFilter() !== 'active') n++;
   const badge = document.getElementById('filterBadge');
   badge.textContent = n;
   badge.classList.toggle('show', n > 0);
@@ -1237,6 +1255,7 @@ function saveStateToHash() {
   if (getPtFilter() !== 'all')        s.pt = getPtFilter();
   if (getMcFilter() !== 'all')        s.mc = getMcFilter();
   if (getRecentFilter() !== 'all')    s.recent = getRecentFilter();
+  if (getAvailFilter() !== 'active')  s.avail = getAvailFilter();
   if (getSearch())                    s.q = getSearch();
   if (getSort() !== 'name')           s.sort = getSort();
   const grid = document.getElementById('grid');
@@ -1289,6 +1308,7 @@ function loadStateFromHash() {
   if (p.get('pt'))     { activateBtn('#playtimeBtns .filter-btn', 'pt', p.get('pt')); }
   if (p.get('mc'))     { activateBtn('#mcBtns .filter-btn', 'mc', p.get('mc')); }
   if (p.get('recent')) { activateBtn('#recentBtns .filter-btn', 'recent', p.get('recent')); }
+  if (p.get('avail'))  { activateBtn('#availBtns .filter-btn', 'avail', p.get('avail')); }
   if (p.get('q'))      { document.getElementById('search').value = p.get('q'); }
   if (p.get('sort'))   { document.getElementById('sortBy').value = p.get('sort'); }
   if (p.get('view') === 'list') {
@@ -1313,6 +1333,7 @@ function updateGrid() {
 
   const mcFilter     = getMcFilter();
   const recentFilter  = getRecentFilter();
+  const availFilter   = getAvailFilter();
   let visible = allCards.filter(c => {
     const badgeOk     = filter === 'all' || c.dataset.status === filter;
     const storeOk     = activeStores.has(c.dataset.store);
@@ -1321,7 +1342,10 @@ function updateGrid() {
     const ptOk        = checkPtFilter(ptFilter, c);
     const mcOk        = checkMcFilter(mcFilter, c);
     const recentOk    = checkRecentFilter(recentFilter, c);
-    return badgeOk && storeOk && libStatusOk && searchOk && ptOk && mcOk && recentOk;
+    const availOk     = availFilter === 'all' ||
+                        (availFilter === 'active'  && !c.dataset.removed) ||
+                        (availFilter === 'removed' && c.dataset.removed === '1');
+    return badgeOk && storeOk && libStatusOk && searchOk && ptOk && mcOk && recentOk && availOk;
   });
 
   visible.sort((a, b) => {
@@ -1417,13 +1441,14 @@ setupFilterGroup('#tagBtns .tag-btn');
 setupFilterGroup('#playtimeBtns .filter-btn');
 setupFilterGroup('#mcBtns .filter-btn');
 setupFilterGroup('#recentBtns .filter-btn');
+setupFilterGroup('#availBtns .filter-btn');
 
 // Reset
 document.getElementById('resetBtn').addEventListener('click', () => {
   document.getElementById('search').value = '';
   document.getElementById('sortBy').value = 'name';
   document.querySelectorAll('#storeBtns .store-btn').forEach(b => b.classList.add('active'));
-  ['#filterBtns .filter-btn', '#libStatusBtns .filter-btn', '#tagBtns .tag-btn', '#playtimeBtns .filter-btn', '#mcBtns .filter-btn', '#recentBtns .filter-btn'].forEach(sel => {
+  ['#filterBtns .filter-btn', '#libStatusBtns .filter-btn', '#tagBtns .tag-btn', '#playtimeBtns .filter-btn', '#mcBtns .filter-btn', '#recentBtns .filter-btn', '#availBtns .filter-btn'].forEach(sel => {
     document.querySelectorAll(sel).forEach(b => b.classList.remove('active'));
     const first = document.querySelector(sel);
     if (first) first.classList.add('active');
@@ -1756,6 +1781,18 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         _date_added_html = f'      <span data-tooltip="{_tt_date_added}">➕ {_date_added_str}</span>\n'
     else:
         _date_added_html = ""
+    _removed_attr = ' data-removed="1"' if record.removed_at else ""
+    if record.removed_at:
+        _removed_date_str = html.escape(
+            datetime.fromisoformat(record.removed_at).strftime("%d/%m/%y")
+        )
+        _tt_removed = html.escape(f"{t('tt_removed_at')} {_removed_date_str}")
+        _removed_badge_html = (
+            f'      <span class="badge badge-removed" data-tooltip="{_tt_removed}">'
+            f"{html.escape(t('badge_removed'))}</span>\n"
+        )
+    else:
+        _removed_badge_html = ""
     return (
         f'<div class="card" data-appid="{appid}" data-status="{status.badge}" '
         f'data-store="{store_tag}" data-lib-status="{lib_status_tag}" data-name="{name.lower()}" '
@@ -1764,7 +1801,7 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         f'data-release="{rel_date}" data-release-ts="{release_ts}" '
         f'data-last-update="{last_update_ts}" '
         f'data-last-patch-ts="{last_patch_ts}" data-last-other-ts="{last_other_ts}" '
-        f'data-time-added="{record.time_added}">\n'
+        f'data-time-added="{record.time_added}"{_removed_attr}>\n'
         f'  <span class="card-ext-hint">{store_hint}</span>\n'
         f'  <img class="card-img" src="{html.escape(img_url)}" alt="" loading="lazy"'
         f"    onerror=\"this.style.display='none';this.nextElementSibling.style.display='flex'\">\n"
@@ -1774,6 +1811,7 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         f'    <div class="card-top">\n'
         f'      <div class="card-title">{name}</div>\n'
         f'      <span class="{html.escape(badge_cls)}" data-tooltip="{_tt_badge}">{html.escape(badge_label)}</span>\n'
+        f"{_removed_badge_html}"
         f"    </div>\n"
         f"    </div>\n"
         f'    <div class="col-detail">{detail_row}</div>\n'

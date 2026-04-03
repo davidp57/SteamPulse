@@ -220,6 +220,7 @@ def cmd_fetch() -> None:
     engine = AlertEngine(rules=load_alert_rules(config_path), db=db)
 
     # ── Game discovery (all sources) ─────────────────────────────────────────
+    pre_active_appids = db.get_all_active_appids()
     all_discovered: list[OwnedGame] = []
     for source in get_all_sources():
         if source.is_enabled(args):
@@ -234,6 +235,15 @@ def cmd_fetch() -> None:
     # Upsert everything to DB (DB enforces source priority: owned = epic > wishlist > followed)
     for game in all_discovered:
         db.upsert_game(game)
+
+    # ── Soft-delete reconciliation ─────────────────────────────────────────
+    discovered_appids = {g.appid for g in all_discovered}
+    reactivated = db.mark_active(discovered_appids)
+    removed = db.mark_removed(pre_active_appids - discovered_appids)
+    if reactivated:
+        print(t("cli_reactivated_count", count=reactivated))
+    if removed:
+        print(t("cli_removed_count", count=removed))
 
     games = _build_enrichment_queue(all_discovered)
 
@@ -398,6 +408,7 @@ def cmd_run() -> None:
     engine_run = AlertEngine(rules=load_alert_rules(config_path), db=db)
 
     # ── Game discovery (all sources) ───────────────────────────────────────
+    pre_active_appids_run = db.get_all_active_appids()
     all_discovered: list[OwnedGame] = []
     all_discovery_stats: list[DiscoveryStats] = []
     for source in get_all_sources():
@@ -416,6 +427,15 @@ def cmd_run() -> None:
     # Upsert everything to DB (DB enforces source priority: owned = epic > wishlist > followed)
     for game in all_discovered:
         db.upsert_game(game)
+
+    # ── Soft-delete reconciliation ───────────────────────────────────────
+    discovered_appids_run = {g.appid for g in all_discovered}
+    reactivated_run = db.mark_active(discovered_appids_run)
+    removed_run = db.mark_removed(pre_active_appids_run - discovered_appids_run)
+    if reactivated_run:
+        print(t("cli_reactivated_count", count=reactivated_run))
+    if removed_run:
+        print(t("cli_removed_count", count=removed_run))
 
     games = _build_enrichment_queue(all_discovered)
 

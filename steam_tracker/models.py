@@ -178,6 +178,7 @@ class GameRecord(BaseModel):
     news: list[NewsItem] = Field(default_factory=list)
     status: GameStatus
     time_added: int = 0                # unix ts: when the game was first seen in the DB
+    removed_at: str | None = None      # ISO timestamp when game disappeared from all stores
     fetched_at: datetime = Field(
         default_factory=lambda: datetime.now(tz=UTC)
     )

@@ -487,3 +487,85 @@ def test_upsert_game_preserves_time_added(db: Database, sample_game: OwnedGame) 
     updated = sample_game.model_copy(update={"playtime_forever": 9999})
     db.upsert_game(updated)
     assert db.get_all_game_records()[0].time_added == original_ts
+
+
+# ─── soft-delete ────────────────────────────────────────────────────────
+
+
+def test_get_all_game_records_removed_at_defaults_none(
+    db: Database, sample_game: OwnedGame
+) -> None:
+    """Freshly upserted games must have removed_at = None."""
+    db.upsert_game(sample_game)
+    rec = db.get_all_game_records()[0]
+    assert rec.removed_at is None
+
+
+def test_get_all_active_appids_returns_all_when_none_removed(
+    db: Database, sample_game: OwnedGame
+) -> None:
+    db.upsert_game(sample_game)
+    assert db.get_all_active_appids() == {sample_game.appid}
+
+
+def test_mark_removed_sets_removed_at(db: Database, sample_game: OwnedGame) -> None:
+    """mark_removed must populate removed_at and return 1."""
+    db.upsert_game(sample_game)
+    n = db.mark_removed({sample_game.appid})
+    assert n == 1
+    rec = db.get_all_game_records()[0]
+    assert rec.removed_at is not None
+
+
+def test_mark_removed_idempotent(db: Database, sample_game: OwnedGame) -> None:
+    """Calling mark_removed twice must not change removed_at on the second call."""
+    db.upsert_game(sample_game)
+    db.mark_removed({sample_game.appid})
+    first_ts = db.get_all_game_records()[0].removed_at
+
+    n = db.mark_removed({sample_game.appid})
+    assert n == 0  # nothing new to update
+    assert db.get_all_game_records()[0].removed_at == first_ts
+
+
+def test_get_all_active_appids_excludes_removed(
+    db: Database, sample_game: OwnedGame
+) -> None:
+    db.upsert_game(sample_game)
+    db.mark_removed({sample_game.appid})
+    assert db.get_all_active_appids() == set()
+
+
+def test_mark_active_clears_removed_at(db: Database, sample_game: OwnedGame) -> None:
+    """mark_active must clear removed_at and return 1."""
+    db.upsert_game(sample_game)
+    db.mark_removed({sample_game.appid})
+    n = db.mark_active({sample_game.appid})
+    assert n == 1
+    rec = db.get_all_game_records()[0]
+    assert rec.removed_at is None
+
+
+def test_mark_active_noop_when_already_active(
+    db: Database, sample_game: OwnedGame
+) -> None:
+    """mark_active on a never-removed game must return 0."""
+    db.upsert_game(sample_game)
+    n = db.mark_active({sample_game.appid})
+    assert n == 0
+
+
+def test_delete_games_removes_record(db: Database, sample_game: OwnedGame) -> None:
+    """delete_games must hard-delete the game and cascade to app_details."""
+    from steam_tracker.models import AppDetails  # noqa: PLC0415
+
+    db.upsert_game(sample_game)
+    db.upsert_app_details(AppDetails(appid=sample_game.appid))
+    n = db.delete_games({sample_game.appid})
+    assert n == 1
+    assert db.get_all_game_records() == []
+
+
+def test_delete_games_unknown_appid_returns_zero(db: Database) -> None:
+    n = db.delete_games({99999})
+    assert n == 0

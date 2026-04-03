@@ -1,5 +1,12 @@
 """English translation strings."""
 STRINGS: dict[str, str] = {
+    # ── CLI – soft-delete ─────────────────────────────────────────────────────
+    "cli_removed_count":     "   🗑 {count} game(s) marked as removed from stores",
+    "cli_reactivated_count": "   ✅ {count} game(s) reactivated (reappeared in store)",
+    "cli_mark_removed_done": "✅ Game {appid} marked as removed",
+    "cli_delete_done":       "✅ Game {appid} deleted from database",
+    "cli_game_not_found":    "⚠ Game {appid} not found in database",
+
     # ── CLI ──────────────────────────────────────────────────────────────────
     "cli_banner":            "🚀 SteamPulse v{version}",
     "cli_fetching_library":  "📦 Fetching Steam library...",
@@ -114,6 +121,13 @@ STRINGS: dict[str, str] = {
     "sort_metacritic":       "Sort: Metacritic ↓",
     "sort_dateadded":        "Sort: Date added ↓",
     "tt_date_added":          "Date added to library",
+    "filter_availability":   "Availability",
+    "lbl_active":            "Active",
+    "lbl_removed":           "Removed",
+    "badge_removed":         "Removed",
+    "tt_filter_avail_active":   "Show only games still available in your library",
+    "tt_filter_avail_removed":  "Show only games no longer found in any store",
+    "tt_removed_at":         "Removed from store on",
     "col_game":              "Game",
     "col_dev_score":         "Developer / Score",
     "col_playtime_date":     "Playtime · Date",
