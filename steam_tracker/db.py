@@ -160,6 +160,8 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("app_details", "branch_names", "TEXT NOT NULL DEFAULT '[]'"),
     # Date-added tracking
     ("games", "time_added", "INTEGER NOT NULL DEFAULT 0"),
+    # Soft-delete: NULL = active, ISO timestamp = removed from all stores
+    ("games", "removed_at", "TEXT"),
 ]
 
 
@@ -803,13 +805,95 @@ class Database:
             ).fetchall()
         return {int(r[0]) for r in rows}
 
+    def get_all_active_appids(self) -> set[int]:
+        """Return the set of appids for games that are currently active (not soft-deleted).
+
+        Returns:
+            Set of appids where ``removed_at`` is NULL.
+        """
+        with self._connect() as con:
+            rows = con.execute(
+                "SELECT appid FROM games WHERE removed_at IS NULL"
+            ).fetchall()
+        return {int(r[0]) for r in rows}
+
+    def mark_removed(self, appids: set[int]) -> int:
+        """Soft-delete games that are no longer found in any store.
+
+        Only updates games whose ``removed_at`` is currently NULL so that
+        the timestamp of first removal is preserved on subsequent calls.
+
+        Args:
+            appids: Set of appids to mark as removed.
+
+        Returns:
+            Number of games newly marked as removed.
+        """
+        if not appids:
+            return 0
+        now = _now()
+        with self._connect() as con:
+            con.executemany(
+                "UPDATE games SET removed_at = ? WHERE appid = ? AND removed_at IS NULL",
+                [(now, a) for a in appids],
+            )
+            count = con.execute(
+                "SELECT changes()"
+            ).fetchone()
+        return int(count[0]) if count else 0
+
+    def mark_active(self, appids: set[int]) -> int:
+        """Clear the soft-delete flag for games that have reappeared in a store.
+
+        Args:
+            appids: Set of appids to reactivate.
+
+        Returns:
+            Number of games reactivated (had a non-NULL ``removed_at``).
+        """
+        if not appids:
+            return 0
+        with self._connect() as con:
+            con.executemany(
+                "UPDATE games SET removed_at = NULL WHERE appid = ? AND removed_at IS NOT NULL",
+                [(a,) for a in appids],
+            )
+            count = con.execute(
+                "SELECT changes()"
+            ).fetchone()
+        return int(count[0]) if count else 0
+
+    def delete_games(self, appids: set[int]) -> int:
+        """Permanently delete games and all their associated data.
+
+        Cascades to ``app_details``, ``news``, ``alerts``, and
+        ``field_history`` via foreign-key constraints.
+
+        Args:
+            appids: Set of appids to hard-delete.
+
+        Returns:
+            Number of games deleted.
+        """
+        if not appids:
+            return 0
+        with self._connect() as con:
+            con.executemany(
+                "DELETE FROM games WHERE appid = ?",
+                [(a,) for a in appids],
+            )
+            count = con.execute(
+                "SELECT changes()"
+            ).fetchone()
+        return int(count[0]) if count else 0
+
     def get_all_game_records(self) -> list[GameRecord]:
         """Return all games with their details and latest news, sorted by name."""
         with self._connect() as con:
             games_rows = con.execute(
                 "SELECT appid, name, playtime_forever, playtime_2weeks, "
                 "rtime_last_played, img_icon_url, img_logo_url, source, external_id, "
-                "time_added "
+                "time_added, removed_at "
                 "FROM games ORDER BY name COLLATE NOCASE"
             ).fetchall()
 
@@ -828,6 +912,7 @@ class Database:
                     external_id=str(row[8]),
                 )
                 time_added = int(row[9]) if row[9] else 0
+                removed_at = str(row[10]) if row[10] is not None else None
 
                 det = con.execute(
                     "SELECT name, app_type, short_description, supported_languages, "
@@ -908,6 +993,7 @@ class Database:
                         news=news,
                         status=infer_status(details),
                         time_added=time_added,
+                        removed_at=removed_at,
                     )
                 )
 

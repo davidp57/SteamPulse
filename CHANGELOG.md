@@ -11,6 +11,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Soft-delete for removed games** — when a game disappears from all sources during a fetch, it is automatically tagged `removed_at` (ISO timestamp) rather than deleted; re-appearing games are automatically reactivated
+- **Availability filter** — new filter group in the library page lets users show "Active" games only (default), all games, or "Removed" games only; filter state is saved in the URL hash and local storage
+- **`--mark-removed <APPID>`** — CLI flag to manually mark a game as removed (soft-delete) without running a full fetch
+- **`--delete <APPID>`** — CLI flag to permanently delete a game and all its associated data from the database
+- **Removed badge on cards** — games tagged as removed display a grey "Removed" badge with the removal date as tooltip; card is dimmed (opacity + grayscale)
 - **Date-added tracking** — database column `time_added` (unix timestamp) records when a game is first inserted; preserved on subsequent upserts
 - **Sort by date added** — new "Date d'ajout ↓" / "Sort: Date added ↓" option in the library sort dropdown; games with no tracked date sort to the bottom
 - **Date-added display on cards** — cards show ➕ date when a `time_added` value is available (new games only; existing games show nothing until they are re-encountered on a new fetch)

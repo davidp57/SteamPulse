@@ -1,5 +1,12 @@
 """French translation strings."""
 STRINGS: dict[str, str] = {
+    # ── CLI – soft-delete ─────────────────────────────────────────────────────
+    "cli_removed_count":     "   🗑 {count} jeu(x) marqué(s) comme retiré(s) des stores",
+    "cli_reactivated_count": "   ✅ {count} jeu(x) réactivé(s) (réapparu(s) dans un store)",
+    "cli_mark_removed_done": "✅ Jeu {appid} marqué comme retiré",
+    "cli_delete_done":       "✅ Jeu {appid} supprimé de la base",
+    "cli_game_not_found":    "⚠ Jeu {appid} introuvable dans la base",
+
     # ── CLI ──────────────────────────────────────────────────────────────────
     "cli_banner":            "🚀 SteamPulse v{version}",
     "cli_fetching_library":  "📦 Récupération de la bibliothèque Steam...",
@@ -115,6 +122,13 @@ STRINGS: dict[str, str] = {
     "sort_metacritic":       "Trier : Metacritic ↓",
     "sort_dateadded":        "Trier : Date d'ajout ↓",
     "tt_date_added":          "Date d'ajout à la bibliothèque",
+    "filter_availability":   "Disponibilité",
+    "lbl_active":            "Actifs",
+    "lbl_removed":           "Retirés",
+    "badge_removed":         "Retiré",
+    "tt_filter_avail_active":   "Afficher uniquement les jeux encore disponibles",
+    "tt_filter_avail_removed":  "Afficher uniquement les jeux absents de tous les stores",
+    "tt_removed_at":         "Retiré des stores le",
     "col_game":              "Jeu",
     "col_dev_score":         "Développeur / Score",
     "col_playtime_date":     "Temps de jeu · Date",

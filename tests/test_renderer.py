@@ -873,3 +873,52 @@ def test_generate_diagnostic_html_contains_toggle_script() -> None:
     assert "toggleFilter" in html
     assert "activeFilter" in html
 
+
+# ── soft-delete / availability filter ─────────────────────────────────────────
+
+
+def test_make_card_removed_has_data_attribute() -> None:
+    """A removed game card must carry data-removed=\"1\"."""
+    record = GameRecord(
+        game=OwnedGame(appid=1, name="Delisted"),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+        removed_at="2024-01-01T00:00:00+00:00",
+    )
+    card = make_card(record)
+    assert 'data-removed="1"' in card
+
+
+def test_make_card_active_has_no_removed_attribute() -> None:
+    """An active game card must NOT carry data-removed."""
+    record = GameRecord(
+        game=OwnedGame(appid=1, name="Active"),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+        removed_at=None,
+    )
+    card = make_card(record)
+    assert "data-removed" not in card
+
+
+def test_make_card_removed_has_badge_removed_class() -> None:
+    """A removed game card must contain a badge with class badge-removed."""
+    record = GameRecord(
+        game=OwnedGame(appid=1, name="Delisted"),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+        removed_at="2024-03-15T12:00:00+00:00",
+    )
+    card = make_card(record)
+    assert "badge-removed" in card
+
+
+def test_generate_html_has_availability_filter_group() -> None:
+    """Library page must contain the availability filter panel with availBtns."""
+    record = GameRecord(
+        game=OwnedGame(appid=1, name="Game"),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+    )
+    page = generate_html([record], steam_id="123")
+    assert 'id="availBtns"' in page
+    assert 'data-avail="active"' in page
+    assert 'data-avail="removed"' in page
+    assert 'data-avail="all"' in page
+
