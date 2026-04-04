@@ -234,6 +234,7 @@ _SECTION_KEYS: list[tuple[str, list[tuple[str, str]]]] = [
             ("workers", "workers"),
             ("news_age", "news_age"),
             ("lang", "lang"),
+            ("serve_token", "serve_token"),
         ],
     ),
 ]

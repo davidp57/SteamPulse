@@ -212,6 +212,11 @@ def run_wizard(config_path: Path | None = None) -> None:
     lang = _ask("  Language (en/fr)     [auto]", default=_def_lang)
     if lang:
         data["lang"] = lang
+    _def_serve_token = existing.get("serve_token")
+    print("  Auth token for steam-serve (leave empty to disable auth):")
+    serve_token = _ask("  Token", default=_def_serve_token, secret=True)
+    if serve_token:
+        data["serve_token"] = serve_token
     print()
 
     # ------------------------------------------------------------------
