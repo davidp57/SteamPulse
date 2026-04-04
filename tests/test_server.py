@@ -564,37 +564,52 @@ class TestRefetch:
 
     def test_refetch_concurrent_returns_409(self, tmp_path: Path) -> None:
         """A second concurrent refetch request must be rejected with 409."""
-        import time  # noqa: PLC0415
+        from unittest.mock import patch  # noqa: PLC0415
 
         cfg_path = tmp_path / "config.toml"
-        cfg_path.write_text("[steam]\nkey = \"\"\nsteamid = \"\"\n", encoding="utf-8")
+        # Provide non-empty credentials so the pre-flight check passes and the
+        # handler reaches the subprocess call (where the lock is still held).
+        cfg_path.write_text(
+            "[steam]\nkey = \"FAKE\"\nsteamid = \"12345\"\n", encoding="utf-8"
+        )
         port, httpd = _start_server(tmp_path, config_path=cfg_path)
+
+        # Use an Event so the mock subprocess blocks until we release it.
+        _release = threading.Event()
+
+        def _slow_popen(*args: object, **kwargs: object) -> None:
+            _release.wait(timeout=5.0)
+            raise RuntimeError("mock: fetch never runs")
+
+        first_headers_received = threading.Event()
+        first_resp: list[object] = []
+
+        def _do_first() -> None:
+            c = HTTPConnection("127.0.0.1", port)
+            c.request("GET", "/api/refetch")
+            r = c.getresponse()
+            first_resp.append(r)
+            first_headers_received.set()
+            r.read()  # drain body so connection closes cleanly
+            c.close()
+
         try:
-            # Start first request in a background thread (will block on SSE).
-            import threading as _t  # noqa: PLC0415  # avoid name clash
+            with patch("steam_tracker.server.subprocess.Popen", side_effect=_slow_popen):
+                t = threading.Thread(target=_do_first, daemon=True)
+                t.start()
+                # Wait until the first request has received its response headers
+                # (lock is held at that point).
+                assert first_headers_received.wait(timeout=5.0), "first request timed out"
 
-            first_resp: list[object] = []
-
-            def _do_first() -> None:
-                c = HTTPConnection("127.0.0.1", port)
-                c.request("GET", "/api/refetch")
-                first_resp.append(c.getresponse())
-
-            t = _t.Thread(target=_do_first, daemon=True)
-            t.start()
-            time.sleep(0.15)  # give first request time to acquire lock
-
-            # Second request should be rejected.
-            conn2 = HTTPConnection("127.0.0.1", port)
-            conn2.request("GET", "/api/refetch")
-            resp2 = conn2.getresponse()
-            # First req either won the lock or the lock was already released (fast path).
-            # Only assert that 409 is a valid outcome when lock is held.
-            assert resp2.status in (200, 409)
-            if resp2.status == 409:
+                conn2 = HTTPConnection("127.0.0.1", port)
+                conn2.request("GET", "/api/refetch")
+                resp2 = conn2.getresponse()
                 data2 = json.loads(resp2.read())
+                conn2.close()
+                assert resp2.status == 409
                 assert data2["ok"] is False
-            else:
-                resp2.read()  # drain SSE body
+
+                _release.set()  # unblock the mock so the server thread finishes
+                t.join(timeout=3.0)
         finally:
             httpd.shutdown()

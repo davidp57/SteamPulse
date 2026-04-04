@@ -102,12 +102,16 @@ $FORM_ERROR$<form method="POST" action="/login">
 def _rerender(db: Database, steamid: str, output_dir: Path, lang: str | None) -> None:
     """Re-render all HTML pages after a mutation.
 
+    Does nothing when *steamid* is empty (no credentials configured).
+
     Args:
         db: Open database instance.
-        steamid: User's SteamID64.
+        steamid: User's SteamID64.  Skipped when empty string.
         output_dir: Directory containing the HTML output files.
         lang: Language code (or None for system default).
     """
+    if not steamid:
+        return
     records = db.get_all_game_records()
     lib_path = output_dir / "steam_library.html"
     alerts_path = output_dir / "steam_alerts.html"
@@ -256,7 +260,6 @@ def make_handler(
             body = json.dumps(payload).encode()
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -304,27 +307,33 @@ def make_handler(
                 if not _fetch_lock.acquire(blocking=False):
                     self._send_json(409, {"ok": False, "error": "fetch already running"})
                     return
-                # Pre-flight: check that Steam credentials exist in the config.
-                _effective_path = config_path or get_config_path()
-                _cfg = load_config(_effective_path)
-                if not _cfg.get("key") or not _cfg.get("steamid"):
-                    _fetch_lock.release()
+                try:
+                    # Pre-flight: check that Steam credentials exist in the config.
+                    # Wrapped in try/finally so the lock is always released on error.
+                    _effective_path = config_path or get_config_path()
+                    _cfg = load_config(_effective_path)
+                    if not _cfg.get("key") or not _cfg.get("steamid"):
+                        self.send_response(200)
+                        self.send_header("Content-Type", "text/event-stream")
+                        self.send_header("Cache-Control", "no-cache")
+                        self.end_headers()
+                        _msg = "\u26a0 No Steam credentials. Run 'steam-setup' first."
+                        _err = json.dumps({"msg": _msg})
+                        _done = json.dumps({"done": True, "status": "error"})
+                        self.wfile.write(f"data: {_err}\n\ndata: {_done}\n\n".encode())
+                        return
+                    # Start SSE stream — this thread blocks until fetch completes.
                     self.send_response(200)
                     self.send_header("Content-Type", "text/event-stream")
                     self.send_header("Cache-Control", "no-cache")
+                    self.send_header("Connection", "keep-alive")
+                    self.send_header("X-Accel-Buffering", "no")
                     self.end_headers()
-                    _msg = "\u26a0 No Steam credentials. Run 'steam-setup' first."
-                    _err = json.dumps({"msg": _msg})
-                    _done = json.dumps({"done": True, "status": "error"})
-                    self.wfile.write(f"data: {_err}\n\ndata: {_done}\n\n".encode())
+                except Exception as _pre_exc:
+                    log.error("refetch pre-flight failed: %s", _pre_exc)
+                    _fetch_lock.release()
+                    self._send_json(500, {"ok": False, "error": str(_pre_exc)})
                     return
-                # Start SSE stream — this thread blocks until fetch completes.
-                self.send_response(200)
-                self.send_header("Content-Type", "text/event-stream")
-                self.send_header("Cache-Control", "no-cache")
-                self.send_header("Connection", "keep-alive")
-                self.send_header("X-Accel-Buffering", "no")
-                self.end_headers()
                 try:
                     cmd = _build_fetch_cmd(config_path, db_path)
                     _env = os.environ.copy()
@@ -461,12 +470,16 @@ def make_handler(
 # ---------------------------------------------------------------------------
 
 
+_TOKEN_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_\-]+$")
+
+
 def run_server(
     db_path: Path,
     output_dir: Path,
     steamid: str,
     lang: str | None = None,
     port: int = DEFAULT_PORT,
+    host: str = "127.0.0.1",
     token: str | None = None,
     config_path: Path | None = None,
 ) -> None:
@@ -478,18 +491,26 @@ def run_server(
         steamid: User's SteamID64 (used when re-rendering after mutations).
         lang: Language code (or None for system default).
         port: TCP port to listen on.
-        token: Shared secret enabling auth mode.  When ``None``, all routes
-            are publicly accessible (localhost-only use case).
+        host: Interface to bind to (default: ``127.0.0.1`` — loopback only).
+            Pass ``0.0.0.0`` to expose on all interfaces.
+        token: Shared secret enabling auth mode.  Must contain only
+            URL-safe characters (``A-Za-z0-9_-``).  When ``None``, all routes
+            are publicly accessible.
         config_path: Path to the TOML config file.  Forwarded to the handler
             so that ``/api/refetch`` can invoke ``cmd_fetch`` with the correct
             credentials.  When ``None``, falls back to the platform default.
 
     Raises:
         KeyboardInterrupt: Propagated; caller should handle it.
+        ValueError: If ``token`` contains invalid characters.
     """
+    if token is not None and not _TOKEN_RE.fullmatch(token):
+        raise ValueError(
+            "--token must contain only A-Za-z0-9, underscore, or hyphen characters."
+        )
     handler_cls = make_handler(
         db_path, output_dir, steamid, lang, token=token, config_path=config_path
     )
-    with ThreadingHTTPServer(("", port), handler_cls) as httpd:
-        log.info("SteamPulse sidecar listening on port %d", port)
+    with ThreadingHTTPServer((host, port), handler_cls) as httpd:
+        log.info("SteamPulse sidecar listening on %s:%d", host, port)
         httpd.serve_forever()

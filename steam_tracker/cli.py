@@ -593,6 +593,11 @@ def cmd_serve() -> None:
         help="Directory containing the rendered HTML files (default: current directory)",
     )
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="TCP port (default: 8080)")
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Interface to bind to (default: 127.0.0.1 — loopback only; use 0.0.0.0 for LAN)",
+    )
     parser.add_argument("--lang", default=None, help="Language code (e.g. en, fr); default: system")
     parser.add_argument(
         "--steamid",
@@ -634,6 +639,7 @@ def cmd_serve() -> None:
             steamid=args.steamid,
             lang=args.lang,
             port=args.port,
+            host=args.host,
             token=serve_token,
             config_path=config_path,
         )

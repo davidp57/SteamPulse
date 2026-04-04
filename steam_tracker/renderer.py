@@ -1137,10 +1137,10 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     </div>
   </div>
   <div class="sp-auth-panel">
-    <button id="sp-rerender-btn" class="sp-ctrl-btn" title="__T_btn_rerender__">&#127912;</button>
-    <button id="sp-refetch-btn"  class="sp-ctrl-btn" title="__T_btn_refetch__">&#11123;</button>
-    <a class="sp-auth-btn sp-login-btn" href="/login" title="__T_btn_sidecar_login__">&#128273;</a>
-    <a class="sp-auth-btn sp-logout-btn" href="/api/logout" title="__T_btn_sidecar_logout__">&#128275;</a>
+    <button id="sp-rerender-btn" class="sp-ctrl-btn" title="__T_btn_rerender__" aria-label="__T_btn_rerender__">&#127912;</button>
+    <button id="sp-refetch-btn"  class="sp-ctrl-btn" title="__T_btn_refetch__" aria-label="__T_btn_refetch__">&#11123;</button>
+    <a class="sp-auth-btn sp-login-btn" href="/login" title="__T_btn_sidecar_login__" aria-label="__T_btn_sidecar_login__">&#128273;</a>
+    <a class="sp-auth-btn sp-logout-btn" href="/api/logout" title="__T_btn_sidecar_logout__" aria-label="__T_btn_sidecar_logout__">&#128275;</a>
   </div>
 </header>
 
@@ -2007,11 +2007,11 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
     _api_actions_html = (
         f'  <div class="api-actions">\n'
         f'    <button class="api-btn btn-mark-removed" data-appid="{appid}"'
-        f' title="{_tt_mark_removed}">⛔</button>\n'
+        f' title="{_tt_mark_removed}" aria-label="{_tt_mark_removed}">⛔</button>\n'
         f'    <button class="api-btn btn-reactivate" data-appid="{appid}"'
-        f' title="{_tt_reactivate}">↩️</button>\n'
+        f' title="{_tt_reactivate}" aria-label="{_tt_reactivate}">↩️</button>\n'
         f'    <button class="api-btn btn-delete" data-appid="{appid}"'
-        f' title="{_tt_delete}">🗑️</button>\n'
+        f' title="{_tt_delete}" aria-label="{_tt_delete}">🗑️</button>\n'
         f"  </div>\n"
     )
     if record.removed_at:

@@ -33,6 +33,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **`appendLog` JS SyntaxError** — unescaped newline in `'\n'` inside the sidecar JS string template broke the entire JS block
 - **`UnicodeEncodeError` in refetch subprocess** — `steam-fetch` subprocess now inherits `PYTHONUTF8=1` in its environment to avoid cp1252 encoding errors on Windows
 - **`UnicodeDecodeError` reading subprocess stdout** — `subprocess.Popen` now uses `encoding="utf-8"` when reading subprocess output instead of defaulting to the system locale
+- **`_fetch_lock` not released on `load_config()` failure** — pre-flight config load is now inside the `try/finally` block so the mutex is always freed even if config parsing raises
+- **Server binding on all interfaces** — `steam-serve` now binds to `127.0.0.1` by default instead of `0.0.0.0`; a new `--host` flag allows overriding for intentional LAN access
+- **`Access-Control-Allow-Origin: *` on mutation API** — removed the wildcard CORS header from all JSON responses; mutations are only accessible from the same origin
+- **Missing `aria-label` on icon-only buttons** — all icon-only header controls (re-render, refetch, login, logout) and card action buttons (mark-removed, reactivate, delete) now carry an `aria-label` matching their `title` tooltip for screen-reader accessibility
+- **Re-render skipped when no `--steamid` configured** — `POST /api/refetch` no longer attempts to call `_rerender` with an empty Steam ID after a successful fetch; a warning is printed instead
+- **Invalid token characters** — `steam-serve` now validates at startup that `--token` contains only alphanumeric characters and hyphens (`[\w\-]+`) and raises `ValueError` for tokens with forbidden chars (e.g. `;` or spaces that could corrupt the session cookie)
 
 ---
 
