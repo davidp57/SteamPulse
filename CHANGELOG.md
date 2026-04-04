@@ -11,6 +11,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **`steam-serve` sidecar server** — new `steam-serve` command starts a lightweight HTTP server (stdlib only, zero new dependencies) that serves the HTML dashboards and exposes a small mutation API (`/api/ping`, `/api/mark-removed/{appid}`, `/api/mark-active/{appid}`, `/api/delete/{appid}`); HTML pages re-render instantly after each mutation
+- **Interactive action buttons on library cards** — when `steam-serve` is running the library page shows ⛔ / ↩️ / 🗑️ action buttons on each game card for quick soft-delete, reactivation, and hard-delete; buttons are hidden in read-only mode (native file-open)
+- **Graceful degradation** — HTML pages remain fully functional read-only dashboards when `steam-serve` is not running; the JS feature-detection probe (`/api/ping`) is fire-and-forget with a 2-second timeout
 - **Soft-delete for removed games** — when a game disappears from all sources during a fetch, it is automatically tagged `removed_at` (ISO timestamp) rather than deleted; reappearing games are automatically reactivated
 - **Availability filter** — new filter group in the library page lets users show "Active" games only (default), all games, or "Removed" games only; filter state is saved in the URL hash and local storage
 - **`--mark-removed <APPID>`** — CLI flag to manually mark a game as removed (soft-delete) without running a full fetch
@@ -20,6 +23,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Sort by date added** — new "Date d'ajout ↓" / "Sort: Date added ↓" option in the library sort dropdown; games with no tracked date sort to the bottom
 - **Date-added display on cards** — cards show ➕ date when a `time_added` value is available (new games only; existing games show nothing until they are re-encountered on a new fetch)
 - **Short date format on cards** — all dates on game cards (release date, last news, date added, in-card news list) now use `dd/mm/yy` instead of a long locale string; news dates on the alerts page are unchanged
+- **Cookie-based authentication for `steam-serve`** — new `--token` flag enables auth mode; login form at `/login` issues an `HttpOnly`/`SameSite=Strict` session cookie; token comparison uses `hmac.compare_digest()` to prevent timing attacks; `steam_diagnostic.html` is protected behind auth
+- **`/api/rerender` route** — `POST /api/rerender` (auth-gated) triggers an in-process HTML re-render and reloads the page; palette icon button in header
+- **`/api/refetch` SSE route** — `GET /api/refetch` (auth-gated) spawns a full `steam-fetch` subprocess and streams live progress to the browser via Server-Sent Events; a modal overlay displays the log; only one fetch can run at a time (mutex lock)
+- **Auth panel in header** — 🔑 (Login) button visible only when not authenticated, 🔓 (Logout) visible only when authenticated; icon-only with tooltip; re-render 🎨 and refetch ⬇ buttons shown only when authenticated
+
+### Fixed
+
+- **`appendLog` JS SyntaxError** — unescaped newline in `'\n'` inside the sidecar JS string template broke the entire JS block
+- **`UnicodeEncodeError` in refetch subprocess** — `steam-fetch` subprocess now inherits `PYTHONUTF8=1` in its environment to avoid cp1252 encoding errors on Windows
+- **`UnicodeDecodeError` reading subprocess stdout** — `subprocess.Popen` now uses `encoding="utf-8"` when reading subprocess output instead of defaulting to the system locale
 
 ---
 

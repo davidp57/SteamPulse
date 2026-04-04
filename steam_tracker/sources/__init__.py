@@ -25,6 +25,7 @@ Example::
         def discover_games(self, args: argparse.Namespace) -> list[OwnedGame]:
             ...
 """
+
 from __future__ import annotations
 
 import argparse

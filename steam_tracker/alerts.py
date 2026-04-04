@@ -1,4 +1,5 @@
 """Alert engine: evaluates AlertRules against news items and field changes."""
+
 from __future__ import annotations
 
 import hashlib
@@ -78,9 +79,7 @@ class AlertEngine:
 
     # ── public API ────────────────────────────────────────────────────────────
 
-    def evaluate_news(
-        self, appid: int, game_name: str, news: list[NewsItem]
-    ) -> list[Alert]:
+    def evaluate_news(self, appid: int, game_name: str, news: list[NewsItem]) -> list[Alert]:
         """Evaluate all enabled news_keyword rules against a list of news items.
 
         Args:
@@ -205,9 +204,7 @@ class AlertEngine:
         return False
 
     @staticmethod
-    def _make_news_alert(
-        rule: AlertRule, appid: int, game_name: str, item: NewsItem
-    ) -> Alert:
+    def _make_news_alert(rule: AlertRule, appid: int, game_name: str, item: NewsItem) -> Alert:
         """Build a deterministic Alert from a matching news item."""
         raw = f"{rule.name}:{appid}:{item.gid}"
         alert_id = hashlib.sha256(raw.encode()).hexdigest()[:16]
@@ -236,8 +233,7 @@ class AlertEngine:
         alert_id = hashlib.sha256(raw.encode()).hexdigest()[:16]
         title = f"{change.field_name}: {change.old_value} → {change.new_value}"
         details = (
-            f"Field '{change.field_name}' changed from"
-            f" '{change.old_value}' to '{change.new_value}'"
+            f"Field '{change.field_name}' changed from '{change.old_value}' to '{change.new_value}'"
         )
         return Alert(
             id=alert_id,

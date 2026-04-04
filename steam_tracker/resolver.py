@@ -3,6 +3,7 @@
 Provides a chain-of-responsibility pattern: each resolver tries to
 map a game name to a Steam AppID. The first successful result wins.
 """
+
 from __future__ import annotations
 
 import logging
