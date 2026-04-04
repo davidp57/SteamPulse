@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import argparse
 
+import pytest
+import requests
 import responses as resp_mock
 
 from steam_tracker.models import SYNTHETIC_APPID_BASE, OwnedGame
@@ -480,11 +482,12 @@ def test_epic_discover_games_unresolved_gets_hash_appid() -> None:
 
 
 @resp_mock.activate
-def test_epic_discover_games_auth_failure_returns_empty() -> None:
+def test_epic_discover_games_auth_failure_raises() -> None:
+    """discover_games must raise (not return []) when authentication fails."""
     resp_mock.add(resp_mock.POST, _EPIC_TOKEN_URL, status=401, json={"error": "invalid_auth"})
 
-    games = EpicSource().discover_games(_epic_args(epic_auth_code="bad_code"))
-    assert games == []
+    with pytest.raises(requests.HTTPError):
+        EpicSource().discover_games(_epic_args(epic_auth_code="bad_code"))
 
 
 @resp_mock.activate
@@ -524,6 +527,7 @@ def test_epic_discover_games_keeps_token_when_response_omits_it() -> None:
     EpicSource().discover_games(args)
 
     assert args.epic_refresh_token == "rt_original"
+
 
 
 _EPIC_CATALOG_BASE = (
@@ -591,3 +595,32 @@ def test_epic_discover_games_catalog_fallback_to_local() -> None:
     games = EpicSource().discover_games(_epic_args(epic_auth_code="code1"))
     assert len(games) == 1
     assert games[0].name == "MyEpicGame"
+
+
+@resp_mock.activate
+def test_epic_discover_games_library_failure_raises() -> None:
+    """discover_games must raise when the library fetch fails (auth succeeded)."""
+    resp_mock.add(resp_mock.POST, _EPIC_TOKEN_URL, json=_token_response())
+    resp_mock.add(resp_mock.GET, _EPIC_LIBRARY_URL, status=500)
+
+    with pytest.raises(requests.HTTPError):
+        EpicSource().discover_games(_epic_args(epic_auth_code="code1"))
+
+
+# ---------------------------------------------------------------------------
+# source_labels — failed-source protection
+# ---------------------------------------------------------------------------
+
+
+def test_steam_source_has_source_labels() -> None:
+    """SteamSource must declare the source values it produces."""
+    labels = SteamSource().source_labels
+    assert "owned" in labels
+    assert "wishlist" in labels
+    assert "followed" in labels
+
+
+def test_epic_source_has_source_labels() -> None:
+    """EpicSource must declare 'epic' as its source label."""
+    labels = EpicSource().source_labels
+    assert "epic" in labels

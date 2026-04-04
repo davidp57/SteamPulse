@@ -836,6 +836,31 @@ class Database:
             rows = con.execute("SELECT appid FROM games WHERE removed_at IS NULL").fetchall()
         return {int(r[0]) for r in rows}
 
+    def get_active_appids_for_sources(self, sources: set[str]) -> set[int]:
+        """Return active appids belonging to any of the given source labels.
+
+        Used to identify which games must be excluded from soft-delete
+        reconciliation when their owning source failed to connect.
+
+        Args:
+            sources: Set of ``source`` field values (e.g. ``{"epic"}`` or
+                ``{"owned", "wishlist", "followed"}``).
+
+        Returns:
+            Set of appids where ``removed_at`` is NULL and ``source`` is in
+            *sources*.  Returns an empty set when *sources* is empty.
+        """
+        if not sources:
+            return set()
+        placeholders = ",".join("?" * len(sources))
+        with self._connect() as con:
+            rows = con.execute(
+                f"SELECT appid FROM games WHERE removed_at IS NULL"
+                f" AND source IN ({placeholders})",
+                list(sources),
+            ).fetchall()
+        return {int(r[0]) for r in rows}
+
     def mark_removed(self, appids: set[int]) -> int:
         """Soft-delete games that are no longer found in any store.
 

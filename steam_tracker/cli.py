@@ -168,18 +168,32 @@ def _reconcile_removed(
     pre_active: set[int],
     discovered: list[OwnedGame],
     t: object,
+    failed_source_labels: set[str] | None = None,
 ) -> None:
     """Mark newly-missing games as removed and reactivate returned games.
+
+    Games that belong to a source that failed to connect during this run are
+    excluded from the removal check: we have no new information about them, so
+    their current status must not change.
 
     Args:
         db: Open database instance.
         pre_active: Set of appids that were active before this fetch run.
         discovered: All games discovered during this fetch run.
         t: Translator callable.
+        failed_source_labels: ``source`` field values (e.g. ``{"epic"}``) for
+            stores that raised a connection error.  Games whose DB source is in
+            this set are protected from being marked as removed.
     """
     discovered_appids = {g.appid for g in discovered}
+    # Exclude games from sources that failed — we cannot reliably detect removal.
+    if failed_source_labels:
+        protected = db.get_active_appids_for_sources(failed_source_labels)
+        effective_pre_active = pre_active - protected
+    else:
+        effective_pre_active = pre_active
     reactivated = db.mark_active(discovered_appids)
-    removed = db.mark_removed(pre_active - discovered_appids)
+    removed = db.mark_removed(effective_pre_active - discovered_appids)
     if reactivated:
         print(t("cli_reactivated_count", count=reactivated))  # type: ignore[operator]
     if removed:
@@ -240,9 +254,15 @@ def cmd_fetch() -> None:
     # ── Game discovery (all sources) ─────────────────────────────────────────
     pre_active_appids = db.get_all_active_appids()
     all_discovered: list[OwnedGame] = []
+    failed_source_labels: set[str] = set()
     for source in get_all_sources():
         if source.is_enabled(args):
-            all_discovered.extend(source.discover_games(args, db=db))
+            try:
+                all_discovered.extend(source.discover_games(args, db=db))
+            except Exception:  # noqa: BLE001
+                labels: frozenset[str] = getattr(source, "source_labels", frozenset())
+                failed_source_labels.update(labels)
+                log.warning("Source %s failed — its games will not be marked removed", source.name)
 
     # Persist credentials early so rotated tokens (e.g. Epic refresh_token)
     # survive even if the enrichment phase crashes.
@@ -255,7 +275,7 @@ def cmd_fetch() -> None:
         db.upsert_game(game)
 
     # ── Soft-delete reconciliation ─────────────────────────────────────────
-    _reconcile_removed(db, pre_active_appids, all_discovered, t)
+    _reconcile_removed(db, pre_active_appids, all_discovered, t, failed_source_labels)
 
     games = _build_enrichment_queue(all_discovered)
 
@@ -448,9 +468,15 @@ def cmd_run() -> None:
     pre_active_appids_run = db.get_all_active_appids()
     all_discovered: list[OwnedGame] = []
     all_discovery_stats: list[DiscoveryStats] = []
+    failed_source_labels_run: set[str] = set()
     for source in get_all_sources():
         if source.is_enabled(args):
-            all_discovered.extend(source.discover_games(args, db=db))
+            try:
+                all_discovered.extend(source.discover_games(args, db=db))
+            except Exception:  # noqa: BLE001
+                labels_run: frozenset[str] = getattr(source, "source_labels", frozenset())
+                failed_source_labels_run.update(labels_run)
+                log.warning("Source %s failed — its games will not be marked removed", source.name)
             stats = getattr(source, "last_stats", None)
             if isinstance(stats, DiscoveryStats):
                 all_discovery_stats.append(stats)
@@ -466,7 +492,7 @@ def cmd_run() -> None:
         db.upsert_game(game)
 
     # ── Soft-delete reconciliation ───────────────────────────────────────
-    _reconcile_removed(db, pre_active_appids_run, all_discovered, t)
+    _reconcile_removed(db, pre_active_appids_run, all_discovered, t, failed_source_labels_run)
 
     games = _build_enrichment_queue(all_discovered)
 
