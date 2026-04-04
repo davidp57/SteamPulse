@@ -711,6 +711,43 @@ def test_mark_active_noop_when_already_active(
     assert n == 0
 
 
+def test_get_active_appids_for_sources_returns_matching(db: Database) -> None:
+    """Only active appids with a source in the given set must be returned."""
+    db.upsert_game(OwnedGame(appid=1, name="EpicA", source="epic"))
+    db.upsert_game(OwnedGame(appid=2, name="OwnedB", source="owned"))
+    db.upsert_game(OwnedGame(appid=3, name="WishC", source="wishlist"))
+
+    result = db.get_active_appids_for_sources({"epic"})
+    assert result == {1}
+
+    result = db.get_active_appids_for_sources({"owned", "wishlist"})
+    assert result == {2, 3}
+
+
+def test_get_active_appids_for_sources_excludes_removed(db: Database) -> None:
+    """Soft-deleted games must not appear even if their source matches."""
+    db.upsert_game(OwnedGame(appid=1, name="EpicGone", source="epic"))
+    db.mark_removed({1})
+
+    result = db.get_active_appids_for_sources({"epic"})
+    assert result == set()
+
+
+def test_get_active_appids_for_sources_empty_set_returns_empty(db: Database) -> None:
+    """Passing an empty sources set must always return an empty set."""
+    db.upsert_game(OwnedGame(appid=1, name="EpicA", source="epic"))
+    assert db.get_active_appids_for_sources(set()) == set()
+
+
+def test_get_active_appids_for_sources_unknown_label_returns_empty(db: Database) -> None:
+    """Unknown source labels must not match any game and return an empty set."""
+    db.upsert_game(OwnedGame(appid=1, name="EpicA", source="epic"))
+    db.upsert_game(OwnedGame(appid=2, name="SteamA", source="owned"))
+    assert db.get_active_appids_for_sources({"nonexistent"}) == set()
+    # Mixed: one valid label, one unknown — only the valid one should match.
+    assert db.get_active_appids_for_sources({"epic", "nonexistent"}) == {1}
+
+
 def test_delete_games_removes_record(db: Database, sample_game: OwnedGame) -> None:
     """delete_games must hard-delete the game and cascade to app_details."""
     from steam_tracker.models import AppDetails  # noqa: PLC0415

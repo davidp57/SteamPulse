@@ -110,6 +110,7 @@ class EpicSource:
     """
 
     name = "epic"
+    source_labels: frozenset[str] = frozenset({"epic"})
     last_stats: DiscoveryStats | None = None
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
@@ -176,7 +177,7 @@ class EpicSource:
             token_data = self._authenticate(args)
         except Exception as exc:  # noqa: BLE001
             print(t("cli_epic_auth_error", error=exc))
-            return []
+            raise
 
         access_token: str = str(token_data["access_token"])
         # Persist the renewed refresh token so save_cli_credentials() picks it up.
@@ -193,7 +194,7 @@ class EpicSource:
             library_items = epic_get_library(access_token)
         except Exception as exc:  # noqa: BLE001
             print(t("cli_epic_library_error", error=exc))
-            return []
+            raise
 
         print(t("cli_epic_library_count", count=len(library_items)))
 

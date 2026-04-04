@@ -40,6 +40,7 @@ class SteamSource:
     """
 
     name = "steam"
+    source_labels: frozenset[str] = frozenset({"owned", "wishlist", "followed"})
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
         """Register Steam-specific CLI arguments.

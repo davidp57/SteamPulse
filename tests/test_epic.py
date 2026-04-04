@@ -4,6 +4,8 @@ from __future__ import annotations
 import argparse
 from unittest.mock import patch
 
+import pytest
+import requests
 import responses as resp_mock
 
 from steam_tracker.sources import GameSource
@@ -223,15 +225,15 @@ def test_discover_games_unresolved_gets_hash_appid() -> None:
 
 
 @resp_mock.activate
-def test_discover_games_auth_failure_returns_empty() -> None:
-    """If Epic auth fails, discover_games returns an empty list gracefully."""
+def test_discover_games_auth_failure_raises() -> None:
+    """If Epic auth fails, discover_games must raise rather than return an empty list."""
     from steam_tracker.sources.epic import EpicSource
 
     resp_mock.add(resp_mock.POST, _EPIC_OAUTH, status=401)
 
     args = _make_args(epic_auth_code="bad_code")
-    games = EpicSource().discover_games(args)
-    assert games == []
+    with pytest.raises(requests.HTTPError):
+        EpicSource().discover_games(args)
 
 
 @resp_mock.activate
@@ -252,16 +254,16 @@ def test_discover_games_empty_library() -> None:
 
 
 @resp_mock.activate
-def test_discover_games_library_api_error_returns_empty() -> None:
-    """If the library API fails, return empty gracefully."""
+def test_discover_games_library_api_error_raises() -> None:
+    """If the library API fails, discover_games must raise rather than return an empty list."""
     from steam_tracker.sources.epic import EpicSource
 
     resp_mock.add(resp_mock.POST, _EPIC_OAUTH, json=_oauth_token_response())
     resp_mock.add(resp_mock.GET, _EPIC_LIBRARY, status=500)
 
     args = _make_args(epic_auth_code="code123")
-    games = EpicSource().discover_games(args)
-    assert games == []
+    with pytest.raises(requests.HTTPError):
+        EpicSource().discover_games(args)
 
 
 # -- epic_api module tests ---------------------------------------------------
