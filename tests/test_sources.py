@@ -74,6 +74,7 @@ def test_custom_source_satisfies_protocol() -> None:
 
     class FakeSource:
         name = "fake"
+        source_labels: frozenset[str] = frozenset({"fake"})
 
         def add_arguments(self, parser: argparse.ArgumentParser) -> None:
             pass

@@ -260,8 +260,7 @@ def cmd_fetch() -> None:
             try:
                 all_discovered.extend(source.discover_games(args, db=db))
             except Exception:  # noqa: BLE001
-                labels: frozenset[str] = getattr(source, "source_labels", frozenset())
-                failed_source_labels.update(labels)
+                failed_source_labels.update(source.source_labels)
                 log.warning(
                     "Source %s failed — its games will not be marked removed",
                     source.name,
@@ -478,8 +477,7 @@ def cmd_run() -> None:
             try:
                 all_discovered.extend(source.discover_games(args, db=db))
             except Exception:  # noqa: BLE001
-                labels_run: frozenset[str] = getattr(source, "source_labels", frozenset())
-                failed_source_labels_run.update(labels_run)
+                failed_source_labels_run.update(source.source_labels)
                 log.warning(
                     "Source %s failed — its games will not be marked removed",
                     source.name,
