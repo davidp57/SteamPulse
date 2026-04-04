@@ -1,4 +1,5 @@
 """Steam Web API & Store API wrappers."""
+
 from __future__ import annotations
 
 import logging
@@ -99,11 +100,7 @@ def get_app_details(
 
         # ── Genres / Categories ─────────────────────────────────────────────
         genres = [str(g.get("description", "")) for g in genres_raw if g.get("description")]
-        categories = [
-            str(c.get("description", ""))
-            for c in categories_raw
-            if c.get("description")
-        ]
+        categories = [str(c.get("description", "")) for c in categories_raw if c.get("description")]
 
         # ── Price ───────────────────────────────────────────────────────────
         price: Any = d.get("price_overview", {})

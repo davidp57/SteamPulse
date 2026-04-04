@@ -662,3 +662,134 @@ docker compose up -d
 ```
 
 Revert to the official image at any time with `docker compose pull && docker compose up -d`.
+
+---
+
+## 13. Live mode — steam-serve
+
+`steam-serve` is a lightweight local HTTP server that:
+
+- Serves the three HTML dashboards (`steam_library.html`, `steam_alerts.html`,
+  `steam_diagnostic.html`) on a local port instead of opening them as files.
+- Exposes a small mutation API so the dashboard can **mark games as removed**,
+  **reactivate** them, or **hard-delete** them directly from the UI
+  (buttons appear automatically in each game card).
+
+No Docker, no external dependencies — it is a pure Python stdlib process.
+
+---
+
+### Basic usage (no authentication)
+
+```bash
+steam-serve --steamid <STEAMID64>
+```
+
+Then open `http://localhost:8080/` in a browser.  The dashboard is identical to
+the static file, but action buttons (⛔ / ↩️ / 🗑) appear in each card and
+trigger live mutations + automatic re-render.
+
+If `--steamid` is omitted, the server still starts but pages are **not**
+re-rendered after mutations.
+
+---
+
+### Auth mode — how authentication works
+
+Auth in SteamPulse is intentionally simple: **one shared token, no username**.
+Think of the token as a password that unlocks the full UI.
+
+- There is no user account system.  Everyone who knows the token has the same
+  access level.
+- After a successful login, the browser receives a **session cookie**
+  (`sp_session`).  The cookie is `HttpOnly`, `SameSite=Strict`, and stores the
+  token value so subsequent requests are automatically authenticated.
+- Clicking **Logout** clears the cookie and returns to read-only mode.
+- The token is compared with `hmac.compare_digest()` to prevent timing attacks.
+
+> ⚠️ Tokens are sent over plain HTTP.  Use auth mode on a trusted local network
+> only.  For remote access, put a reverse proxy with TLS in front.
+
+---
+
+### Auth mode — sharing your library safely
+
+If you want to share the URL with others (e.g. show your library to a friend),
+you can lock the mutation UI behind a shared secret token:
+
+```bash
+steam-serve --steamid <STEAMID64> --token my-secret-token
+```
+
+| Access level | What is visible |
+|:---|:---|
+| **Without token** (anyone) | `steam_library.html`, `steam_alerts.html` |
+| **With token** (you) | All pages + `steam_diagnostic.html` + action buttons + re-render / re-fetch buttons |
+
+When auth mode is active, a **Login** button appears in the page header.
+Click it, enter your token, and the action buttons become available.
+Click **Logout** (same area) to return to read-only mode.
+
+---
+
+### Storing the token in the config file
+
+You can store the token in `config.toml` so you don't have to pass `--token`
+every time:
+
+```toml
+[settings]
+serve_token = "my-secret-token"
+```
+
+All other `[settings]` values (`db`, `lang`, etc.) are also picked up by
+`steam-serve`.
+
+---
+
+### Re-render and re-fetch from the UI
+
+When you are authenticated, two extra buttons appear in the page header:
+
+| Button | What it does |
+|:---|:---|
+| **🎨 Re-render pages** | Regenerates all HTML files from the database instantly (fast, in-process). |
+| **⬇ Fetch & re-render** | Runs a full `steam-fetch` followed by re-render. Progress is shown live in a modal. |
+
+The re-fetch button requires that Steam credentials (`key` + `steamid`) are
+configured in the TOML file (via `[steam]` section or `--key`/`--steamid` flags).
+If they are missing, the progress modal will display an error.
+
+Only one fetch can run at a time.  A concurrent request returns a `409` response.
+
+---
+
+### Options reference
+
+| Option | Default | Description |
+|:---|:---|:---|
+| `--steamid` | *(empty)* | SteamID64 — required for HTML re-render after mutations |
+| `--db` | `steam_library.db` | Path to the SQLite database |
+| `--output-dir` | `.` | Folder containing the HTML files |
+| `--port` | `8080` | TCP port to listen on |
+| `--lang` | *(system)* | Force language (`en`, `fr`, …) |
+| `--token` | *(none)* | Shared secret to enable auth mode |
+| `--config` | *(platform default)* | Path to TOML config file |
+
+---
+
+### API routes
+
+| Method | Path | Auth required | Description |
+|:---|:---|:---:|:---|
+| `GET` | `/api/ping` | No | Health check: returns `{ok, version, auth_enabled, authenticated}` |
+| `GET` | `/` | No | Redirects to `steam_library.html` |
+| `GET` | `/*.html` | No (public pages) | Static file serving |
+| `GET` | `/steam_diagnostic.html` | Yes (if token set) | Protected diagnostic page |
+| `GET` | `/login` | No | Login form |
+| `GET` | `/api/logout` | No | Clears session cookie, redirects to `/` |
+| `GET` | `/api/refetch` | Yes (if token set) | SSE stream: run full fetch + re-render with live progress |
+| `POST` | `/api/rerender` | Yes (if token set) | Regenerate HTML files from DB (fast, synchronous) |
+| `POST` | `/api/mark-removed/{appid}` | Yes (if token set) | Soft-delete a game |
+| `POST` | `/api/mark-active/{appid}` | Yes (if token set) | Reactivate a game |
+| `POST` | `/api/delete/{appid}` | Yes (if token set) | Hard-delete a game |

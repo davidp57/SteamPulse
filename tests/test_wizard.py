@@ -29,10 +29,11 @@ def _steam_only(
     workers: str = "",
     news_age: str = "",
     lang: str = "",
+    serve_token: str = "",
     confirm: str = "y",
 ) -> tuple[str, ...]:
     """Return a standard set of inputs for a Steam-only wizard run."""
-    return (key, steamid, skip_epic, skip_twitch, db, workers, news_age, lang, confirm)
+    return (key, steamid, skip_epic, skip_twitch, db, workers, news_age, lang, serve_token, confirm)
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +109,46 @@ def test_wizard_uses_default_workers_when_empty(tmp_path: Path) -> None:
     assert cfg.get("workers", 4) == 4
 
 
+def test_wizard_saves_serve_token(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    with patch("builtins.input", _inputs(*_steam_only(serve_token="my-secret-token"))):
+        run_wizard(config_path=config_path)
+    cfg = load_config(config_path)
+    assert cfg["serve_token"] == "my-secret-token"
+
+
+def test_wizard_no_serve_token_when_empty(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    with patch("builtins.input", _inputs(*_steam_only(serve_token=""))):
+        run_wizard(config_path=config_path)
+    cfg = load_config(config_path)
+    assert "serve_token" not in cfg
+
+
+def test_wizard_prefills_existing_serve_token(tmp_path: Path) -> None:
+    """Pressing Enter on the token prompt keeps the existing token."""
+    config_path = tmp_path / "config.toml"
+    write_config({"key": "K", "steamid": "S", "serve_token": "OLD-TOKEN"}, path=config_path)
+    # All Enter: keep all existing values
+    inputs = _inputs("", "", "n", "n", "", "", "", "", "", "")
+    with patch("builtins.input", inputs):
+        run_wizard(config_path=config_path)
+    cfg = load_config(config_path)
+    assert cfg["serve_token"] == "OLD-TOKEN"
+
+
+def test_wizard_summary_masks_serve_token(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The summary must mask serve_token with *** (contains 'token')."""
+    config_path = tmp_path / "config.toml"
+    with patch("builtins.input", _inputs(*_steam_only(serve_token="topsecret"))):
+        run_wizard(config_path=config_path)
+    out = capsys.readouterr().out
+    assert "serve_token = ***" in out
+    assert "topsecret" not in out
+
+
 # ---------------------------------------------------------------------------
 # Twitch / IGDB section
 # ---------------------------------------------------------------------------
@@ -119,7 +160,7 @@ def test_wizard_saves_twitch_credentials(tmp_path: Path) -> None:
         "STEAMKEY", "76561198001",           # Steam
         "n",                                  # Skip Epic
         "y", "TCLIENTID", "TCLIENTSECRET",    # Twitch
-        "", "", "", "",                        # Default settings
+        "", "", "", "", "",                   # Default settings
         "y",                                  # Confirm
     )
     with patch("builtins.input", inputs):
@@ -151,7 +192,7 @@ def test_wizard_saves_epic_refresh_credentials(tmp_path: Path) -> None:
         "n",                          # Don't open browser automatically
         "AUTHCODE123",                # Paste auth code
         "n",                          # Skip Twitch
-        "", "", "", "",               # Default settings
+        "", "", "", "", "",           # Default settings
         "y",                          # Confirm
     )
     mock_token = {"access_token": "tok_abc", "account_id": "ACC123", "refresh_token": "REF_XYZ"}
@@ -183,7 +224,7 @@ def test_wizard_epic_auth_failure_continues(tmp_path: Path) -> None:
         "n",
         "BADCODE",
         "n",
-        "", "", "", "",
+        "", "", "", "", "",
         "y",
     )
     with (
@@ -206,7 +247,7 @@ def test_wizard_prints_epic_auth_url(tmp_path: Path, capsys: pytest.CaptureFixtu
         "n",         # Don't open browser
         "AUTHCODE",
         "n",
-        "", "", "", "",
+        "", "", "", "", "",
         "y",
     )
     mock_token = {"access_token": "tok", "account_id": "A", "refresh_token": "RT"}
@@ -227,7 +268,7 @@ def test_wizard_opens_browser_when_requested(tmp_path: Path) -> None:
         "y",         # Open browser automatically
         "AUTHCODE",
         "n",
-        "", "", "", "",
+        "", "", "", "", "",
         "y",
     )
     mock_token = {"access_token": "tok", "account_id": "A", "refresh_token": "RT"}
@@ -252,7 +293,7 @@ def test_wizard_prefills_steam_credentials(tmp_path: Path) -> None:
     write_config({"key": "OLDKEY", "steamid": "OLDSTEAMID"}, path=config_path)
 
     # All Enter: keep existing Steam creds, skip Epic, skip Twitch, keep settings
-    inputs = _inputs("", "", "n", "n", "", "", "", "", "")
+    inputs = _inputs("", "", "n", "n", "", "", "", "", "", "")
     with patch("builtins.input", inputs):
         run_wizard(config_path=config_path)
     cfg = load_config(config_path)
@@ -267,7 +308,7 @@ def test_wizard_shows_hint_when_existing_config(
     config_path = tmp_path / "config.toml"
     write_config({"key": "K", "steamid": "S"}, path=config_path)
 
-    inputs = _inputs("", "", "n", "n", "", "", "", "", "")
+    inputs = _inputs("", "", "n", "n", "", "", "", "", "", "")
     with patch("builtins.input", inputs):
         run_wizard(config_path=config_path)
     out = capsys.readouterr().out
@@ -287,8 +328,8 @@ def test_wizard_keeps_existing_epic_when_no_reauth(tmp_path: Path) -> None:
         path=config_path,
     )
     # Enter x2 (steam), Enter (epic enabled by default), Enter (no reauth by default),
-    # n (skip twitch), Enter x4 (settings), Enter (confirm)
-    inputs = _inputs("", "", "", "", "n", "", "", "", "", "")
+    # n (skip twitch), Enter x4 (settings), Enter x2 (serve_token + confirm)
+    inputs = _inputs("", "", "", "", "n", "", "", "", "", "", "")
     with patch("builtins.input", inputs):
         run_wizard(config_path=config_path)
     cfg = load_config(config_path)
@@ -309,8 +350,8 @@ def test_wizard_prefills_twitch_credentials(tmp_path: Path) -> None:
         path=config_path,
     )
     # Enter x2 (steam), n (skip epic), Enter (twitch enabled by default),
-    # Enter x2 (keep twitch creds), Enter x4 (settings), Enter (confirm)
-    inputs = _inputs("", "", "n", "", "", "", "", "", "", "", "")
+    # Enter x2 (keep twitch creds), Enter x4 (settings), Enter x2 (serve_token + confirm)
+    inputs = _inputs("", "", "n", "", "", "", "", "", "", "", "", "")
     with patch("builtins.input", inputs):
         run_wizard(config_path=config_path)
     cfg = load_config(config_path)
@@ -333,7 +374,7 @@ def test_wizard_summary_masks_key_secret_and_token(
         "n",  # skip opening browser
         "MYAUTHCODE",  # auth code
         "n",  # skip twitch
-        "", "", "", "",  # settings defaults
+        "", "", "", "", "",  # settings defaults
         "y",  # confirm
     )
     with (

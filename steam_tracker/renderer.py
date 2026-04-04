@@ -1,4 +1,5 @@
 """HTML renderer: turns a list of GameRecords into a self-contained page."""
+
 from __future__ import annotations
 
 import contextlib
@@ -1067,6 +1068,35 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
     .filter-panel-close { display: flex; }
   }
+  /* ── Sidecar action buttons (only shown when steam-serve is running) ──────────── */
+  .api-actions { display: none; gap: 4px; padding: 4px 0 2px; flex-wrap: wrap; }
+  body.sp-live .api-actions { display: flex; }
+  .api-btn { background: none; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: .72rem; padding: 2px 7px; line-height: 1.5; color: var(--muted); transition: background .15s, color .15s; }
+  .api-btn:hover { background: var(--surface2); color: var(--text); }
+  .btn-reactivate { color: #3c9; }
+  .btn-delete { color: #e44; }
+  .card[data-removed] .btn-mark-removed { display: none; }
+  .card:not([data-removed]) .btn-reactivate { display: none; }
+  /* ── Sidecar control buttons (re-render / refetch) ───────────────────────────── */
+  .sp-ctrl-btn { display: none; background: none; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: .75rem; padding: 3px 9px; line-height: 1.5; color: var(--muted); transition: background .15s, color .15s; }
+  body.sp-live.sp-authenticated .sp-ctrl-btn { display: inline-block; }
+  .sp-ctrl-btn:hover { background: var(--surface2); color: var(--text); }
+  /* ── Auth panel (login / logout) ────────────────────────────────────────────── */
+  .sp-auth-panel { display: none; gap: 6px; align-items: center; }
+  body.sp-auth-ui .sp-auth-panel { display: flex; }
+  .sp-auth-btn { background: none; border: 1px solid var(--border); border-radius: 4px; font-size: .9rem; padding: 3px 8px; line-height: 1.5; color: var(--muted); text-decoration: none; transition: background .15s, color .15s; cursor: pointer; }
+  .sp-auth-btn:hover { background: var(--surface2); color: var(--text); }
+  .sp-login-btn  { display: none; }
+  body.sp-auth-ui:not(.sp-authenticated) .sp-login-btn  { display: inline-block; }
+  .sp-logout-btn { display: none; }
+  body.sp-auth-ui.sp-authenticated .sp-logout-btn { display: inline-block; }
+  /* ── Modal overlay for refetch progress ─────────────────────────────────────── */
+  .sp-modal { display: none; position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,.6); align-items: center; justify-content: center; }
+  .sp-modal.open { display: flex; }
+  .sp-modal-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; min-width: 360px; max-width: 600px; max-height: 70vh; display: flex; flex-direction: column; gap: 10px; }
+  .sp-modal-title { font-weight: 600; font-size: .95rem; color: var(--text); }
+  .sp-modal-log { flex: 1; overflow-y: auto; font-size: .72rem; font-family: monospace; color: var(--muted); white-space: pre-wrap; word-break: break-all; max-height: 40vh; }
+  .sp-modal-close { align-self: flex-end; background: none; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; padding: 3px 10px; font-size: .8rem; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -1105,6 +1135,12 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <div class="stat-val" style="color:var(--accent2)">__PLAYTIME__</div>
       <div class="stat-lbl">__T_stat_hours__</div>
     </div>
+  </div>
+  <div class="sp-auth-panel">
+    <button id="sp-rerender-btn" class="sp-ctrl-btn" title="__T_btn_rerender__" aria-label="__T_btn_rerender__">&#127912;</button>
+    <button id="sp-refetch-btn"  class="sp-ctrl-btn" title="__T_btn_refetch__" aria-label="__T_btn_refetch__">&#11123;</button>
+    <a class="sp-auth-btn sp-login-btn" href="/login" title="__T_btn_sidecar_login__" aria-label="__T_btn_sidecar_login__">&#128273;</a>
+    <a class="sp-auth-btn sp-logout-btn" href="/api/logout" title="__T_btn_sidecar_logout__" aria-label="__T_btn_sidecar_logout__">&#128275;</a>
   </div>
 </header>
 
@@ -1529,40 +1565,175 @@ loadStateFromHash();
 saveStateToHash(); // initialise le lien nav avec l'état courant
 updateGrid();
 </script>
+
+<div id="sp-modal" class="sp-modal">
+  <div class="sp-modal-box">
+    <div class="sp-modal-title" id="sp-modal-title"></div>
+    <pre class="sp-modal-log" id="sp-modal-log"></pre>
+    <button class="sp-modal-close" id="sp-modal-close">&#10005;</button>
+  </div>
+</div>
+
+__SIDECAR_JS__
 </body>
 </html>
 """
 
 
-
 def _build_i18n_js(t: Translator) -> str:
     """Return a ``const I18N = {...};`` block for the HTML templates."""
     data = {
-        "grid_view":      t("btn_grid_view"),
-        "list_view":      t("btn_list_view"),
-        "news_0":         t("js_news_0"),
-        "news_1":         t("js_news_1"),
-        "news_n":         t("js_news_n"),
+        "grid_view": t("btn_grid_view"),
+        "list_view": t("btn_list_view"),
+        "news_0": t("js_news_0"),
+        "news_1": t("js_news_1"),
+        "news_n": t("js_news_n"),
         "no_match_games": t("js_no_match_games"),
-        "count_game_1":   t("js_count_game_1"),
-        "count_game_n":   t("js_count_game_n"),
-        "no_match_news":  t("js_no_match_news"),
-        "count_news":     t("js_count_news"),
-        "show_unknown":   t("lbl_show_unknown"),
-        "hide_unknown":   t("lbl_hide_unknown"),
+        "count_game_1": t("js_count_game_1"),
+        "count_game_n": t("js_count_game_n"),
+        "no_match_news": t("js_no_match_news"),
+        "count_news": t("js_count_news"),
+        "show_unknown": t("lbl_show_unknown"),
+        "hide_unknown": t("lbl_hide_unknown"),
+        "delete_confirm": t("js_delete_confirm"),
+        "refetch_running": t("js_refetch_running"),
+        "refetch_error": t("js_refetch_error"),
     }
     entries = ", ".join(f"{k}: {json.dumps(v)}" for k, v in data.items())
     return f"const I18N = {{{entries}}};"
 
 
+def _build_sidecar_js() -> str:
+    """Return the feature-detection JS block for the SteamPulse sidecar.
+
+    The script probes ``/api/ping`` with a 2-second timeout.  If the server
+    responds, ``body.sp-live`` is activated, revealing the action buttons.
+    When auth mode is enabled and the user is not authenticated, only the
+    auth panel is shown (login button); action buttons remain hidden.
+    Button clicks are handled via event delegation and call the sidecar API.
+    The re-render and re-fetch buttons use ``/api/rerender`` and
+    ``/api/refetch`` (SSE) respectively.
+    """
+    return """\
+<script>
+(function() {
+  var ctrl = new AbortController();
+  setTimeout(function() { ctrl.abort(); }, 2000);
+  fetch('/api/ping', {signal: ctrl.signal})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) return;
+      if (d.auth_enabled) {
+        document.body.classList.add('sp-auth-ui');
+        if (d.authenticated) {
+          document.body.classList.add('sp-authenticated');
+          document.body.classList.add('sp-live');
+        }
+      } else {
+        document.body.classList.add('sp-live');
+      }
+    })
+    .catch(function() { /* server not running — read-only mode */ });
+
+  function apiPost(url) {
+    fetch(url, {method: 'POST'})
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.ok) {
+          location.reload();
+        } else if (d.error === 'authentication required') {
+          location.href = '/login';
+        }
+      })
+      .catch(function() {});
+  }
+
+  // ── Modal helpers ──────────────────────────────────────────────────────
+  function openModal(title) {
+    document.getElementById('sp-modal-title').textContent = title;
+    document.getElementById('sp-modal-log').textContent = '';
+    document.getElementById('sp-modal').classList.add('open');
+    document.getElementById('sp-modal-close').disabled = true;
+  }
+  function appendLog(msg) {
+    var log = document.getElementById('sp-modal-log');
+    log.textContent += msg + '\\n';
+    log.scrollTop = log.scrollHeight;
+  }
+  function closeModal() {
+    document.getElementById('sp-modal').classList.remove('open');
+    document.getElementById('sp-modal-log').textContent = '';
+  }
+  document.getElementById('sp-modal-close').addEventListener('click', closeModal);
+
+  // ── Re-render ──────────────────────────────────────────────────────────
+  function spRerender() {
+    var btn = document.getElementById('sp-rerender-btn');
+    btn.disabled = true;
+    fetch('/api/rerender', {method: 'POST'})
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        btn.disabled = false;
+        if (d.ok) { location.reload(); }
+        else if (d.error === 'authentication required') { location.href = '/login'; }
+      })
+      .catch(function() { btn.disabled = false; });
+  }
+
+  // ── Re-fetch (SSE) ─────────────────────────────────────────────────────
+  function spRefetch() {
+    openModal(I18N.refetch_running);
+    var es = new EventSource('/api/refetch');
+    es.onmessage = function(e) {
+      try {
+        var d = JSON.parse(e.data);
+        if (d.done) {
+          es.close();
+          document.getElementById('sp-modal-close').disabled = false;
+          if (d.status === 'ok') {
+            closeModal();
+            location.reload();
+          } else {
+            appendLog(I18N.refetch_error);
+          }
+        } else if (d.msg) {
+          appendLog(d.msg);
+        }
+      } catch(_) {}
+    };
+    es.onerror = function() {
+      es.close();
+      appendLog(I18N.refetch_error);
+      document.getElementById('sp-modal-close').disabled = false;
+    };
+  }
+
+  document.addEventListener('click', function(e) {
+    if (e.target.id === 'sp-rerender-btn') { spRerender(); return; }
+    if (e.target.id === 'sp-refetch-btn')  { spRefetch();  return; }
+    var btn = e.target.closest('.api-btn');
+    if (!btn) return;
+    e.stopPropagation();
+    var appid = btn.dataset.appid;
+    if (btn.classList.contains('btn-mark-removed')) {
+      apiPost('/api/mark-removed/' + appid);
+    } else if (btn.classList.contains('btn-reactivate')) {
+      apiPost('/api/mark-active/' + appid);
+    } else if (btn.classList.contains('btn-delete')) {
+      if (window.confirm(I18N.delete_confirm)) apiPost('/api/delete/' + appid);
+    }
+  });
+})();
+</script>"""
+
+
 def _apply_html_t(s: str, t: Translator) -> str:
     """Replace all ``__T_key__`` placeholders in *s* with translated values."""
     import re
+
     for key in re.findall(r"__T_(\w+)__", s):
         s = s.replace(f"__T_{key}__", t(key))
     return s
-
-
 
 
 def format_playtime(minutes: int) -> str:
@@ -1572,9 +1743,18 @@ def format_playtime(minutes: int) -> str:
 
 
 _FR_MONTHS = {
-    "janvier": "Jan", "f\u00e9vrier": "Feb", "mars": "Mar", "avril": "Apr",
-    "mai": "May", "juin": "Jun", "juillet": "Jul", "ao\u00fbt": "Aug",
-    "septembre": "Sep", "octobre": "Oct", "novembre": "Nov", "d\u00e9cembre": "Dec",
+    "janvier": "Jan",
+    "f\u00e9vrier": "Feb",
+    "mars": "Mar",
+    "avril": "Apr",
+    "mai": "May",
+    "juin": "Jun",
+    "juillet": "Jul",
+    "ao\u00fbt": "Aug",
+    "septembre": "Sep",
+    "octobre": "Oct",
+    "novembre": "Nov",
+    "d\u00e9cembre": "Dec",
 }
 
 
@@ -1602,6 +1782,7 @@ def _parse_release_ts(date_str: str) -> int:
 def _metacritic_html(score: int, url: str, t: Translator | None = None) -> str:
     if t is None:
         from .i18n import get_translator  # noqa: PLC0415
+
         t = get_translator()
     if score <= 0:
         return ""
@@ -1619,7 +1800,7 @@ def _metacritic_html(score: int, url: str, t: Translator | None = None) -> str:
         f'<span class="mc-tt">'
         f'<span class="mc-tt-score">{score}\u00a0/\u00a0100</span>'
         f'<span class="mc-tt-label">{html.escape(label)}</span>'
-        f'</span>'
+        f"</span>"
     )
     if url:
         safe_url = html.escape(url)
@@ -1631,10 +1812,12 @@ def _metacritic_html(score: int, url: str, t: Translator | None = None) -> str:
 
 def _price_html(details: object, t: Translator | None = None) -> str:
     from .models import AppDetails  # local import to avoid circular
+
     if not isinstance(details, AppDetails):
         return ""
     if t is None:
         from .i18n import get_translator  # noqa: PLC0415
+
         t = get_translator()
     price_free_lbl = t("price_free")
     price_tip = html.escape(t("tt_price"))
@@ -1657,8 +1840,10 @@ def _price_html(details: object, t: Translator | None = None) -> str:
 
 def _platform_html(details: object, t: Translator | None = None) -> str:
     from .models import AppDetails
+
     if t is None:
         from .i18n import get_translator  # noqa: PLC0415
+
         t = get_translator()
     if not isinstance(details, AppDetails):
         return ""
@@ -1676,6 +1861,7 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
     """Return the HTML string for a single game card."""
     if t is None:
         from .i18n import get_translator  # noqa: PLC0415
+
         t = get_translator()
     game = record.game
     status = record.status
@@ -1700,8 +1886,7 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
     genres_html = ""
     if details and details.genres:
         tags = "".join(
-            f'<span class="genre-tag">{html.escape(g)}</span>'
-            for g in details.genres[:3]
+            f'<span class="genre-tag">{html.escape(g)}</span>' for g in details.genres[:3]
         )
         genres_html = f'<div class="genre-tags">{tags}</div>\n'
 
@@ -1736,7 +1921,8 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         _rows = []
         for n in news_list:
             _ntag = "patchnotes" if n.tags and n.tags[0].lower() == "patchnotes" else "other"
-            _rows.append(                f'<div class="news-item" data-news-tag="{_ntag}">'
+            _rows.append(
+                f'<div class="news-item" data-news-tag="{_ntag}">'
                 f'  <span class="news-date">{html.escape(n.date.strftime("%d/%m/%y"))}</span>'
                 f'  <span class="news-item-title">'
                 f'    <a href="{html.escape(n.url)}" target="_blank" rel="noopener">'
@@ -1757,18 +1943,18 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         toggle_lbl = t("card_news_toggle_n", count=nc)
 
     news_section_html = (
-        f'    <div class="news-section">\n'
-        f'      <div class="news-toggle">\n'
-        f'        <div class="news-title">\U0001f5de {html.escape(toggle_lbl)}</div>\n'
-        f'        <span class="news-toggle-icon">\u25bc</span>\n'
-        f"      </div>\n"
-        f"    </div>\n"
-    ) if nc > 0 else ""
-    news_list_html = (
-        f'  <div class="news-list">\n'
-        f"    {news_html}\n"
-        f"  </div>\n"
-    ) if nc > 0 else ""
+        (
+            f'    <div class="news-section">\n'
+            f'      <div class="news-toggle">\n'
+            f'        <div class="news-title">\U0001f5de {html.escape(toggle_lbl)}</div>\n'
+            f'        <span class="news-toggle-icon">\u25bc</span>\n'
+            f"      </div>\n"
+            f"    </div>\n"
+        )
+        if nc > 0
+        else ""
+    )
+    news_list_html = (f'  <div class="news-list">\n    {news_html}\n  </div>\n') if nc > 0 else ""
 
     release_ts = _parse_release_ts(status.release_date)
     rel_date_display = (
@@ -1809,10 +1995,25 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
     _tt_date_added = html.escape(t("tt_date_added"))
     if record.time_added > 0:
         _date_added_str = datetime.fromtimestamp(record.time_added, tz=UTC).strftime("%d/%m/%y")
-        _date_added_html = f'      <span data-tooltip="{_tt_date_added}">➕ {_date_added_str}</span>\n'
+        _date_added_html = (
+            f'      <span data-tooltip="{_tt_date_added}">➕ {_date_added_str}</span>\n'
+        )
     else:
         _date_added_html = ""
     _removed_attr = ' data-removed="1"' if record.removed_at else ""
+    _tt_mark_removed = html.escape(t("btn_mark_removed_tooltip"))
+    _tt_reactivate = html.escape(t("btn_reactivate_tooltip"))
+    _tt_delete = html.escape(t("btn_delete_tooltip"))
+    _api_actions_html = (
+        f'  <div class="api-actions">\n'
+        f'    <button class="api-btn btn-mark-removed" data-appid="{appid}"'
+        f' title="{_tt_mark_removed}" aria-label="{_tt_mark_removed}">⛔</button>\n'
+        f'    <button class="api-btn btn-reactivate" data-appid="{appid}"'
+        f' title="{_tt_reactivate}" aria-label="{_tt_reactivate}">↩️</button>\n'
+        f'    <button class="api-btn btn-delete" data-appid="{appid}"'
+        f' title="{_tt_delete}" aria-label="{_tt_delete}">🗑️</button>\n'
+        f"  </div>\n"
+    )
     if record.removed_at:
         try:
             _removed_date_str = html.escape(
@@ -1836,7 +2037,7 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         f'data-last-update="{last_update_ts}" '
         f'data-last-patch-ts="{last_patch_ts}" data-last-other-ts="{last_other_ts}" '
         f'data-time-added="{record.time_added}"'
-        f'{_unknown_attr}{_removed_attr}>\n'
+        f"{_unknown_attr}{_removed_attr}>\n"
         f'  <span class="card-ext-hint">{store_hint}</span>\n'
         f'  <img class="card-img" src="{html.escape(img_url)}" alt="" loading="lazy"'
         f"    onerror=\"this.style.display='none';this.nextElementSibling.style.display='flex'\">\n"
@@ -1858,12 +2059,13 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         f' data-date-all="{html.escape(last_all_date)}"'
         f' data-date-patch="{html.escape(last_patch_date)}"'
         f' data-date-other="{html.escape(last_other_date)}">'
-        f'\U0001f4f0 {html.escape(last_all_date) or "—"}</span>\n'
+        f"\U0001f4f0 {html.escape(last_all_date) or '—'}</span>\n"
         f"{_date_added_html}"
-        f'      <span{_pt_attr}>{pt_display}</span>\n'
+        f"      <span{_pt_attr}>{pt_display}</span>\n"
         f"    </div>\n"
         f"    </div>\n"
         f"{news_section_html}"
+        f"{_api_actions_html}"
         f"  </div>\n"
         f"{news_list_html}"
         f"</div>"
@@ -1879,6 +2081,7 @@ def generate_html(
 ) -> str:
     """Render the full HTML page from a list of game records."""
     from .i18n import get_translator  # noqa: PLC0415
+
     t = get_translator(lang)
     cards_html = "\n".join(make_card(r, t) for r in records)
     total = len(records)
@@ -1892,6 +2095,7 @@ def generate_html(
     return _apply_html_t(
         _HTML_TEMPLATE.replace("__SHARED_JS__", _SHARED_JS)
         .replace("__I18N_JS__", _build_i18n_js(t))
+        .replace("__SIDECAR_JS__", _build_sidecar_js())
         .replace("__GENERATED_AT__", now_str)
         .replace("__STEAM_ID__", html.escape(steam_id))
         .replace("__TOTAL__", str(total))
@@ -1915,8 +2119,9 @@ def write_html(
     lang: str | None = None,
 ) -> None:
     """Write the rendered HTML page to *output_path*."""
-    output_path.write_text(generate_html(records, steam_id, alerts_href, diag_href, lang), encoding="utf-8")
-
+    output_path.write_text(
+        generate_html(records, steam_id, alerts_href, diag_href, lang), encoding="utf-8"
+    )
 
 
 def make_alert_card(
@@ -1935,6 +2140,7 @@ def make_alert_card(
     """
     if t is None:
         from .i18n import get_translator  # noqa: PLC0415
+
         t = get_translator()
 
     details = record.details if record else None
@@ -1958,9 +2164,7 @@ def make_alert_card(
     # Store & collection data attributes for filtering
     store_tag = "epic" if game and game.source == "epic" else "steam"
     collection_tag = (
-        ("owned" if game.source in ("owned", "epic") else game.source)
-        if game
-        else "owned"
+        ("owned" if game.source in ("owned", "epic") else game.source) if game else "owned"
     )
     # Game-level data attributes for shared filters
     status_tag = record.status.badge if record else "released"
@@ -1977,16 +2181,13 @@ def make_alert_card(
                     last_patch_ts = _ts
     # Buildid badge
     buildid = details.buildid if details and details.buildid else 0
-    buildid_html = (
-        f'      <span class="alert-buildid">build {buildid}</span>\n'
-        if buildid
-        else ""
-    )
+    buildid_html = f'      <span class="alert-buildid">build {buildid}</span>\n' if buildid else ""
     # Tag for news-type filter: match alert to its NewsItem via source_id/gid
     tag_val = "other"
     if alert.source_type == "news" and record and record.news:
         news_item = next(
-            (n for n in record.news if str(n.gid) == alert.source_id), None,
+            (n for n in record.news if str(n.gid) == alert.source_id),
+            None,
         )
         if news_item and any(t.lower() == "patchnotes" for t in news_item.tags):
             tag_val = "patchnotes"
@@ -2005,8 +2206,8 @@ def make_alert_card(
         f'data-status="{status_tag}" data-playtime="{playtime_val}" '
         f'data-metacritic="{metacritic_val}" data-last-patch-ts="{last_patch_ts}" '
         f'data-tag="{tag_val}" data-store-url="{html.escape(store_url)}"'
-        f'{news_url_attr}'
-        f'{_unknown_attr}>\n'
+        f"{news_url_attr}"
+        f"{_unknown_attr}>\n"
         f'  <a class="alert-thumb-link" href="{html.escape(store_url)}" target="_blank" rel="noopener">'
         f'<img class="alert-thumb" src="{html.escape(img_url)}" alt="" loading="lazy"></a>\n'
         f'  <div class="alert-body">\n'
@@ -2894,13 +3095,10 @@ def generate_alerts_html(
     t = get_translator(lang)
     record_map = {r.game.appid: r for r in records}
     sorted_alerts = sorted(alerts, key=lambda a: a.timestamp, reverse=True)
-    cards_html = "\n".join(
-        make_alert_card(a, record_map.get(a.appid), t) for a in sorted_alerts
-    )
+    cards_html = "\n".join(make_alert_card(a, record_map.get(a.appid), t) for a in sorted_alerts)
     now_str = datetime.now().strftime("%d/%m/%Y à %H:%M")
     return _apply_html_t(
-        _ALERTS_TEMPLATE
-        .replace("__SHARED_FILTER_CSS__", _SHARED_FILTER_CSS)
+        _ALERTS_TEMPLATE.replace("__SHARED_FILTER_CSS__", _SHARED_FILTER_CSS)
         .replace("__SHARED_JS__", _SHARED_JS)
         .replace("__GENERATED_AT__", now_str)
         .replace("__STEAM_ID__", html.escape(steam_id))
@@ -2942,7 +3140,8 @@ def write_alerts_html(
         lang: Language code.
     """
     output_path.write_text(
-        generate_alerts_html(alerts, records, steam_id, library_href, diag_href, lang), encoding="utf-8"
+        generate_alerts_html(alerts, records, steam_id, library_href, diag_href, lang),
+        encoding="utf-8",
     )
 
 
@@ -3089,7 +3288,10 @@ document.querySelectorAll('.stat-card[data-filter]').forEach(c=>c.addEventListen
 
 
 def _make_stat_card(
-    value: object, label: str, *, data_filter: str | None = None,
+    value: object,
+    label: str,
+    *,
+    data_filter: str | None = None,
 ) -> str:
     """Render a stat card.  Optionally clickable when *data_filter* is set."""
     attr = f' data-filter="{html.escape(data_filter)}"' if data_filter else ""
@@ -3169,13 +3371,15 @@ def generate_diagnostic_html(
     t = get_translator(lang)
 
     # ── Summary stats ──────────────────────────────────────────────────
-    summary_cards = "".join([
-        _make_stat_card(summary["total_games"], t("diag_total_games")),
-        _make_stat_card(summary["enriched_count"], t("diag_enriched")),
-        _make_stat_card(summary["unenriched_count"], t("diag_unenriched")),
-        _make_stat_card(summary["total_news"], t("diag_total_news")),
-        _make_stat_card(summary["total_alerts"], t("diag_total_alerts")),
-    ])
+    summary_cards = "".join(
+        [
+            _make_stat_card(summary["total_games"], t("diag_total_games")),
+            _make_stat_card(summary["enriched_count"], t("diag_enriched")),
+            _make_stat_card(summary["unenriched_count"], t("diag_unenriched")),
+            _make_stat_card(summary["total_news"], t("diag_total_news")),
+            _make_stat_card(summary["total_alerts"], t("diag_total_alerts")),
+        ]
+    )
 
     # ── Source chips ───────────────────────────────────────────────────
     by_source: dict[str, int] = summary.get("by_source", {})  # type: ignore[assignment]
@@ -3188,19 +3392,25 @@ def generate_diagnostic_html(
     epic_stats_list = [s for s in (discovery_stats or []) if s.source == "epic"]
     if epic_stats_list:
         es = epic_stats_list[0]
-        epic_html = '<div class="stat-grid">' + "".join([
-            _make_stat_card(es.total_api_items, t("diag_api_items")),
-            _make_stat_card(es.accepted_count, t("diag_accepted")),
-            _make_stat_card(es.resolved_count, t("diag_resolved_appids")),
-            _make_stat_card(es.unresolved_count, t("diag_unresolved_appids")),
-            _make_stat_card(len(es.skipped_items), t("diag_skipped")),
-        ]) + "</div>"
+        epic_html = (
+            '<div class="stat-grid">'
+            + "".join(
+                [
+                    _make_stat_card(es.total_api_items, t("diag_api_items")),
+                    _make_stat_card(es.accepted_count, t("diag_accepted")),
+                    _make_stat_card(es.resolved_count, t("diag_resolved_appids")),
+                    _make_stat_card(es.unresolved_count, t("diag_unresolved_appids")),
+                    _make_stat_card(len(es.skipped_items), t("diag_skipped")),
+                ]
+            )
+            + "</div>"
+        )
     else:
         epic_html = f'<p class="info-msg">{t("diag_no_epic")}</p>'
 
     # ── Skipped items ──────────────────────────────────────────────────
     all_skipped: list[SkippedItem] = []
-    for ds in (discovery_stats or []):
+    for ds in discovery_stats or []:
         all_skipped.extend(ds.skipped_items)
     if all_skipped:
         skipped_rows = "".join(_make_skipped_row(s, t) for s in all_skipped)
@@ -3225,7 +3435,7 @@ def generate_diagnostic_html(
         )
         unknown_html = (
             f'<p style="margin-bottom:12px"><span class="badge badge-unresolved">'
-            f'{len(unknown_games)} {t("diag_unknown_count")}</span></p>'
+            f"{len(unknown_games)} {t('diag_unknown_count')}</span></p>"
             '<div class="table-wrap"><table>'
             f"<thead><tr><th>{t('diag_col_name')}</th>"
             f"<th>{t('diag_col_source')}</th>"
@@ -3237,19 +3447,24 @@ def generate_diagnostic_html(
         unknown_html = f'<p class="info-msg">{t("diag_no_unknown")}</p>'
 
     # ── Mappings ───────────────────────────────────────────────────────
-    mapping_stats = "".join([
-        _make_stat_card(summary["total_mappings"], t("diag_total_mappings"), data_filter="all"),
-        _make_stat_card(summary["resolved_mappings"], t("diag_resolved"), data_filter="resolved"),
-        _make_stat_card(summary["unresolved_mappings"], t("diag_unresolved"), data_filter="unresolved"),
-        _make_stat_card(summary["manual_mappings"], t("diag_manual"), data_filter="manual"),
-    ])
+    mapping_stats = "".join(
+        [
+            _make_stat_card(summary["total_mappings"], t("diag_total_mappings"), data_filter="all"),
+            _make_stat_card(
+                summary["resolved_mappings"], t("diag_resolved"), data_filter="resolved"
+            ),
+            _make_stat_card(
+                summary["unresolved_mappings"], t("diag_unresolved"), data_filter="unresolved"
+            ),
+            _make_stat_card(summary["manual_mappings"], t("diag_manual"), data_filter="manual"),
+        ]
+    )
     mapping_rows = "".join(_make_mapping_row(m, t) for m in mappings)
 
     now_str = datetime.now().strftime("%d/%m/%Y à %H:%M")
 
     return _apply_html_t(
-        _DIAGNOSTIC_TEMPLATE
-        .replace("__LIB_HREF__", html.escape(library_href))
+        _DIAGNOSTIC_TEMPLATE.replace("__LIB_HREF__", html.escape(library_href))
         .replace("__ALERTS_HREF__", html.escape(alerts_href))
         .replace("__GENERATED_AT__", now_str)
         .replace("__SUMMARY_STATS__", summary_cards)
@@ -3287,8 +3502,13 @@ def write_diagnostic_html(
     """
     output_path.write_text(
         generate_diagnostic_html(
-            summary, mappings, discovery_stats, unknown_games,
-            library_href, alerts_href, lang,
+            summary,
+            mappings,
+            discovery_stats,
+            unknown_games,
+            library_href,
+            alerts_href,
+            lang,
         ),
         encoding="utf-8",
     )
