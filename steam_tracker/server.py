@@ -505,9 +505,7 @@ def run_server(
         ValueError: If ``token`` contains invalid characters.
     """
     if token is not None and not _TOKEN_RE.fullmatch(token):
-        raise ValueError(
-            "--token must contain only A-Za-z0-9, underscore, or hyphen characters."
-        )
+        raise ValueError("--token must contain only A-Za-z0-9, underscore, or hyphen characters.")
     handler_cls = make_handler(
         db_path, output_dir, steamid, lang, token=token, config_path=config_path
     )

@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [2.0.0] — 2026-04-04
+
 ### Added
 
 - **`steam-serve` sidecar server** — new `steam-serve` command starts a lightweight HTTP server (stdlib only, zero new dependencies) that serves the HTML dashboards and exposes a small mutation API (`/api/ping`, `/api/mark-removed/{appid}`, `/api/mark-active/{appid}`, `/api/delete/{appid}`); HTML pages re-render instantly after each mutation
@@ -30,6 +34,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **Duplicate news alerts in combined view** — when multiple alert rules matched the same news item, the combined view showed the article multiple times; deduplicated by `(appid, source_id)` pair in JS (fixes #30)
+- **Epic source failure no longer marks games as removed** — when a source (e.g. Epic) fails during a fetch, games belonging to that source are excluded from the soft-delete reconciliation; `source_labels` is now a required field of the `GameSource` protocol so the CLI can enforce this without `getattr` fallbacks
 - **`appendLog` JS SyntaxError** — unescaped newline in `'\n'` inside the sidecar JS string template broke the entire JS block
 - **`UnicodeEncodeError` in refetch subprocess** — `steam-fetch` subprocess now inherits `PYTHONUTF8=1` in its environment to avoid cp1252 encoding errors on Windows
 - **`UnicodeDecodeError` reading subprocess stdout** — `subprocess.Popen` now uses `encoding="utf-8"` when reading subprocess output instead of defaulting to the system locale

@@ -855,8 +855,7 @@ class Database:
         placeholders = ",".join("?" * len(sources))
         with self._connect() as con:
             rows = con.execute(
-                f"SELECT appid FROM games WHERE removed_at IS NULL"
-                f" AND source IN ({placeholders})",
+                f"SELECT appid FROM games WHERE removed_at IS NULL AND source IN ({placeholders})",
                 list(sources),
             ).fetchall()
         return {int(r[0]) for r in rows}

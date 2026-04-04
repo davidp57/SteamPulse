@@ -95,9 +95,24 @@
 
 ---
 
-## 🔵 Planned / Not yet started
+### v2.0.0 — Sidecar server & self-hosted mode
+- **`steam-serve` sidecar server** — lightweight stdlib HTTP server serving HTML dashboards from a local folder
+- **Interactive action buttons** — ⛔ / ↩️ / 🗑️ on library cards for soft-delete, reactivation, and hard-delete (shown only when sidecar is running; graceful degradation otherwise)
+- **Cookie-based authentication** — `--token` flag enables auth mode; `HttpOnly`/`SameSite=Strict` session cookie; timing-safe token comparison
+- **`/api/rerender`** — in-process HTML re-render triggered from the UI
+- **`/api/refetch` SSE** — streams live fetch progress to the browser; only one fetch runs at a time
+- **Auth panel in header** — login / logout buttons, re-render and refetch buttons (auth-only)
+- **Soft-delete for removed games** — `removed_at` timestamp instead of hard-delete; reappearing games auto-reactivated; `--mark-removed` and `--delete` CLI flags
+- **Availability filter** — Active / All / Removed filter group in library page; removed cards dimmed with badge
+- **Date-added tracking** — `time_added` column; "Sort by date added" option; ➕ date shown on newly discovered cards
+- **Short date format** — all card dates now `dd/mm/yy`
+- **`source_labels` in `GameSource` protocol** — required field protects games from false soft-delete when their source fails
+- **Duplicate news deduplication in combined view** — `(appid, source_id)` pair dedup in JS (fixes #30)
+- 473 tests total
 
-### Manual AppID mappings CLI
+---
+
+## 🔵 Planned / Not yet started
 - Interface to add/edit manual `appid_mappings` entries (e.g. `steam-fetch --add-mapping epic:Flier 1234567`)
 - Useful for games that fail automatic resolution (e.g. Epic exclusives with no Steam page)
 - `manual=True` entries already protected in DB — just needs a CLI surface
