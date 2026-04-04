@@ -535,6 +535,40 @@ survit aux redémarrages et mises à jour du conteneur.
 
 ---
 
+### Étape 4 — Activer l'API de mutation (optionnel mais recommandé)
+
+Le conteneur lance `steam-serve` en parallèle de nginx. L'API de mutation
+(`/api/mark-removed`, `/api/rerender`, `/api/refetch`, etc.) est
+proxifiée par nginx et disponible sur le même port 8080.
+
+**Sans configuration supplémentaire :** l'API est accessible sans
+authentification. Les boutons d'action (⛔ / ↩️ / 🗑) apparaissent
+automatiquement dans chaque carte, et les boutons re-render / re-fetch
+apparaissent dans l'en-tête.
+
+**Pour protéger l'API avec un token** (fortement recommandé si le port
+est accessible depuis internet ou un réseau partagé), ajoute `serve_token`
+dans ton `config.toml` :
+
+```toml
+[settings]
+serve_token = "ton-secret"
+```
+
+Ou, si tu utilises des variables d'environnement, ajoute `SERVE_TOKEN`
+dans `docker-compose.yml` :
+
+```yaml
+environment:
+  INTERVAL_HOURS: "4"
+  SERVE_TOKEN: "ton-secret"
+```
+
+Avec un token configuré, les dashboards affichent un bouton 🔑 Connexion.
+Après avoir saisi le token, toutes les actions de mutation sont disponibles.
+
+---
+
 ### Gérer ton conteneur
 
 ```bash

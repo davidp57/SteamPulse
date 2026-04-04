@@ -9,6 +9,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **`steam-serve` sidecar missing in Docker** — `supervisord.conf` now starts `steam-serve` on `127.0.0.1:8081`; `nginx.conf` proxies `/api/` and `/login` to the sidecar so mutation buttons and the re-fetch/re-render UI work out of the box in the Docker container
+- **`SERVE_TOKEN` env var support in Docker** — when generating `config.toml` from environment variables, the `SERVE_TOKEN` env var is now written as `serve_token` under `[settings]`
+
 ---
 
 ## [2.0.0] — 2026-04-04

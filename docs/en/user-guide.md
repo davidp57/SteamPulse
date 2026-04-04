@@ -527,6 +527,39 @@ survives container restarts and image updates.
 
 ---
 
+### Step 4 — Enable the mutation API (optional but recommended)
+
+The container runs `steam-serve` as a sidecar process alongside nginx. The
+mutation API (`/api/mark-removed`, `/api/rerender`, `/api/refetch`, etc.) is
+proxied by nginx and available on the same port 8080 you already use.
+
+**Without any extra configuration:** the API is available without authentication.
+Action buttons (⛔ / ↩️ / 🗑) appear automatically in each card and the
+re-render / re-fetch buttons appear in the header.
+
+**To protect the API with a token** (strongly recommended if the port is
+reachable from the internet or a shared network), add `serve_token` to your
+`config.toml`:
+
+```toml
+[settings]
+serve_token = "your-secret-token"
+```
+
+Or, if you use environment variables instead of a config file, set
+`SERVE_TOKEN` in `docker-compose.yml`:
+
+```yaml
+environment:
+  INTERVAL_HOURS: "4"
+  SERVE_TOKEN: "your-secret-token"
+```
+
+With a token set, the dashboards display a 🔑 login button. After logging in
+with the token, all mutation actions become available.
+
+---
+
 ### Managing your container
 
 ```bash

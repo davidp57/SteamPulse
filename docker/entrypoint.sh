@@ -83,6 +83,7 @@ if twitch_id and twitch_secret:
 workers  = _int_env("WORKERS", 4)
 news_age = _int_env("NEWS_AGE", 24)
 lang     = os.environ.get("SP_LANG", "")
+token    = os.environ.get("SERVE_TOKEN", "")
 lines += [
     "",
     "[settings]",
@@ -91,7 +92,9 @@ lines += [
     f"news_age = {news_age}",
 ]
 if lang:
-    lines.append(f'lang     = "{q(lang)}"')
+    lines.append(f'lang        = "{q(lang)}"')
+if token:
+    lines.append(f'serve_token = "{q(token)}"')
 
 dest = "/run/steampulse/config.toml"
 with open(dest, "w") as f:
