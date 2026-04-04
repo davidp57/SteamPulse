@@ -262,7 +262,11 @@ def cmd_fetch() -> None:
             except Exception:  # noqa: BLE001
                 labels: frozenset[str] = getattr(source, "source_labels", frozenset())
                 failed_source_labels.update(labels)
-                log.warning("Source %s failed — its games will not be marked removed", source.name)
+                log.warning(
+                    "Source %s failed — its games will not be marked removed",
+                    source.name,
+                    exc_info=True,
+                )
 
     # Persist credentials early so rotated tokens (e.g. Epic refresh_token)
     # survive even if the enrichment phase crashes.
@@ -476,7 +480,11 @@ def cmd_run() -> None:
             except Exception:  # noqa: BLE001
                 labels_run: frozenset[str] = getattr(source, "source_labels", frozenset())
                 failed_source_labels_run.update(labels_run)
-                log.warning("Source %s failed — its games will not be marked removed", source.name)
+                log.warning(
+                    "Source %s failed — its games will not be marked removed",
+                    source.name,
+                    exc_info=True,
+                )
             stats = getattr(source, "last_stats", None)
             if isinstance(stats, DiscoveryStats):
                 all_discovery_stats.append(stats)

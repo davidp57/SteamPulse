@@ -739,6 +739,15 @@ def test_get_active_appids_for_sources_empty_set_returns_empty(db: Database) -> 
     assert db.get_active_appids_for_sources(set()) == set()
 
 
+def test_get_active_appids_for_sources_unknown_label_returns_empty(db: Database) -> None:
+    """Unknown source labels must not match any game and return an empty set."""
+    db.upsert_game(OwnedGame(appid=1, name="EpicA", source="epic"))
+    db.upsert_game(OwnedGame(appid=2, name="SteamA", source="owned"))
+    assert db.get_active_appids_for_sources({"nonexistent"}) == set()
+    # Mixed: one valid label, one unknown — only the valid one should match.
+    assert db.get_active_appids_for_sources({"epic", "nonexistent"}) == {1}
+
+
 def test_delete_games_removes_record(db: Database, sample_game: OwnedGame) -> None:
     """delete_games must hard-delete the game and cascade to app_details."""
     from steam_tracker.models import AppDetails  # noqa: PLC0415
