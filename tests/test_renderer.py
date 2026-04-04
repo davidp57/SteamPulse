@@ -480,6 +480,13 @@ def test_make_alert_card_has_data_id() -> None:
     assert f'data-id="{alert.id}"' in card
 
 
+def test_make_alert_card_has_data_source_id() -> None:
+    """Card must carry data-source-id for JS combined-view deduplication."""
+    alert = _sample_alert()
+    card = make_alert_card(alert)
+    assert f'data-source-id="{alert.source_id}"' in card
+
+
 def test_make_alert_card_escapes_xss_in_game_name() -> None:
     alert = Alert(
         id="xss123456789012",
@@ -756,6 +763,12 @@ def test_generate_alerts_html_contains_alert_title(sample_record: GameRecord) ->
 def test_generate_alerts_html_empty_list(sample_record: GameRecord) -> None:
     page = generate_alerts_html([], [sample_record], "76561198000000000")
     assert "__ALERTS__" not in page
+
+
+def test_generate_alerts_html_cards_have_data_source_id(sample_record: GameRecord) -> None:
+    """Every rendered alert card must have a data-source-id attribute."""
+    page = generate_alerts_html([_sample_alert()], [sample_record], "76561198000000000")
+    assert 'data-source-id="' in page
 
 
 def test_write_alerts_html_creates_file(sample_record: GameRecord, tmp_path: Path) -> None:

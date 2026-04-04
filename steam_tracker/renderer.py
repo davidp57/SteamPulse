@@ -2202,6 +2202,7 @@ def make_alert_card(
         f'data-name="{html.escape(alert.game_name.lower())}" '
         f'data-appid="{alert.appid}" data-ts="{ts}" '
         f'data-source="{html.escape(alert.source_type)}" '
+        f'data-source-id="{html.escape(alert.source_id)}" '
         f'data-store="{store_tag}" data-lib-status="{collection_tag}" '
         f'data-status="{status_tag}" data-playtime="{playtime_val}" '
         f'data-metacritic="{metacritic_val}" data-last-patch-ts="{last_patch_ts}" '
@@ -2676,7 +2677,21 @@ __SHARED_JS__
         if (sort === 'metacritic') return (parseInt(b.getAttribute('data-metacritic')) || 0) - (parseInt(a.getAttribute('data-metacritic')) || 0);
         return (parseInt(b.getAttribute('data-ts')) || 0) - (parseInt(a.getAttribute('data-ts')) || 0);
       });
-      allCards.forEach(function(c) { container.appendChild(c); });
+      // Deduplicate news alerts: same (appid, source_id) = same article matched by
+      // multiple rules. Show only the first occurrence; hide the rest so they stay
+      // fully visible when switching to by-rule or by-game view.
+      var seenNews = new Set();
+      allCards.forEach(function(c) {
+        if (!c.classList.contains('hidden') && c.getAttribute('data-source') === 'news') {
+          var dk = (c.getAttribute('data-appid') || '') + '\x1f' + (c.getAttribute('data-source-id') || '');
+          if (seenNews.has(dk)) {
+            c.classList.add('hidden');
+          } else {
+            seenNews.add(dk);
+          }
+        }
+        container.appendChild(c);
+      });
     }
     updateSections();
     updateCount();
