@@ -1,4 +1,5 @@
 """SQLite persistence layer."""
+
 from __future__ import annotations
 
 import json
@@ -158,7 +159,15 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
     ("app_details", "build_timeupdated", "INTEGER NOT NULL DEFAULT 0"),
     ("app_details", "depot_size_bytes", "INTEGER NOT NULL DEFAULT 0"),
     ("app_details", "branch_names", "TEXT NOT NULL DEFAULT '[]'"),
+    # Date-added tracking
+    ("games", "time_added", "INTEGER NOT NULL DEFAULT 0"),
+    # Soft-delete: NULL = active, ISO timestamp = removed from all stores
+    ("games", "removed_at", "TEXT"),
 ]
+
+
+# SQLite limits bound parameters per statement; keep chunks safely below that limit.
+_SQLITE_MAX_PARAMS = 900
 
 
 def _now() -> str:
@@ -250,8 +259,7 @@ class Database:
         """
         with self._connect() as con:
             rows = con.execute(
-                "SELECT appid, external_id FROM games "
-                "WHERE source = 'epic' AND name = 'Live'",
+                "SELECT appid, external_id FROM games WHERE source = 'epic' AND name = 'Live'",
             ).fetchall()
             if not rows:
                 return 0
@@ -262,8 +270,7 @@ class Database:
             # Invalidate cached appid_mappings so the resolver retries
             if ext_ids:
                 con.executemany(
-                    "DELETE FROM appid_mappings "
-                    "WHERE external_source = 'epic' AND external_id = ?",
+                    "DELETE FROM appid_mappings WHERE external_source = 'epic' AND external_id = ?",
                     [(e,) for e in ext_ids],
                 )
             log.info("cleanup: removed %d Epic game(s) named 'Live'", len(appids))
@@ -293,8 +300,7 @@ class Database:
             con.executemany("DELETE FROM games WHERE appid = ?", [(a,) for a in appids])
             if ext_ids:
                 con.executemany(
-                    "DELETE FROM appid_mappings "
-                    "WHERE external_source = 'epic' AND external_id = ?",
+                    "DELETE FROM appid_mappings WHERE external_source = 'epic' AND external_id = ?",
                     [(e,) for e in ext_ids],
                 )
             log.info("cleanup: removed %d Epic game(s) with hex-ID names", len(appids))
@@ -319,9 +325,7 @@ class Database:
                 "SELECT appid, name, external_id FROM games WHERE source = 'epic'",
             ).fetchall()
             prod_rows = [
-                (int(r[0]), str(r[2]))
-                for r in rows
-                if self._PRODUCTION_NAME_RE.match(str(r[1]))
+                (int(r[0]), str(r[2])) for r in rows if self._PRODUCTION_NAME_RE.match(str(r[1]))
             ]
             if not prod_rows:
                 return 0
@@ -330,8 +334,7 @@ class Database:
             con.executemany("DELETE FROM games WHERE appid = ?", [(a,) for a in appids])
             if ext_ids:
                 con.executemany(
-                    "DELETE FROM appid_mappings "
-                    "WHERE external_source = 'epic' AND external_id = ?",
+                    "DELETE FROM appid_mappings WHERE external_source = 'epic' AND external_id = ?",
                     [(e,) for e in ext_ids],
                 )
             log.info("cleanup: removed %d Epic game(s) with Production names", len(appids))
@@ -372,12 +375,12 @@ class Database:
             con.executemany("DELETE FROM games WHERE appid = ?", [(a,) for a in appids])
             if ext_ids:
                 con.executemany(
-                    "DELETE FROM appid_mappings "
-                    "WHERE external_source = 'epic' AND external_id = ?",
+                    "DELETE FROM appid_mappings WHERE external_source = 'epic' AND external_id = ?",
                     [(e,) for e in ext_ids],
                 )
             log.info(
-                "cleanup: removed %d Epic synthetic-appid duplicate(s)", len(appids),
+                "cleanup: removed %d Epic synthetic-appid duplicate(s)",
+                len(appids),
             )
             return len(appids)
 
@@ -407,12 +410,12 @@ class Database:
             con.executemany("DELETE FROM games WHERE appid = ?", [(a,) for a in appids])
             if ext_ids:
                 con.executemany(
-                    "DELETE FROM appid_mappings "
-                    "WHERE external_source = 'epic' AND external_id = ?",
+                    "DELETE FROM appid_mappings WHERE external_source = 'epic' AND external_id = ?",
                     [(e,) for e in ext_ids],
                 )
             log.info(
-                "cleanup: removed %d Epic same-name duplicate(s)", len(appids),
+                "cleanup: removed %d Epic same-name duplicate(s)",
+                len(appids),
             )
             return len(appids)
 
@@ -425,14 +428,15 @@ class Database:
     ]
 
     def upsert_game(self, game: OwnedGame) -> None:
+        now_ts = int(datetime.now(tz=UTC).timestamp())
         with self._connect() as con:
             con.execute(
                 """
                 INSERT INTO games
                     (appid, name, playtime_forever, playtime_2weeks,
                      rtime_last_played, img_icon_url, img_logo_url, last_seen_at, source,
-                     external_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     external_id, time_added)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(appid) DO UPDATE SET
                     name = CASE WHEN excluded.name != ''
                         THEN excluded.name ELSE name END,
@@ -457,7 +461,9 @@ class Database:
                     END,
                     external_id = CASE WHEN excluded.external_id != ''
                         THEN excluded.external_id ELSE external_id END,
-                    last_seen_at = excluded.last_seen_at
+                    last_seen_at = excluded.last_seen_at,
+                    time_added = CASE WHEN time_added = 0
+                        THEN excluded.time_added ELSE time_added END
                 """,
                 (
                     game.appid,
@@ -470,6 +476,7 @@ class Database:
                     _now(),
                     game.source,
                     game.external_id,
+                    now_ts,
                 ),
             )
 
@@ -512,54 +519,76 @@ class Database:
             ).fetchone()
 
             new_values: dict[str, str] = {
-                "name":                 details.name,
-                "app_type":             details.app_type,
-                "short_description":    details.short_description,
-                "supported_languages":  details.supported_languages,
-                "website":              details.website,
-                "header_image":         details.header_image,
-                "background_image":     details.background_image,
-                "early_access":         str(int(details.early_access)),
-                "coming_soon":          str(int(details.coming_soon)),
-                "release_date_str":     details.release_date_str,
-                "developers":           json.dumps(details.developers),
-                "publishers":           json.dumps(details.publishers),
-                "genres":               json.dumps(details.genres),
-                "categories":           json.dumps(details.categories),
-                "is_free":              str(int(details.is_free)),
-                "price_initial":        str(details.price_initial),
-                "price_final":          str(details.price_final),
-                "price_discount_pct":   str(details.price_discount_pct),
-                "price_currency":       details.price_currency,
-                "platform_windows":     str(int(details.platform_windows)),
-                "platform_mac":         str(int(details.platform_mac)),
-                "platform_linux":       str(int(details.platform_linux)),
-                "metacritic_score":     str(details.metacritic_score),
-                "metacritic_url":       details.metacritic_url,
-                "achievement_count":    str(details.achievement_count),
+                "name": details.name,
+                "app_type": details.app_type,
+                "short_description": details.short_description,
+                "supported_languages": details.supported_languages,
+                "website": details.website,
+                "header_image": details.header_image,
+                "background_image": details.background_image,
+                "early_access": str(int(details.early_access)),
+                "coming_soon": str(int(details.coming_soon)),
+                "release_date_str": details.release_date_str,
+                "developers": json.dumps(details.developers),
+                "publishers": json.dumps(details.publishers),
+                "genres": json.dumps(details.genres),
+                "categories": json.dumps(details.categories),
+                "is_free": str(int(details.is_free)),
+                "price_initial": str(details.price_initial),
+                "price_final": str(details.price_final),
+                "price_discount_pct": str(details.price_discount_pct),
+                "price_currency": details.price_currency,
+                "platform_windows": str(int(details.platform_windows)),
+                "platform_mac": str(int(details.platform_mac)),
+                "platform_linux": str(int(details.platform_linux)),
+                "metacritic_score": str(details.metacritic_score),
+                "metacritic_url": details.metacritic_url,
+                "achievement_count": str(details.achievement_count),
                 "recommendation_count": str(details.recommendation_count),
-                "dlc_appids":           json.dumps(details.dlc_appids),
-                "controller_support":   details.controller_support,
-                "required_age":         str(details.required_age),
-                "buildid":              str(details.buildid),
-                "build_timeupdated":    str(details.build_timeupdated),
-                "depot_size_bytes":     str(details.depot_size_bytes),
-                "branch_names":         json.dumps(details.branch_names),
+                "dlc_appids": json.dumps(details.dlc_appids),
+                "controller_support": details.controller_support,
+                "required_age": str(details.required_age),
+                "buildid": str(details.buildid),
+                "build_timeupdated": str(details.build_timeupdated),
+                "depot_size_bytes": str(details.depot_size_bytes),
+                "branch_names": json.dumps(details.branch_names),
             }
 
             # Ordered list that matches the SELECT columns above
             field_names = [
-                "name", "app_type", "short_description", "supported_languages",
-                "website", "header_image", "background_image",
-                "early_access", "coming_soon", "release_date_str",
-                "developers", "publishers", "genres", "categories",
-                "is_free", "price_initial", "price_final", "price_discount_pct",
+                "name",
+                "app_type",
+                "short_description",
+                "supported_languages",
+                "website",
+                "header_image",
+                "background_image",
+                "early_access",
+                "coming_soon",
+                "release_date_str",
+                "developers",
+                "publishers",
+                "genres",
+                "categories",
+                "is_free",
+                "price_initial",
+                "price_final",
+                "price_discount_pct",
                 "price_currency",
-                "platform_windows", "platform_mac", "platform_linux",
-                "metacritic_score", "metacritic_url",
-                "achievement_count", "recommendation_count",
-                "dlc_appids", "controller_support", "required_age",
-                "buildid", "build_timeupdated", "depot_size_bytes", "branch_names",
+                "platform_windows",
+                "platform_mac",
+                "platform_linux",
+                "metacritic_score",
+                "metacritic_url",
+                "achievement_count",
+                "recommendation_count",
+                "dlc_appids",
+                "controller_support",
+                "required_age",
+                "buildid",
+                "build_timeupdated",
+                "depot_size_bytes",
+                "branch_names",
             ]
 
             changes: list[FieldChange] = []
@@ -569,13 +598,15 @@ class Database:
                     old_val = str(old_row[i]) if old_row[i] is not None else None
                     new_val = new_values[field_name]
                     if old_val != new_val:
-                        changes.append(FieldChange(
-                            appid=details.appid,
-                            field_name=field_name,
-                            old_value=old_val,
-                            new_value=new_val,
-                            timestamp=ts,
-                        ))
+                        changes.append(
+                            FieldChange(
+                                appid=details.appid,
+                                field_name=field_name,
+                                old_value=old_val,
+                                new_value=new_val,
+                                timestamp=ts,
+                            )
+                        )
 
             if old_row is None:
                 # First insert: persist baseline to field_history for future
@@ -709,9 +740,7 @@ class Database:
 
         return changes
 
-    def mark_fetched(
-        self, appids: set[int], *, details: bool = False, news: bool = False
-    ) -> None:
+    def mark_fetched(self, appids: set[int], *, details: bool = False, news: bool = False) -> None:
         """Record that a fetch was attempted for *appids*, even if it returned nothing.
 
         Pass ``details=True`` to update ``details_fetched_at`` (suppresses
@@ -799,12 +828,137 @@ class Database:
             ).fetchall()
         return {int(r[0]) for r in rows}
 
+    def get_all_active_appids(self) -> set[int]:
+        """Return the set of appids for games that are currently active (not soft-deleted).
+
+        Returns:
+            Set of appids where ``removed_at`` is NULL.
+        """
+        with self._connect() as con:
+            rows = con.execute("SELECT appid FROM games WHERE removed_at IS NULL").fetchall()
+        return {int(r[0]) for r in rows}
+
+    def get_active_appids_for_sources(self, sources: set[str]) -> set[int]:
+        """Return active appids belonging to any of the given source labels.
+
+        Used to identify which games must be excluded from soft-delete
+        reconciliation when their owning source failed to connect.
+
+        Args:
+            sources: Set of ``source`` field values (e.g. ``{"epic"}`` or
+                ``{"owned", "wishlist", "followed"}``).
+
+        Returns:
+            Set of appids where ``removed_at`` is NULL and ``source`` is in
+            *sources*.  Returns an empty set when *sources* is empty.
+        """
+        if not sources:
+            return set()
+        placeholders = ",".join("?" * len(sources))
+        with self._connect() as con:
+            rows = con.execute(
+                f"SELECT appid FROM games WHERE removed_at IS NULL AND source IN ({placeholders})",
+                list(sources),
+            ).fetchall()
+        return {int(r[0]) for r in rows}
+
+    def mark_removed(self, appids: set[int]) -> int:
+        """Soft-delete games that are no longer found in any store.
+
+        Only updates games whose ``removed_at`` is currently NULL so that
+        the timestamp of first removal is preserved on subsequent calls.
+        Processes ``appids`` in chunks to stay within SQLite's bound-parameter
+        limit.
+
+        Args:
+            appids: Set of appids to mark as removed.
+
+        Returns:
+            Number of games newly marked as removed.
+        """
+        if not appids:
+            return 0
+        now = _now()
+        safe_ids = [int(a) for a in appids]
+        total = 0
+        with self._connect() as con:
+            for i in range(0, len(safe_ids), _SQLITE_MAX_PARAMS):
+                chunk = safe_ids[i : i + _SQLITE_MAX_PARAMS]
+                placeholders = ",".join("?" * len(chunk))
+                con.execute(
+                    f"UPDATE games SET removed_at = ? "
+                    f"WHERE appid IN ({placeholders}) AND removed_at IS NULL",
+                    [now, *chunk],
+                )
+                row = con.execute("SELECT changes()").fetchone()
+                total += int(row[0]) if row else 0
+        return total
+
+    def mark_active(self, appids: set[int]) -> int:
+        """Clear the soft-delete flag for games that have reappeared in a store.
+
+        Processes ``appids`` in chunks to stay within SQLite's bound-parameter
+        limit.
+
+        Args:
+            appids: Set of appids to reactivate.
+
+        Returns:
+            Number of games reactivated (had a non-NULL ``removed_at``).
+        """
+        if not appids:
+            return 0
+        safe_ids = [int(a) for a in appids]
+        total = 0
+        with self._connect() as con:
+            for i in range(0, len(safe_ids), _SQLITE_MAX_PARAMS):
+                chunk = safe_ids[i : i + _SQLITE_MAX_PARAMS]
+                placeholders = ",".join("?" * len(chunk))
+                con.execute(
+                    f"UPDATE games SET removed_at = NULL "
+                    f"WHERE appid IN ({placeholders}) AND removed_at IS NOT NULL",
+                    [*chunk],
+                )
+                row = con.execute("SELECT changes()").fetchone()
+                total += int(row[0]) if row else 0
+        return total
+
+    def delete_games(self, appids: set[int]) -> int:
+        """Permanently delete games and all their associated data.
+
+        Cascades to ``app_details``, ``news``, ``alerts``, and
+        ``field_history`` via foreign-key constraints.  Processes ``appids``
+        in chunks to stay within SQLite's bound-parameter limit.
+
+        Args:
+            appids: Set of appids to hard-delete.
+
+        Returns:
+            Number of games deleted.
+        """
+        if not appids:
+            return 0
+        safe_ids = [int(a) for a in appids]
+        total = 0
+        with self._connect() as con:
+            for i in range(0, len(safe_ids), _SQLITE_MAX_PARAMS):
+                chunk = safe_ids[i : i + _SQLITE_MAX_PARAMS]
+                placeholders = ",".join("?" * len(chunk))
+                con.execute(
+                    f"DELETE FROM games WHERE appid IN ({placeholders})",
+                    [*chunk],
+                )
+                row = con.execute("SELECT changes()").fetchone()
+                total += int(row[0]) if row else 0
+        return total
+
     def get_all_game_records(self) -> list[GameRecord]:
         """Return all games with their details and latest news, sorted by name."""
         with self._connect() as con:
             games_rows = con.execute(
                 "SELECT appid, name, playtime_forever, playtime_2weeks, "
-                "rtime_last_played, img_icon_url, img_logo_url, source, external_id "
+                "rtime_last_played, img_icon_url, img_logo_url, source, external_id, "
+                "time_added, removed_at "
                 "FROM games ORDER BY name COLLATE NOCASE"
             ).fetchall()
 
@@ -822,6 +976,8 @@ class Database:
                     source=str(row[7]),
                     external_id=str(row[8]),
                 )
+                time_added = int(row[9]) if row[9] else 0
+                removed_at = str(row[10]) if row[10] is not None else None
 
                 det = con.execute(
                     "SELECT name, app_type, short_description, supported_languages, "
@@ -896,7 +1052,14 @@ class Database:
                 ]
 
                 records.append(
-                    GameRecord(game=game, details=details, news=news, status=infer_status(details))
+                    GameRecord(
+                        game=game,
+                        details=details,
+                        news=news,
+                        status=infer_status(details),
+                        time_added=time_added,
+                        removed_at=removed_at,
+                    )
                 )
 
         return records
@@ -1069,8 +1232,7 @@ class Database:
             ordered by timestamp descending.
         """
         query = (  # noqa: S608
-            "SELECT appid, field_name, old_value, new_value, timestamp"
-            " FROM field_history WHERE 1=1"
+            "SELECT appid, field_name, old_value, new_value, timestamp FROM field_history WHERE 1=1"
         )
         params: list[object] = []
         if appid is not None:
@@ -1143,24 +1305,16 @@ class Database:
             ).fetchall()
             by_source = {str(r[0]): int(r[1]) for r in by_source_rows}
 
-            enriched = con.execute(
-                "SELECT COUNT(*) FROM app_details"
-            ).fetchone()[0]
-            total_mappings = con.execute(
-                "SELECT COUNT(*) FROM appid_mappings"
-            ).fetchone()[0]
+            enriched = con.execute("SELECT COUNT(*) FROM app_details").fetchone()[0]
+            total_mappings = con.execute("SELECT COUNT(*) FROM appid_mappings").fetchone()[0]
             resolved_mappings = con.execute(
                 "SELECT COUNT(*) FROM appid_mappings WHERE steam_appid IS NOT NULL"
             ).fetchone()[0]
             manual_mappings = con.execute(
                 "SELECT COUNT(*) FROM appid_mappings WHERE manual = 1"
             ).fetchone()[0]
-            total_alerts = con.execute(
-                "SELECT COUNT(*) FROM alerts"
-            ).fetchone()[0]
-            total_news = con.execute(
-                "SELECT COUNT(*) FROM news"
-            ).fetchone()[0]
+            total_alerts = con.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+            total_news = con.execute("SELECT COUNT(*) FROM news").fetchone()[0]
 
         return {
             "total_games": int(total_games),

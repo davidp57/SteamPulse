@@ -8,6 +8,7 @@ Discovers games from a Steam account via three sub-sources:
   (opt-in via ``--followed``; the endpoint is not publicly accessible for all
   accounts)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -39,6 +40,7 @@ class SteamSource:
     """
 
     name = "steam"
+    source_labels: frozenset[str] = frozenset({"owned", "wishlist", "followed"})
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
         """Register Steam-specific CLI arguments.

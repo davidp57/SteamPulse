@@ -10,6 +10,7 @@ by a simple template-based generator (``tomllib`` is read-only by design).
 
 CLI flags always take precedence over config file values.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -35,20 +36,23 @@ _TOML_TO_ARGS: dict[tuple[str, str], str] = {
     ("settings", "workers"): "workers",
     ("settings", "news_age"): "news_age",
     ("settings", "lang"): "lang",
+    ("settings", "serve_token"): "serve_token",
 }
 
 # Reverse mapping for writes
 _ARGS_TO_TOML: dict[str, tuple[str, str]] = {v: k for k, v in _TOML_TO_ARGS.items()}
 
 # Keys that represent credentials — always saved when new/changed
-_CREDENTIAL_KEYS: frozenset[str] = frozenset({
-    "key",
-    "steamid",
-    "epic_refresh_token",
-    "epic_account_id",
-    "twitch_client_id",
-    "twitch_client_secret",
-})
+_CREDENTIAL_KEYS: frozenset[str] = frozenset(
+    {
+        "key",
+        "steamid",
+        "epic_refresh_token",
+        "epic_account_id",
+        "twitch_client_id",
+        "twitch_client_secret",
+    }
+)
 
 # Keys in [settings] — only saved when explicitly passed on CLI
 _SETTINGS_KEYS: frozenset[str] = frozenset({"db", "workers", "news_age", "lang"})
@@ -165,7 +169,8 @@ def load_alert_rules(path: Path | None = None) -> list[AlertRule]:
     return [ALL_NEWS_RULE, *user_rules]
 
 
-def save_cli_credentials(    args_dict: dict[str, Any],
+def save_cli_credentials(
+    args_dict: dict[str, Any],
     existing: dict[str, Any],
     path: Path | None = None,
     _explicit_keys: set[str] | None = None,
@@ -229,6 +234,7 @@ _SECTION_KEYS: list[tuple[str, list[tuple[str, str]]]] = [
             ("workers", "workers"),
             ("news_age", "news_age"),
             ("lang", "lang"),
+            ("serve_token", "serve_token"),
         ],
     ),
 ]
@@ -266,7 +272,7 @@ def _build_toml(data: dict[str, Any], alert_rules: list[AlertRule] | None = None
             else:
                 lines.append(f"{toml_key} = {value}")
         lines.append("")
-    for rule in (alert_rules or []):
+    for rule in alert_rules or []:
         lines.append("[[alerts]]")
         lines.append(f'name = "{_toml_escape(rule.name)}"')
         lines.append(f'rule_type = "{rule.rule_type}"')
@@ -299,8 +305,7 @@ def _toml_escape(value: str) -> str:
         Escaped string safe for use inside TOML double quotes.
     """
     return (
-        value
-        .replace("\\", "\\\\")
+        value.replace("\\", "\\\\")
         .replace('"', '\\"')
         .replace("\n", "\\n")
         .replace("\r", "\\r")

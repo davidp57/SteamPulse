@@ -5,6 +5,7 @@ endpoint.  Each game is resolved to a Steam AppID when possible (via the
 resolver chain); unresolved games receive a deterministic hash-based appid
 and a non-empty ``external_id``.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -109,6 +110,7 @@ class EpicSource:
     """
 
     name = "epic"
+    source_labels: frozenset[str] = frozenset({"epic"})
     last_stats: DiscoveryStats | None = None
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
@@ -175,7 +177,7 @@ class EpicSource:
             token_data = self._authenticate(args)
         except Exception as exc:  # noqa: BLE001
             print(t("cli_epic_auth_error", error=exc))
-            return []
+            raise
 
         access_token: str = str(token_data["access_token"])
         # Persist the renewed refresh token so save_cli_credentials() picks it up.
@@ -192,7 +194,7 @@ class EpicSource:
             library_items = epic_get_library(access_token)
         except Exception as exc:  # noqa: BLE001
             print(t("cli_epic_library_error", error=exc))
-            return []
+            raise
 
         print(t("cli_epic_library_count", count=len(library_items)))
 
@@ -238,37 +240,45 @@ class EpicSource:
 
             # ── Skip logic ─────────────────────────────────────────────
             if not catalog_id or not name or name in _SANDBOX_LABELS:
-                skipped.append(SkippedItem(
-                    catalog_id=catalog_id or "?",
-                    raw_name=name or internal_name or "?",
-                    reason="no_title" if not name else "sandbox_label",
-                ))
+                skipped.append(
+                    SkippedItem(
+                        catalog_id=catalog_id or "?",
+                        raw_name=name or internal_name or "?",
+                        reason="no_title" if not name else "sandbox_label",
+                    )
+                )
                 continue
             if _is_hex_id(name):
-                skipped.append(SkippedItem(
-                    catalog_id=catalog_id,
-                    raw_name=name,
-                    reason="hex_id",
-                ))
+                skipped.append(
+                    SkippedItem(
+                        catalog_id=catalog_id,
+                        raw_name=name,
+                        reason="hex_id",
+                    )
+                )
                 log.debug("Epic skip hex-id: catalog=%s name=%r", catalog_id, name)
                 continue
             if _PRODUCTION_RE.search(name):
-                skipped.append(SkippedItem(
-                    catalog_id=catalog_id,
-                    raw_name=name,
-                    reason="production_label",
-                ))
+                skipped.append(
+                    SkippedItem(
+                        catalog_id=catalog_id,
+                        raw_name=name,
+                        reason="production_label",
+                    )
+                )
                 log.debug("Epic skip production: catalog=%s name=%r", catalog_id, name)
                 continue
 
             # Deduplicate: skip additional entitlements for the same game.
             name_lower = name.lower()
             if name_lower in seen_names:
-                skipped.append(SkippedItem(
-                    catalog_id=catalog_id,
-                    raw_name=name,
-                    reason="duplicate",
-                ))
+                skipped.append(
+                    SkippedItem(
+                        catalog_id=catalog_id,
+                        raw_name=name,
+                        reason="duplicate",
+                    )
+                )
                 log.debug("Epic skip duplicate: catalog=%s name=%r", catalog_id, name)
                 continue
             seen_names.add(name_lower)
@@ -301,8 +311,14 @@ class EpicSource:
             )
 
         print()  # newline after the \r progress line
-        print(t("cli_epic_resolved_done", resolved=resolved_count, total=len(games),
-                unresolved=len(games) - resolved_count))
+        print(
+            t(
+                "cli_epic_resolved_done",
+                resolved=resolved_count,
+                total=len(games),
+                unresolved=len(games) - resolved_count,
+            )
+        )
         if skipped:
             print(t("cli_epic_skipped", count=len(skipped)))
 

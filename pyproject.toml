@@ -7,7 +7,7 @@ packages = ["steam_tracker"]
 
 [project]
 name = "steampulse"
-version = "1.6.4"
+version = "2.0.0"
 description = "Fetches your Steam library, wishlist, and game news via the Steam API and renders them as a filterable offline HTML dashboard."
 requires-python = ">=3.11"
 dependencies = [
@@ -33,6 +33,7 @@ steampulse   = "steam_tracker.cli:cmd_run"
 steam-fetch  = "steam_tracker.cli:cmd_fetch"
 steam-render = "steam_tracker.cli:cmd_render"
 steam-setup  = "steam_tracker.wizard:run_wizard"
+steam-serve  = "steam_tracker.cli:cmd_serve"
 
 [tool.ruff]
 line-length   = 100

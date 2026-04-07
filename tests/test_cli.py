@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from steam_tracker import __version__
-from steam_tracker.cli import _build_enrichment_queue
+from steam_tracker.cli import _build_enrichment_queue, _reconcile_removed
+from steam_tracker.db import Database
 from steam_tracker.models import SYNTHETIC_APPID_BASE, OwnedGame
 
 # ---------------------------------------------------------------------------
@@ -121,3 +122,75 @@ def test_version_matches_semver() -> None:
     parts = __version__.split(".")
     assert len(parts) == 3
     assert all(p.isdigit() for p in parts)
+
+
+# ---------------------------------------------------------------------------
+# _reconcile_removed — failed source protection
+# ---------------------------------------------------------------------------
+
+_NOOP_T = lambda *a, **kw: ""  # noqa: E731
+"""Minimal translator stub that accepts any call and returns an empty string."""
+
+
+def test_reconcile_removed_without_failed_sources_marks_missing_game(
+    db: Database,
+) -> None:
+    """Without failed sources, a game not in discovered must be marked removed."""
+    db.upsert_game(OwnedGame(appid=1, name="Game1", source="owned"))
+    pre_active = db.get_all_active_appids()
+
+    _reconcile_removed(db, pre_active, [], _NOOP_T, set())
+
+    rec = db.get_all_game_records()[0]
+    assert rec.removed_at is not None
+
+
+def test_reconcile_removed_protects_games_from_failed_source(
+    db: Database,
+) -> None:
+    """Games from a failed source must NOT be marked removed even if absent from discovered."""
+    db.upsert_game(OwnedGame(appid=100, name="EpicGame", source="epic"))
+    db.upsert_game(OwnedGame(appid=200, name="SteamGame", source="owned"))
+    pre_active = db.get_all_active_appids()
+
+    # Epic source failed; only Steam game was discovered
+    steam_game = OwnedGame(appid=200, name="SteamGame", source="owned")
+    _reconcile_removed(db, pre_active, [steam_game], _NOOP_T, {"epic"})
+
+    records = {r.game.appid: r for r in db.get_all_game_records()}
+    # Epic game must be untouched (not marked removed)
+    assert records[100].removed_at is None
+    # Steam game is present in discovered → still active
+    assert records[200].removed_at is None
+
+
+def test_reconcile_removed_marks_missing_game_from_successful_source(
+    db: Database,
+) -> None:
+    """A game from a source that succeeded but was not in discovered must be marked removed."""
+    db.upsert_game(OwnedGame(appid=100, name="EpicGame", source="epic"))
+    db.upsert_game(OwnedGame(appid=200, name="SteamGame", source="owned"))
+    pre_active = db.get_all_active_appids()
+
+    # Both sources succeeded; SteamGame disappeared from owned
+    epic_game = OwnedGame(appid=100, name="EpicGame", source="epic")
+    _reconcile_removed(db, pre_active, [epic_game], _NOOP_T, set())
+
+    records = {r.game.appid: r for r in db.get_all_game_records()}
+    # Epic game is present in discovered → still active
+    assert records[100].removed_at is None
+    # Steam game is absent and its source (owned) succeeded → marked removed
+    assert records[200].removed_at is not None
+
+
+def test_reconcile_removed_with_no_failed_labels_matches_original_behaviour(
+    db: Database,
+) -> None:
+    """Passing an empty set must behave exactly like the original (no-protection) path."""
+    db.upsert_game(OwnedGame(appid=1, name="Gone", source="owned"))
+    pre_active = db.get_all_active_appids()
+
+    _reconcile_removed(db, pre_active, [], _NOOP_T, set())
+
+    rec = db.get_all_game_records()[0]
+    assert rec.removed_at is not None

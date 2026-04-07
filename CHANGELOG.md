@@ -9,6 +9,48 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **`steam-serve` sidecar missing in Docker** — `supervisord.conf` now starts `steam-serve` on `127.0.0.1:8081`; `nginx.conf` proxies `/api/` and `/login` to the sidecar so mutation buttons and the re-fetch/re-render UI work out of the box in the Docker container
+- **`SERVE_TOKEN` env var support in Docker** — when generating `config.toml` from environment variables, the `SERVE_TOKEN` env var is now written as `serve_token` under `[settings]`
+
+---
+
+## [2.0.0] — 2026-04-04
+
+### Added
+
+- **`steam-serve` sidecar server** — new `steam-serve` command starts a lightweight HTTP server (stdlib only, zero new dependencies) that serves the HTML dashboards and exposes a small mutation API (`/api/ping`, `/api/mark-removed/{appid}`, `/api/mark-active/{appid}`, `/api/delete/{appid}`); HTML pages re-render instantly after each mutation
+- **Interactive action buttons on library cards** — when `steam-serve` is running the library page shows ⛔ / ↩️ / 🗑️ action buttons on each game card for quick soft-delete, reactivation, and hard-delete; buttons are hidden in read-only mode (native file-open)
+- **Graceful degradation** — HTML pages remain fully functional read-only dashboards when `steam-serve` is not running; the JS feature-detection probe (`/api/ping`) is fire-and-forget with a 2-second timeout
+- **Soft-delete for removed games** — when a game disappears from all sources during a fetch, it is automatically tagged `removed_at` (ISO timestamp) rather than deleted; reappearing games are automatically reactivated
+- **Availability filter** — new filter group in the library page lets users show "Active" games only (default), all games, or "Removed" games only; filter state is saved in the URL hash and local storage
+- **`--mark-removed <APPID>`** — CLI flag to manually mark a game as removed (soft-delete) without running a full fetch
+- **`--delete <APPID>`** — CLI flag to permanently delete a game and all its associated data from the database
+- **Removed badge on cards** — games tagged as removed display a grey "Removed" badge with the removal date as tooltip; card is dimmed (opacity + grayscale)
+- **Date-added tracking** — database column `time_added` (Unix timestamp) records when a game is first inserted; preserved on subsequent upserts
+- **Sort by date added** — new "Date d'ajout ↓" / "Sort: Date added ↓" option in the library sort dropdown; games with no tracked date sort to the bottom
+- **Date-added display on cards** — cards show ➕ date when a `time_added` value is available (new games only; existing games show nothing until they are re-encountered on a new fetch)
+- **Short date format on cards** — all dates on game cards (release date, last news, date added, in-card news list) now use `dd/mm/yy` instead of a long locale string; news dates on the alerts page are unchanged
+- **Cookie-based authentication for `steam-serve`** — new `--token` flag enables auth mode; login form at `/login` issues an `HttpOnly`/`SameSite=Strict` session cookie; token comparison uses `hmac.compare_digest()` to prevent timing attacks; `steam_diagnostic.html` is protected behind auth
+- **`/api/rerender` route** — `POST /api/rerender` (auth-gated) triggers an in-process HTML re-render and reloads the page; palette icon button in header
+- **`/api/refetch` SSE route** — `GET /api/refetch` (auth-gated) spawns a full `steam-fetch` subprocess and streams live progress to the browser via Server-Sent Events; a modal overlay displays the log; only one fetch can run at a time (mutex lock)
+- **Auth panel in header** — 🔑 (Login) button visible only when not authenticated, 🔓 (Logout) visible only when authenticated; icon-only with tooltip; re-render 🎨 and refetch ⬇ buttons shown only when authenticated
+
+### Fixed
+
+- **Duplicate news alerts in combined view** — when multiple alert rules matched the same news item, the combined view showed the article multiple times; deduplicated by `(appid, source_id)` pair in JS (fixes #30)
+- **Epic source failure no longer marks games as removed** — when a source (e.g. Epic) fails during a fetch, games belonging to that source are excluded from the soft-delete reconciliation; `source_labels` is now a required field of the `GameSource` protocol so the CLI can enforce this without `getattr` fallbacks
+- **`appendLog` JS SyntaxError** — unescaped newline in `'\n'` inside the sidecar JS string template broke the entire JS block
+- **`UnicodeEncodeError` in refetch subprocess** — `steam-fetch` subprocess now inherits `PYTHONUTF8=1` in its environment to avoid cp1252 encoding errors on Windows
+- **`UnicodeDecodeError` reading subprocess stdout** — `subprocess.Popen` now uses `encoding="utf-8"` when reading subprocess output instead of defaulting to the system locale
+- **`_fetch_lock` not released on `load_config()` failure** — pre-flight config load is now inside the `try/finally` block so the mutex is always freed even if config parsing raises
+- **Server binding on all interfaces** — `steam-serve` now binds to `127.0.0.1` by default instead of `0.0.0.0`; a new `--host` flag allows overriding for intentional LAN access
+- **`Access-Control-Allow-Origin: *` on mutation API** — removed the wildcard CORS header from all JSON responses; mutations are only accessible from the same origin
+- **Missing `aria-label` on icon-only buttons** — all icon-only header controls (re-render, refetch, login, logout) and card action buttons (mark-removed, reactivate, delete) now carry an `aria-label` matching their `title` tooltip for screen-reader accessibility
+- **Re-render skipped when no `--steamid` configured** — `POST /api/refetch` no longer attempts to call `_rerender` with an empty Steam ID after a successful fetch; a warning is printed instead
+- **Invalid token characters** — `steam-serve` now validates at startup that `--token` contains only alphanumeric characters and hyphens (`[\w\-]+`) and raises `ValueError` for tokens with forbidden chars (e.g. `;` or spaces that could corrupt the session cookie)
+
 ---
 
 ## [1.6.4] — 2026-03-22
@@ -37,6 +79,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Epic "Production" name cleanup rule** — `_cleanup_epic_production_name` removes Epic games with sandbox names matching `^\w+ Production$` (e.g. "coffee Production", "boysenberry Production") and their `appid_mappings` entries
 - **Epic duplicate external_id cleanup rule** — `_cleanup_epic_duplicate_external_id` removes duplicate Epic entries where both a real-appid and a synthetic-appid row exist for the same `external_id`; keeps the real-appid entry
 - **Systematic Catalog API enrichment** — `EpicSource.discover_games()` now queries the Epic Catalog API for ALL library items (not just those missing titles), ensuring codename-only items (e.g. "BrilliantRose" → "Gone Home") get their real titles; `_extract_epic_title()` is kept as fallback only
+
+### Fixed
+
+- **Epic source failure no longer marks games as removed** — when a source (e.g. Epic) fails to connect during a fetch run, games belonging to that source are now excluded from the soft-delete reconciliation; they retain their current status instead of being incorrectly marked as removed
 
 ---
 

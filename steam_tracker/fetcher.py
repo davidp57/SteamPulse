@@ -1,4 +1,5 @@
 """Multi-threaded Steam data fetcher with thread-safe rate limiting."""
+
 from __future__ import annotations
 
 import logging
@@ -73,12 +74,14 @@ class SteamFetcher:
             if details is not None:
                 cmd_info = get_steamcmd_info(game.appid, session=session)
                 if cmd_info is not None:
-                    details = details.model_copy(update={
-                        "buildid": cmd_info.buildid,
-                        "build_timeupdated": cmd_info.build_timeupdated,
-                        "depot_size_bytes": cmd_info.depot_size_bytes,
-                        "branch_names": cmd_info.branch_names,
-                    })
+                    details = details.model_copy(
+                        update={
+                            "buildid": cmd_info.buildid,
+                            "build_timeupdated": cmd_info.build_timeupdated,
+                            "depot_size_bytes": cmd_info.depot_size_bytes,
+                            "branch_names": cmd_info.branch_names,
+                        }
+                    )
         news = get_app_news(game.appid, count=self._news_per_game, session=session)
         return game.appid, details, news
 
@@ -138,9 +141,7 @@ class SteamFetcher:
                         appid, details, news = fut.result()
                         results[appid] = (details, news)
                     except Exception:
-                        log.error(
-                            "fetch failed for %s (%d)", game.name, game.appid, exc_info=True
-                        )
+                        log.error("fetch failed for %s (%d)", game.name, game.appid, exc_info=True)
                         appid = game.appid
                         details, news = None, []
                         results[appid] = (details, news)

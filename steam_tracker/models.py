@@ -1,4 +1,5 @@
 """Domain models (Pydantic v2)."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -20,19 +21,19 @@ class OwnedGame(BaseModel):
     appid: int
     name: str
     playtime_forever: int = 0
-    playtime_2weeks: int = 0          # minutes played in the last 2 weeks
-    rtime_last_played: int = 0        # unix timestamp of last play session
+    playtime_2weeks: int = 0  # minutes played in the last 2 weeks
+    rtime_last_played: int = 0  # unix timestamp of last play session
     img_icon_url: str = ""
     img_logo_url: str = ""
-    source: str = "owned"             # "owned" | "wishlist" | "followed" | "epic"
-    external_id: str = ""             # e.g. "epic:<catalogItemId>" for non-Steam games
+    source: str = "owned"  # "owned" | "wishlist" | "followed" | "epic"
+    external_id: str = ""  # e.g. "epic:<catalogItemId>" for non-Steam games
 
 
 class AppDetails(BaseModel):
     appid: int
     # Identity
     name: str = ""
-    app_type: str = ""                # "game" | "dlc" | "demo" | "mod" | …
+    app_type: str = ""  # "game" | "dlc" | "demo" | "mod" | …
     # Descriptions
     short_description: str = ""
     supported_languages: str = ""
@@ -52,8 +53,8 @@ class AppDetails(BaseModel):
     categories: list[str] = Field(default_factory=list)
     # Business
     is_free: bool = False
-    price_initial: int = 0            # in cents (store currency)
-    price_final: int = 0              # after discount
+    price_initial: int = 0  # in cents (store currency)
+    price_final: int = 0  # after discount
     price_discount_pct: int = 0
     price_currency: str = ""
     # Platforms
@@ -116,7 +117,7 @@ class AlertRule(BaseModel):
 class Alert(BaseModel):
     """A triggered alert stored in the database."""
 
-    id: str                                  # deterministic SHA-256 prefix
+    id: str  # deterministic SHA-256 prefix
     rule_name: str
     rule_icon: str
     appid: int
@@ -125,17 +126,17 @@ class Alert(BaseModel):
     title: str
     details: str = ""
     url: str = ""
-    source_type: str                         # "news" | "field_change"
+    source_type: str  # "news" | "field_change"
     source_id: str = ""
 
 
 class NewsItem(BaseModel):
-    gid: str = ""                     # unique news item ID from Steam
+    gid: str = ""  # unique news item ID from Steam
     title: str
     date: datetime
     url: str
     author: str = ""
-    contents: str = ""               # news body text (may be truncated)
+    contents: str = ""  # news body text (may be truncated)
     feedname: str = ""
     feedlabel: str = ""
     tags: list[str] = Field(default_factory=list)
@@ -177,6 +178,6 @@ class GameRecord(BaseModel):
     details: AppDetails | None = None
     news: list[NewsItem] = Field(default_factory=list)
     status: GameStatus
-    fetched_at: datetime = Field(
-        default_factory=lambda: datetime.now(tz=UTC)
-    )
+    time_added: int = 0  # unix ts: when the game was first seen in the DB
+    removed_at: str | None = None  # ISO timestamp when game disappeared from all stores
+    fetched_at: datetime = Field(default_factory=lambda: datetime.now(tz=UTC))

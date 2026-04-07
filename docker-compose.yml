@@ -22,3 +22,4 @@ services:
       - ./config.toml:/config/config.toml:ro
     environment:
       INTERVAL_HOURS: "4"    # regenerate dashboards every N hours
+      # SERVE_TOKEN: "change-me"  # enable auth on the mutation API (recommended)

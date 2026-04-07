@@ -1,4 +1,5 @@
-﻿"""CLI entry points: ``steam-fetch``, ``steam-render``, and ``steampulse``."""
+"""CLI entry points: ``steam-fetch``, ``steam-render``, and ``steampulse``."""
+
 from __future__ import annotations
 
 import argparse
@@ -38,10 +39,7 @@ _SETTINGS_FLAG_TO_DEST: dict[str, str] = {
 def _has_steam_credentials_in_argv() -> bool:
     """Return True if ``--key`` or ``--steamid`` are present anywhere in sys.argv."""
     return any(
-        a == "--key"
-        or a.startswith("--key=")
-        or a == "--steamid"
-        or a.startswith("--steamid=")
+        a == "--key" or a.startswith("--key=") or a == "--steamid" or a.startswith("--steamid=")
         for a in sys.argv[1:]
     )
 
@@ -112,9 +110,7 @@ def _maybe_run_wizard(
     return config
 
 
-def _require_steam_credentials(
-    args: argparse.Namespace, parser: argparse.ArgumentParser
-) -> None:
+def _require_steam_credentials(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     """Abort with a friendly error if --key or --steamid are missing.
 
     Args:
@@ -123,8 +119,7 @@ def _require_steam_credentials(
     """
     if not getattr(args, "key", None):
         parser.error(
-            "--key is required. Run 'steam-setup' to create a config file,"
-            " or pass --key directly."
+            "--key is required. Run 'steam-setup' to create a config file, or pass --key directly."
         )
     if not getattr(args, "steamid", None):
         parser.error(
@@ -166,6 +161,43 @@ def _run_cleanup(db: Database, t: object) -> None:
         print(t("cli_cleanup_done", count=cleaned))  # type: ignore[operator]
     else:
         log.debug("cleanup: nothing to clean")
+
+
+def _reconcile_removed(
+    db: Database,
+    pre_active: set[int],
+    discovered: list[OwnedGame],
+    t: object,
+    failed_source_labels: set[str] | None = None,
+) -> None:
+    """Mark newly-missing games as removed and reactivate returned games.
+
+    Games that belong to a source that failed to connect during this run are
+    excluded from the removal check: we have no new information about them, so
+    their current status must not change.
+
+    Args:
+        db: Open database instance.
+        pre_active: Set of appids that were active before this fetch run.
+        discovered: All games discovered during this fetch run.
+        t: Translator callable.
+        failed_source_labels: ``source`` field values (e.g. ``{"epic"}``) for
+            stores that raised a connection error.  Games whose DB source is in
+            this set are protected from being marked as removed.
+    """
+    discovered_appids = {g.appid for g in discovered}
+    # Exclude games from sources that failed — we cannot reliably detect removal.
+    if failed_source_labels:
+        protected = db.get_active_appids_for_sources(failed_source_labels)
+        effective_pre_active = pre_active - protected
+    else:
+        effective_pre_active = pre_active
+    reactivated = db.mark_active(discovered_appids)
+    removed = db.mark_removed(effective_pre_active - discovered_appids)
+    if reactivated:
+        print(t("cli_reactivated_count", count=reactivated))  # type: ignore[operator]
+    if removed:
+        print(t("cli_removed_count", count=removed))  # type: ignore[operator]
 
 
 def cmd_fetch() -> None:
@@ -220,10 +252,20 @@ def cmd_fetch() -> None:
     engine = AlertEngine(rules=load_alert_rules(config_path), db=db)
 
     # ── Game discovery (all sources) ─────────────────────────────────────────
+    pre_active_appids = db.get_all_active_appids()
     all_discovered: list[OwnedGame] = []
+    failed_source_labels: set[str] = set()
     for source in get_all_sources():
         if source.is_enabled(args):
-            all_discovered.extend(source.discover_games(args, db=db))
+            try:
+                all_discovered.extend(source.discover_games(args, db=db))
+            except Exception:  # noqa: BLE001
+                failed_source_labels.update(source.source_labels)
+                log.warning(
+                    "Source %s failed — its games will not be marked removed",
+                    source.name,
+                    exc_info=True,
+                )
 
     # Persist credentials early so rotated tokens (e.g. Epic refresh_token)
     # survive even if the enrichment phase crashes.
@@ -234,6 +276,9 @@ def cmd_fetch() -> None:
     # Upsert everything to DB (DB enforces source priority: owned = epic > wishlist > followed)
     for game in all_discovered:
         db.upsert_game(game)
+
+    # ── Soft-delete reconciliation ─────────────────────────────────────────
+    _reconcile_removed(db, pre_active_appids, all_discovered, t, failed_source_labels)
 
     games = _build_enrichment_queue(all_discovered)
 
@@ -250,8 +295,14 @@ def cmd_fetch() -> None:
         if stale_news is not None
         else 0
     )
-    print(t("cli_pending", details=pending_details, news=pending_news,
-            cached=len(skip) - pending_news))
+    print(
+        t(
+            "cli_pending",
+            details=pending_details,
+            news=pending_news,
+            cached=len(skip) - pending_news,
+        )
+    )
 
     width = len(str(pending_details + pending_news)) if (pending_details + pending_news) else 1
     name_map: dict[int, str] = {g.appid: g.name for g in games}
@@ -332,19 +383,33 @@ def cmd_render() -> None:
     diag_out = out.parent / "steam_diagnostic.html"
     all_alerts = db.get_alerts()
     write_html(
-        records, args.steamid, out,
-        alerts_href=alerts_out.name, diag_href=diag_out.name, lang=args.lang,
+        records,
+        args.steamid,
+        out,
+        alerts_href=alerts_out.name,
+        diag_href=diag_out.name,
+        lang=args.lang,
     )
-    write_alerts_html(all_alerts, records, args.steamid, alerts_out,
-                      library_href=out.name, diag_href=diag_out.name, lang=args.lang)
+    write_alerts_html(
+        all_alerts,
+        records,
+        args.steamid,
+        alerts_out,
+        library_href=out.name,
+        diag_href=diag_out.name,
+        lang=args.lang,
+    )
     unknown_games = [
-        r for r in records
-        if r.game.appid >= SYNTHETIC_APPID_BASE or r.status.badge == "unknown"
+        r for r in records if r.game.appid >= SYNTHETIC_APPID_BASE or r.status.badge == "unknown"
     ]
     write_diagnostic_html(
-        db.get_diagnostic_summary(), db.get_all_appid_mappings(), diag_out,
+        db.get_diagnostic_summary(),
+        db.get_all_appid_mappings(),
+        diag_out,
         unknown_games=unknown_games,
-        library_href=out.name, alerts_href=alerts_out.name, lang=args.lang,
+        library_href=out.name,
+        alerts_href=alerts_out.name,
+        lang=args.lang,
     )
     print(t("cli_render_library", count=len(records), path=out.resolve()))
     print(t("cli_render_alerts", count=len(all_alerts), path=alerts_out.resolve()))
@@ -403,11 +468,21 @@ def cmd_run() -> None:
     engine_run = AlertEngine(rules=load_alert_rules(config_path), db=db)
 
     # ── Game discovery (all sources) ───────────────────────────────────────
+    pre_active_appids_run = db.get_all_active_appids()
     all_discovered: list[OwnedGame] = []
     all_discovery_stats: list[DiscoveryStats] = []
+    failed_source_labels_run: set[str] = set()
     for source in get_all_sources():
         if source.is_enabled(args):
-            all_discovered.extend(source.discover_games(args, db=db))
+            try:
+                all_discovered.extend(source.discover_games(args, db=db))
+            except Exception:  # noqa: BLE001
+                failed_source_labels_run.update(source.source_labels)
+                log.warning(
+                    "Source %s failed — its games will not be marked removed",
+                    source.name,
+                    exc_info=True,
+                )
             stats = getattr(source, "last_stats", None)
             if isinstance(stats, DiscoveryStats):
                 all_discovery_stats.append(stats)
@@ -421,6 +496,9 @@ def cmd_run() -> None:
     # Upsert everything to DB (DB enforces source priority: owned = epic > wishlist > followed)
     for game in all_discovered:
         db.upsert_game(game)
+
+    # ── Soft-delete reconciliation ───────────────────────────────────────
+    _reconcile_removed(db, pre_active_appids_run, all_discovered, t, failed_source_labels_run)
 
     games = _build_enrichment_queue(all_discovered)
 
@@ -437,8 +515,14 @@ def cmd_run() -> None:
         if stale_news is not None
         else 0
     )
-    print(t("cli_pending", details=pending_details, news=pending_news,
-            cached=len(skip) - pending_news))
+    print(
+        t(
+            "cli_pending",
+            details=pending_details,
+            news=pending_news,
+            cached=len(skip) - pending_news,
+        )
+    )
 
     width = len(str(pending_details + pending_news)) if (pending_details + pending_news) else 1
     name_map_run: dict[int, str] = {g.appid: g.name for g in games}
@@ -489,21 +573,107 @@ def cmd_run() -> None:
     diag_out = out.parent / "steam_diagnostic.html"
     all_alerts = db.get_alerts()
     write_html(
-        records, args.steamid, out,
-        alerts_href=alerts_out.name, diag_href=diag_out.name, lang=args.lang,
+        records,
+        args.steamid,
+        out,
+        alerts_href=alerts_out.name,
+        diag_href=diag_out.name,
+        lang=args.lang,
     )
-    write_alerts_html(all_alerts, records, args.steamid, alerts_out,
-                      library_href=out.name, diag_href=diag_out.name, lang=args.lang)
+    write_alerts_html(
+        all_alerts,
+        records,
+        args.steamid,
+        alerts_out,
+        library_href=out.name,
+        diag_href=diag_out.name,
+        lang=args.lang,
+    )
     unknown_games = [
-        r for r in records
-        if r.game.appid >= SYNTHETIC_APPID_BASE or r.status.badge == "unknown"
+        r for r in records if r.game.appid >= SYNTHETIC_APPID_BASE or r.status.badge == "unknown"
     ]
     write_diagnostic_html(
-        db.get_diagnostic_summary(), db.get_all_appid_mappings(), diag_out,
+        db.get_diagnostic_summary(),
+        db.get_all_appid_mappings(),
+        diag_out,
         discovery_stats=all_discovery_stats,
         unknown_games=unknown_games,
-        library_href=out.name, alerts_href=alerts_out.name, lang=args.lang,
+        library_href=out.name,
+        alerts_href=alerts_out.name,
+        lang=args.lang,
     )
     print(t("cli_render_library", count=len(records), path=out.resolve()))
     print(t("cli_render_alerts", count=len(all_alerts), path=alerts_out.resolve()))
     print(t("cli_render_diagnostic", path=diag_out.resolve()))
+
+
+def cmd_serve() -> None:
+    """Start the SteamPulse sidecar HTTP server."""
+    from .server import DEFAULT_PORT, run_server  # noqa: PLC0415
+
+    config_path, _ = _pre_parse_config()
+    config = load_config(config_path)
+
+    parser = argparse.ArgumentParser(
+        description="Serve the SteamPulse HTML dashboards and expose a small mutation API",
+    )
+    parser.add_argument("--version", action="version", version=f"SteamPulse {__version__}")
+    parser.add_argument("--db", default="steam_library.db", help="SQLite DB path")
+    parser.add_argument(
+        "--output-dir",
+        default=".",
+        help="Directory containing the rendered HTML files (default: current directory)",
+    )
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="TCP port (default: 8080)")
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Interface to bind to (default: 127.0.0.1 — loopback only; use 0.0.0.0 for LAN)",
+    )
+    parser.add_argument("--lang", default=None, help="Language code (e.g. en, fr); default: system")
+    parser.add_argument(
+        "--steamid",
+        default="",
+        metavar="STEAMID64",
+        help="Steam ID64 — required for re-rendering HTML after mutations",
+    )
+    parser.add_argument(
+        "--token",
+        dest="serve_token",
+        default=None,
+        metavar="SECRET",
+        help=(
+            "Shared secret token to enable auth mode. "
+            "Without a token, all pages are publicly accessible."
+        ),
+    )
+    parser.add_argument("--config", default=None, help="Path to config TOML file")
+    parser.set_defaults(**config)
+    args = parser.parse_args()
+
+    t = get_translator(args.lang)
+    print(t("cli_banner", version=__version__))
+
+    if not args.steamid:
+        print(t("cli_serve_steamid_missing"))
+
+    serve_token: str | None = getattr(args, "serve_token", None) or None
+    if serve_token:
+        print(t("cli_serve_token_set"))
+
+    print(t("cli_serve_url", port=args.port))
+    print(t("cli_serve_stop"))
+
+    try:
+        run_server(
+            db_path=Path(args.db),
+            output_dir=Path(args.output_dir),
+            steamid=args.steamid,
+            lang=args.lang,
+            port=args.port,
+            host=args.host,
+            token=serve_token,
+            config_path=config_path,
+        )
+    except KeyboardInterrupt:
+        print(t("cli_interrupted"))

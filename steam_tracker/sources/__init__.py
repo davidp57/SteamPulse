@@ -25,6 +25,7 @@ Example::
         def discover_games(self, args: argparse.Namespace) -> list[OwnedGame]:
             ...
 """
+
 from __future__ import annotations
 
 import argparse
@@ -54,6 +55,16 @@ class GameSource(Protocol):
 
     name: str
     """Unique identifier for this source (e.g. ``"steam"``, ``"gog"``)."""
+
+    source_labels: frozenset[str]
+    """Set of ``source`` DB column values this plugin produces.
+
+    Used by the CLI to exclude games from soft-delete reconciliation when this
+    source fails to connect.  Must match the values written to
+    :attr:`~steam_tracker.models.OwnedGame.source` by :meth:`discover_games`.
+
+    Example: ``frozenset({"owned", "wishlist", "followed"})`` for Steam.
+    """
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
         """Register CLI arguments specific to this source.

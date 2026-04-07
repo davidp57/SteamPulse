@@ -623,3 +623,142 @@ def test_get_all_appid_mappings_returns_rows(db: Database) -> None:
     assert resolved[0]["external_name"] == "Hades"
     assert len(unresolved) == 1
     assert unresolved[0]["external_name"] == "Celeste"
+
+
+# ─── time_added ────────────────────────────────────────────────────────
+
+
+def test_upsert_game_sets_time_added(db: Database, sample_game: OwnedGame) -> None:
+    """First insert must populate time_added with a positive unix timestamp."""
+    db.upsert_game(sample_game)
+    rec = db.get_all_game_records()[0]
+    assert rec.time_added > 0
+
+
+def test_upsert_game_preserves_time_added(db: Database, sample_game: OwnedGame) -> None:
+    """Subsequent upserts must NOT overwrite the original time_added."""
+    db.upsert_game(sample_game)
+    original_ts = db.get_all_game_records()[0].time_added
+
+    updated = sample_game.model_copy(update={"playtime_forever": 9999})
+    db.upsert_game(updated)
+    assert db.get_all_game_records()[0].time_added == original_ts
+
+
+# ─── soft-delete ────────────────────────────────────────────────────────
+
+
+def test_get_all_game_records_removed_at_defaults_none(
+    db: Database, sample_game: OwnedGame
+) -> None:
+    """Freshly upserted games must have removed_at = None."""
+    db.upsert_game(sample_game)
+    rec = db.get_all_game_records()[0]
+    assert rec.removed_at is None
+
+
+def test_get_all_active_appids_returns_all_when_none_removed(
+    db: Database, sample_game: OwnedGame
+) -> None:
+    db.upsert_game(sample_game)
+    assert db.get_all_active_appids() == {sample_game.appid}
+
+
+def test_mark_removed_sets_removed_at(db: Database, sample_game: OwnedGame) -> None:
+    """mark_removed must populate removed_at and return 1."""
+    db.upsert_game(sample_game)
+    n = db.mark_removed({sample_game.appid})
+    assert n == 1
+    rec = db.get_all_game_records()[0]
+    assert rec.removed_at is not None
+
+
+def test_mark_removed_idempotent(db: Database, sample_game: OwnedGame) -> None:
+    """Calling mark_removed twice must not change removed_at on the second call."""
+    db.upsert_game(sample_game)
+    db.mark_removed({sample_game.appid})
+    first_ts = db.get_all_game_records()[0].removed_at
+
+    n = db.mark_removed({sample_game.appid})
+    assert n == 0  # nothing new to update
+    assert db.get_all_game_records()[0].removed_at == first_ts
+
+
+def test_get_all_active_appids_excludes_removed(
+    db: Database, sample_game: OwnedGame
+) -> None:
+    db.upsert_game(sample_game)
+    db.mark_removed({sample_game.appid})
+    assert db.get_all_active_appids() == set()
+
+
+def test_mark_active_clears_removed_at(db: Database, sample_game: OwnedGame) -> None:
+    """mark_active must clear removed_at and return 1."""
+    db.upsert_game(sample_game)
+    db.mark_removed({sample_game.appid})
+    n = db.mark_active({sample_game.appid})
+    assert n == 1
+    rec = db.get_all_game_records()[0]
+    assert rec.removed_at is None
+
+
+def test_mark_active_noop_when_already_active(
+    db: Database, sample_game: OwnedGame
+) -> None:
+    """mark_active on a never-removed game must return 0."""
+    db.upsert_game(sample_game)
+    n = db.mark_active({sample_game.appid})
+    assert n == 0
+
+
+def test_get_active_appids_for_sources_returns_matching(db: Database) -> None:
+    """Only active appids with a source in the given set must be returned."""
+    db.upsert_game(OwnedGame(appid=1, name="EpicA", source="epic"))
+    db.upsert_game(OwnedGame(appid=2, name="OwnedB", source="owned"))
+    db.upsert_game(OwnedGame(appid=3, name="WishC", source="wishlist"))
+
+    result = db.get_active_appids_for_sources({"epic"})
+    assert result == {1}
+
+    result = db.get_active_appids_for_sources({"owned", "wishlist"})
+    assert result == {2, 3}
+
+
+def test_get_active_appids_for_sources_excludes_removed(db: Database) -> None:
+    """Soft-deleted games must not appear even if their source matches."""
+    db.upsert_game(OwnedGame(appid=1, name="EpicGone", source="epic"))
+    db.mark_removed({1})
+
+    result = db.get_active_appids_for_sources({"epic"})
+    assert result == set()
+
+
+def test_get_active_appids_for_sources_empty_set_returns_empty(db: Database) -> None:
+    """Passing an empty sources set must always return an empty set."""
+    db.upsert_game(OwnedGame(appid=1, name="EpicA", source="epic"))
+    assert db.get_active_appids_for_sources(set()) == set()
+
+
+def test_get_active_appids_for_sources_unknown_label_returns_empty(db: Database) -> None:
+    """Unknown source labels must not match any game and return an empty set."""
+    db.upsert_game(OwnedGame(appid=1, name="EpicA", source="epic"))
+    db.upsert_game(OwnedGame(appid=2, name="SteamA", source="owned"))
+    assert db.get_active_appids_for_sources({"nonexistent"}) == set()
+    # Mixed: one valid label, one unknown — only the valid one should match.
+    assert db.get_active_appids_for_sources({"epic", "nonexistent"}) == {1}
+
+
+def test_delete_games_removes_record(db: Database, sample_game: OwnedGame) -> None:
+    """delete_games must hard-delete the game and cascade to app_details."""
+    from steam_tracker.models import AppDetails  # noqa: PLC0415
+
+    db.upsert_game(sample_game)
+    db.upsert_app_details(AppDetails(appid=sample_game.appid))
+    n = db.delete_games({sample_game.appid})
+    assert n == 1
+    assert db.get_all_game_records() == []
+
+
+def test_delete_games_unknown_appid_returns_zero(db: Database) -> None:
+    n = db.delete_games({99999})
+    assert n == 0

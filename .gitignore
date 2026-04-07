@@ -42,3 +42,4 @@ steam_library.py
 *.exe
 steam_alerts.html
 steam_diagnostic.html
+config.toml

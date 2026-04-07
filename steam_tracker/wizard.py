@@ -3,6 +3,7 @@
 Guides the user through entering Steam credentials, optional Epic Games and
 Twitch/IGDB credentials, and optional settings, then writes a TOML config file.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -139,7 +140,7 @@ def run_wizard(config_path: Path | None = None) -> None:
             print("  Epic authentication — how it works:")
             print("    1. Open the URL below in your browser and log in to your Epic account.")
             print("    2. You will be redirected to a JSON page.")
-            print('    3. Find the \"authorizationCode\" field and copy its value.')
+            print('    3. Find the "authorizationCode" field and copy its value.')
             print(f"  URL: {_EPIC_AUTH_URL}")
             if _yes_no("  Open URL in browser automatically?", default_yes=True):
                 webbrowser.open(_EPIC_AUTH_URL)
@@ -211,6 +212,11 @@ def run_wizard(config_path: Path | None = None) -> None:
     lang = _ask("  Language (en/fr)     [auto]", default=_def_lang)
     if lang:
         data["lang"] = lang
+    _def_serve_token = existing.get("serve_token")
+    print("  Auth token for steam-serve (leave empty to disable auth):")
+    serve_token = _ask("  Token", default=_def_serve_token, secret=True)
+    if serve_token:
+        data["serve_token"] = serve_token
     print()
 
     # ------------------------------------------------------------------
@@ -236,5 +242,6 @@ def run_wizard(config_path: Path | None = None) -> None:
                 _raw = tomllib.load(f)
             _existing_alerts = bool(_raw.get("alerts"))
     from .models import AlertRule as _AlertRule
+
     _alert_rules: list[_AlertRule] | None = None if _existing_alerts else DEFAULT_ALERT_RULES
     write_config(data, alert_rules=_alert_rules, path=target)

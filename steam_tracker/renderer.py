@@ -1,4 +1,5 @@
 """HTML renderer: turns a list of GameRecords into a self-contained page."""
+
 from __future__ import annotations
 
 import contextlib
@@ -167,6 +168,7 @@ function getTagFilter()    { var b = document.querySelector('#tagBtns .tag-btn.a
 function getPtFilter()     { var b = document.querySelector('#playtimeBtns .filter-btn.active'); return b ? b.dataset.pt : 'all'; }
 function getMcFilter()     { var b = document.querySelector('#mcBtns .filter-btn.active'); return b ? b.dataset.mc : 'all'; }
 function getRecentFilter() { var b = document.querySelector('#recentBtns .filter-btn.active'); return b ? b.dataset.recent : 'all'; }
+function getAvailFilter()  { var b = document.querySelector('#availBtns .filter-btn.active'); return b ? b.dataset.avail : 'active'; }
 function checkMcFilter(mc, card) {
   if (mc === 'all') return true;
   var s = parseInt(card.dataset.metacritic) || 0;
@@ -225,6 +227,7 @@ function saveFilterState() {
     if (getTagFilter() !== 'all') state.tag = getTagFilter();
     var ukEl = document.getElementById('unknownToggle');
     if (ukEl && ukEl.classList.contains('active')) state.unknown = '1';
+    if (getAvailFilter() !== 'active') state.avail = getAvailFilter();
     var json = JSON.stringify(state);
     window.name = SP_WIN_PREFIX + json;
     try { localStorage.setItem(SP_FILTER_KEY, json); } catch(e2) {}
@@ -268,6 +271,9 @@ function loadFilterState() {
     if (state.unknown === '1') {
       var ukEl = document.getElementById('unknownToggle');
       if (ukEl) { ukEl.classList.add('active'); }
+    }
+    if (state.avail) {
+      activateBtn('#availBtns .filter-btn', 'avail', state.avail);
     }
   } catch(e) {}
 }"""
@@ -572,6 +578,9 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   .badge-released    { background: rgba(61,214,140,.12); color: var(--released); border: 1px solid rgba(61,214,140,.25); }
   .badge-unreleased  { background: rgba(123,127,255,.12); color: var(--unreleased); border: 1px solid rgba(123,127,255,.25); }
   .badge-unknown     { background: rgba(90,113,153,.12); color: var(--unknown); border: 1px solid rgba(90,113,153,.25); }
+  .badge-removed     { background: rgba(160,80,80,.15); color: #c06060; border: 1px solid rgba(160,80,80,.3); }
+
+  .card[data-removed="1"] { opacity: 0.5; filter: grayscale(60%); }
 
   .card-meta {
     display: flex;
@@ -1059,6 +1068,35 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
     .filter-panel-close { display: flex; }
   }
+  /* ── Sidecar action buttons (only shown when steam-serve is running) ──────────── */
+  .api-actions { display: none; gap: 4px; padding: 4px 0 2px; flex-wrap: wrap; }
+  body.sp-live .api-actions { display: flex; }
+  .api-btn { background: none; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: .72rem; padding: 2px 7px; line-height: 1.5; color: var(--muted); transition: background .15s, color .15s; }
+  .api-btn:hover { background: var(--surface2); color: var(--text); }
+  .btn-reactivate { color: #3c9; }
+  .btn-delete { color: #e44; }
+  .card[data-removed] .btn-mark-removed { display: none; }
+  .card:not([data-removed]) .btn-reactivate { display: none; }
+  /* ── Sidecar control buttons (re-render / refetch) ───────────────────────────── */
+  .sp-ctrl-btn { display: none; background: none; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: .75rem; padding: 3px 9px; line-height: 1.5; color: var(--muted); transition: background .15s, color .15s; }
+  body.sp-live.sp-authenticated .sp-ctrl-btn { display: inline-block; }
+  .sp-ctrl-btn:hover { background: var(--surface2); color: var(--text); }
+  /* ── Auth panel (login / logout) ────────────────────────────────────────────── */
+  .sp-auth-panel { display: none; gap: 6px; align-items: center; }
+  body.sp-auth-ui .sp-auth-panel { display: flex; }
+  .sp-auth-btn { background: none; border: 1px solid var(--border); border-radius: 4px; font-size: .9rem; padding: 3px 8px; line-height: 1.5; color: var(--muted); text-decoration: none; transition: background .15s, color .15s; cursor: pointer; }
+  .sp-auth-btn:hover { background: var(--surface2); color: var(--text); }
+  .sp-login-btn  { display: none; }
+  body.sp-auth-ui:not(.sp-authenticated) .sp-login-btn  { display: inline-block; }
+  .sp-logout-btn { display: none; }
+  body.sp-auth-ui.sp-authenticated .sp-logout-btn { display: inline-block; }
+  /* ── Modal overlay for refetch progress ─────────────────────────────────────── */
+  .sp-modal { display: none; position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,.6); align-items: center; justify-content: center; }
+  .sp-modal.open { display: flex; }
+  .sp-modal-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; min-width: 360px; max-width: 600px; max-height: 70vh; display: flex; flex-direction: column; gap: 10px; }
+  .sp-modal-title { font-weight: 600; font-size: .95rem; color: var(--text); }
+  .sp-modal-log { flex: 1; overflow-y: auto; font-size: .72rem; font-family: monospace; color: var(--muted); white-space: pre-wrap; word-break: break-all; max-height: 40vh; }
+  .sp-modal-close { align-self: flex-end; background: none; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; padding: 3px 10px; font-size: .8rem; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -1098,6 +1136,12 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <div class="stat-lbl">__T_stat_hours__</div>
     </div>
   </div>
+  <div class="sp-auth-panel">
+    <button id="sp-rerender-btn" class="sp-ctrl-btn" title="__T_btn_rerender__" aria-label="__T_btn_rerender__">&#127912;</button>
+    <button id="sp-refetch-btn"  class="sp-ctrl-btn" title="__T_btn_refetch__" aria-label="__T_btn_refetch__">&#11123;</button>
+    <a class="sp-auth-btn sp-login-btn" href="/login" title="__T_btn_sidecar_login__" aria-label="__T_btn_sidecar_login__">&#128273;</a>
+    <a class="sp-auth-btn sp-logout-btn" href="/api/logout" title="__T_btn_sidecar_logout__" aria-label="__T_btn_sidecar_logout__">&#128275;</a>
+  </div>
 </header>
 
 <div class="toolbar">
@@ -1113,6 +1157,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       <option value="release">__T_sort_release__</option>
       <option value="lastupdate">__T_sort_lastupdate__</option>
       <option value="metacritic">__T_sort_metacritic__</option>
+      <option value="dateadded">__T_sort_dateadded__</option>
     </select>
     <button class="filter-toggle-btn" id="filtersToggle" title="__T_title_btn_filters__">⚙ __T_btn_filters__<span class="filter-badge" id="filterBadge"></span></button>
     <button class="reset-btn" id="resetBtn" title="__T_title_btn_reset__">✕ __T_btn_reset__</button>
@@ -1192,6 +1237,14 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         <button class="filter-btn" id="unknownToggle" data-tooltip="__T_tt_filter_unknown__">👻 __T_lbl_show_unknown__</button>
       </div>
     </div>
+    <div class="filter-group">
+      <div class="filter-group-label">__T_filter_availability__</div>
+      <div class="filter-btns" id="availBtns">
+        <button class="filter-btn active" data-avail="active" data-tooltip="__T_tt_filter_avail_active__">__T_lbl_active__</button>
+        <button class="filter-btn" data-avail="all">__T_lbl_all__</button>
+        <button class="filter-btn" data-avail="removed" data-tooltip="__T_tt_filter_avail_removed__">🗑 __T_lbl_removed__</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1222,6 +1275,7 @@ function isDefaultState() {
   return getStatusFilter() === 'all' && allStoresActive() && getLibStatusFilter() === 'all' && getTagFilter() === 'all'
     && getPtFilter() === 'all' && getMcFilter() === 'all' && getRecentFilter() === 'all'
     && !document.getElementById('unknownToggle').classList.contains('active')
+    && getAvailFilter() === 'active'
     && !getSearch() && getSort() === 'name';
 }
 
@@ -1235,6 +1289,7 @@ function updateFilterBadge() {
   if (getMcFilter() !== 'all')       n++;
   if (getRecentFilter() !== 'all')   n++;
   if (document.getElementById('unknownToggle').classList.contains('active')) n++;
+  if (getAvailFilter() !== 'active') n++;
   const badge = document.getElementById('filterBadge');
   badge.textContent = n;
   badge.classList.toggle('show', n > 0);
@@ -1251,6 +1306,7 @@ function saveStateToHash() {
   if (getMcFilter() !== 'all')        s.mc = getMcFilter();
   if (getRecentFilter() !== 'all')    s.recent = getRecentFilter();
   if (document.getElementById('unknownToggle').classList.contains('active')) s.unknown = '1';
+  if (getAvailFilter() !== 'active')  s.avail = getAvailFilter();
   if (getSearch())                    s.q = getSearch();
   if (getSort() !== 'name')           s.sort = getSort();
   const grid = document.getElementById('grid');
@@ -1304,6 +1360,7 @@ function loadStateFromHash() {
   if (p.get('mc'))     { activateBtn('#mcBtns .filter-btn', 'mc', p.get('mc')); }
   if (p.get('recent')) { activateBtn('#recentBtns .filter-btn', 'recent', p.get('recent')); }
   if (p.get('unknown') === '1') { document.getElementById('unknownToggle').classList.add('active'); document.getElementById('unknownToggle').textContent = '👻 ' + I18N.hide_unknown; }
+  if (p.get('avail'))  { activateBtn('#availBtns .filter-btn', 'avail', p.get('avail')); }
   if (p.get('q'))      { document.getElementById('search').value = p.get('q'); }
   if (p.get('sort'))   { document.getElementById('sortBy').value = p.get('sort'); }
   if (p.get('view') === 'list') {
@@ -1329,6 +1386,7 @@ function updateGrid() {
   const mcFilter     = getMcFilter();
   const recentFilter  = getRecentFilter();
   const showUnknown = document.getElementById('unknownToggle').classList.contains('active');
+  const availFilter   = getAvailFilter();
   let visible = allCards.filter(c => {
     const badgeOk     = filter === 'all' || c.dataset.status === filter;
     const storeOk     = activeStores.has(c.dataset.store);
@@ -1338,7 +1396,10 @@ function updateGrid() {
     const mcOk        = checkMcFilter(mcFilter, c);
     const recentOk    = checkRecentFilter(recentFilter, c);
     const unknownOk   = showUnknown || c.dataset.unknown !== 'true';
-    return badgeOk && storeOk && libStatusOk && searchOk && ptOk && mcOk && recentOk && unknownOk;
+    const availOk     = availFilter === 'all' ||
+                        (availFilter === 'active'  && !c.dataset.removed) ||
+                        (availFilter === 'removed' && c.dataset.removed === '1');
+    return badgeOk && storeOk && libStatusOk && searchOk && ptOk && mcOk && recentOk && unknownOk && availOk;
   });
 
   visible.sort((a, b) => {
@@ -1356,6 +1417,7 @@ function updateGrid() {
                 : parseInt(b.dataset.lastUpdate) || 0;
       return tsB - tsA;
     }
+    if (sort === 'dateadded') return (parseInt(b.dataset.timeAdded) || 0) - (parseInt(a.dataset.timeAdded) || 0);
     return 0;
   });
 
@@ -1439,13 +1501,14 @@ document.getElementById('unknownToggle').addEventListener('click', () => {
   btn.textContent = btn.classList.contains('active') ? '👻 ' + I18N.hide_unknown : '👻 ' + I18N.show_unknown;
   updateGrid();
 });
+setupFilterGroup('#availBtns .filter-btn');
 
 // Reset
 document.getElementById('resetBtn').addEventListener('click', () => {
   document.getElementById('search').value = '';
   document.getElementById('sortBy').value = 'name';
   document.querySelectorAll('#storeBtns .store-btn').forEach(b => b.classList.add('active'));
-  ['#filterBtns .filter-btn', '#libStatusBtns .filter-btn', '#tagBtns .tag-btn', '#playtimeBtns .filter-btn', '#mcBtns .filter-btn', '#recentBtns .filter-btn'].forEach(sel => {
+  ['#filterBtns .filter-btn', '#libStatusBtns .filter-btn', '#tagBtns .tag-btn', '#playtimeBtns .filter-btn', '#mcBtns .filter-btn', '#recentBtns .filter-btn', '#availBtns .filter-btn'].forEach(sel => {
     document.querySelectorAll(sel).forEach(b => b.classList.remove('active'));
     const first = document.querySelector(sel);
     if (first) first.classList.add('active');
@@ -1502,40 +1565,175 @@ loadStateFromHash();
 saveStateToHash(); // initialise le lien nav avec l'état courant
 updateGrid();
 </script>
+
+<div id="sp-modal" class="sp-modal">
+  <div class="sp-modal-box">
+    <div class="sp-modal-title" id="sp-modal-title"></div>
+    <pre class="sp-modal-log" id="sp-modal-log"></pre>
+    <button class="sp-modal-close" id="sp-modal-close">&#10005;</button>
+  </div>
+</div>
+
+__SIDECAR_JS__
 </body>
 </html>
 """
 
 
-
 def _build_i18n_js(t: Translator) -> str:
     """Return a ``const I18N = {...};`` block for the HTML templates."""
     data = {
-        "grid_view":      t("btn_grid_view"),
-        "list_view":      t("btn_list_view"),
-        "news_0":         t("js_news_0"),
-        "news_1":         t("js_news_1"),
-        "news_n":         t("js_news_n"),
+        "grid_view": t("btn_grid_view"),
+        "list_view": t("btn_list_view"),
+        "news_0": t("js_news_0"),
+        "news_1": t("js_news_1"),
+        "news_n": t("js_news_n"),
         "no_match_games": t("js_no_match_games"),
-        "count_game_1":   t("js_count_game_1"),
-        "count_game_n":   t("js_count_game_n"),
-        "no_match_news":  t("js_no_match_news"),
-        "count_news":     t("js_count_news"),
-        "show_unknown":   t("lbl_show_unknown"),
-        "hide_unknown":   t("lbl_hide_unknown"),
+        "count_game_1": t("js_count_game_1"),
+        "count_game_n": t("js_count_game_n"),
+        "no_match_news": t("js_no_match_news"),
+        "count_news": t("js_count_news"),
+        "show_unknown": t("lbl_show_unknown"),
+        "hide_unknown": t("lbl_hide_unknown"),
+        "delete_confirm": t("js_delete_confirm"),
+        "refetch_running": t("js_refetch_running"),
+        "refetch_error": t("js_refetch_error"),
     }
     entries = ", ".join(f"{k}: {json.dumps(v)}" for k, v in data.items())
     return f"const I18N = {{{entries}}};"
 
 
+def _build_sidecar_js() -> str:
+    """Return the feature-detection JS block for the SteamPulse sidecar.
+
+    The script probes ``/api/ping`` with a 2-second timeout.  If the server
+    responds, ``body.sp-live`` is activated, revealing the action buttons.
+    When auth mode is enabled and the user is not authenticated, only the
+    auth panel is shown (login button); action buttons remain hidden.
+    Button clicks are handled via event delegation and call the sidecar API.
+    The re-render and re-fetch buttons use ``/api/rerender`` and
+    ``/api/refetch`` (SSE) respectively.
+    """
+    return """\
+<script>
+(function() {
+  var ctrl = new AbortController();
+  setTimeout(function() { ctrl.abort(); }, 2000);
+  fetch('/api/ping', {signal: ctrl.signal})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) return;
+      if (d.auth_enabled) {
+        document.body.classList.add('sp-auth-ui');
+        if (d.authenticated) {
+          document.body.classList.add('sp-authenticated');
+          document.body.classList.add('sp-live');
+        }
+      } else {
+        document.body.classList.add('sp-live');
+      }
+    })
+    .catch(function() { /* server not running — read-only mode */ });
+
+  function apiPost(url) {
+    fetch(url, {method: 'POST'})
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.ok) {
+          location.reload();
+        } else if (d.error === 'authentication required') {
+          location.href = '/login';
+        }
+      })
+      .catch(function() {});
+  }
+
+  // ── Modal helpers ──────────────────────────────────────────────────────
+  function openModal(title) {
+    document.getElementById('sp-modal-title').textContent = title;
+    document.getElementById('sp-modal-log').textContent = '';
+    document.getElementById('sp-modal').classList.add('open');
+    document.getElementById('sp-modal-close').disabled = true;
+  }
+  function appendLog(msg) {
+    var log = document.getElementById('sp-modal-log');
+    log.textContent += msg + '\\n';
+    log.scrollTop = log.scrollHeight;
+  }
+  function closeModal() {
+    document.getElementById('sp-modal').classList.remove('open');
+    document.getElementById('sp-modal-log').textContent = '';
+  }
+  document.getElementById('sp-modal-close').addEventListener('click', closeModal);
+
+  // ── Re-render ──────────────────────────────────────────────────────────
+  function spRerender() {
+    var btn = document.getElementById('sp-rerender-btn');
+    btn.disabled = true;
+    fetch('/api/rerender', {method: 'POST'})
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        btn.disabled = false;
+        if (d.ok) { location.reload(); }
+        else if (d.error === 'authentication required') { location.href = '/login'; }
+      })
+      .catch(function() { btn.disabled = false; });
+  }
+
+  // ── Re-fetch (SSE) ─────────────────────────────────────────────────────
+  function spRefetch() {
+    openModal(I18N.refetch_running);
+    var es = new EventSource('/api/refetch');
+    es.onmessage = function(e) {
+      try {
+        var d = JSON.parse(e.data);
+        if (d.done) {
+          es.close();
+          document.getElementById('sp-modal-close').disabled = false;
+          if (d.status === 'ok') {
+            closeModal();
+            location.reload();
+          } else {
+            appendLog(I18N.refetch_error);
+          }
+        } else if (d.msg) {
+          appendLog(d.msg);
+        }
+      } catch(_) {}
+    };
+    es.onerror = function() {
+      es.close();
+      appendLog(I18N.refetch_error);
+      document.getElementById('sp-modal-close').disabled = false;
+    };
+  }
+
+  document.addEventListener('click', function(e) {
+    if (e.target.id === 'sp-rerender-btn') { spRerender(); return; }
+    if (e.target.id === 'sp-refetch-btn')  { spRefetch();  return; }
+    var btn = e.target.closest('.api-btn');
+    if (!btn) return;
+    e.stopPropagation();
+    var appid = btn.dataset.appid;
+    if (btn.classList.contains('btn-mark-removed')) {
+      apiPost('/api/mark-removed/' + appid);
+    } else if (btn.classList.contains('btn-reactivate')) {
+      apiPost('/api/mark-active/' + appid);
+    } else if (btn.classList.contains('btn-delete')) {
+      if (window.confirm(I18N.delete_confirm)) apiPost('/api/delete/' + appid);
+    }
+  });
+})();
+</script>"""
+
+
 def _apply_html_t(s: str, t: Translator) -> str:
     """Replace all ``__T_key__`` placeholders in *s* with translated values."""
     import re
+
     for key in re.findall(r"__T_(\w+)__", s):
         s = s.replace(f"__T_{key}__", t(key))
     return s
-
-
 
 
 def format_playtime(minutes: int) -> str:
@@ -1545,9 +1743,18 @@ def format_playtime(minutes: int) -> str:
 
 
 _FR_MONTHS = {
-    "janvier": "Jan", "f\u00e9vrier": "Feb", "mars": "Mar", "avril": "Apr",
-    "mai": "May", "juin": "Jun", "juillet": "Jul", "ao\u00fbt": "Aug",
-    "septembre": "Sep", "octobre": "Oct", "novembre": "Nov", "d\u00e9cembre": "Dec",
+    "janvier": "Jan",
+    "f\u00e9vrier": "Feb",
+    "mars": "Mar",
+    "avril": "Apr",
+    "mai": "May",
+    "juin": "Jun",
+    "juillet": "Jul",
+    "ao\u00fbt": "Aug",
+    "septembre": "Sep",
+    "octobre": "Oct",
+    "novembre": "Nov",
+    "d\u00e9cembre": "Dec",
 }
 
 
@@ -1575,6 +1782,7 @@ def _parse_release_ts(date_str: str) -> int:
 def _metacritic_html(score: int, url: str, t: Translator | None = None) -> str:
     if t is None:
         from .i18n import get_translator  # noqa: PLC0415
+
         t = get_translator()
     if score <= 0:
         return ""
@@ -1592,7 +1800,7 @@ def _metacritic_html(score: int, url: str, t: Translator | None = None) -> str:
         f'<span class="mc-tt">'
         f'<span class="mc-tt-score">{score}\u00a0/\u00a0100</span>'
         f'<span class="mc-tt-label">{html.escape(label)}</span>'
-        f'</span>'
+        f"</span>"
     )
     if url:
         safe_url = html.escape(url)
@@ -1604,10 +1812,12 @@ def _metacritic_html(score: int, url: str, t: Translator | None = None) -> str:
 
 def _price_html(details: object, t: Translator | None = None) -> str:
     from .models import AppDetails  # local import to avoid circular
+
     if not isinstance(details, AppDetails):
         return ""
     if t is None:
         from .i18n import get_translator  # noqa: PLC0415
+
         t = get_translator()
     price_free_lbl = t("price_free")
     price_tip = html.escape(t("tt_price"))
@@ -1630,8 +1840,10 @@ def _price_html(details: object, t: Translator | None = None) -> str:
 
 def _platform_html(details: object, t: Translator | None = None) -> str:
     from .models import AppDetails
+
     if t is None:
         from .i18n import get_translator  # noqa: PLC0415
+
         t = get_translator()
     if not isinstance(details, AppDetails):
         return ""
@@ -1649,6 +1861,7 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
     """Return the HTML string for a single game card."""
     if t is None:
         from .i18n import get_translator  # noqa: PLC0415
+
         t = get_translator()
     game = record.game
     status = record.status
@@ -1673,8 +1886,7 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
     genres_html = ""
     if details and details.genres:
         tags = "".join(
-            f'<span class="genre-tag">{html.escape(g)}</span>'
-            for g in details.genres[:3]
+            f'<span class="genre-tag">{html.escape(g)}</span>' for g in details.genres[:3]
         )
         genres_html = f'<div class="genre-tags">{tags}</div>\n'
 
@@ -1709,8 +1921,9 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         _rows = []
         for n in news_list:
             _ntag = "patchnotes" if n.tags and n.tags[0].lower() == "patchnotes" else "other"
-            _rows.append(                f'<div class="news-item" data-news-tag="{_ntag}">'
-                f'  <span class="news-date">{html.escape(n.date.strftime("%d/%m/%Y"))}</span>'
+            _rows.append(
+                f'<div class="news-item" data-news-tag="{_ntag}">'
+                f'  <span class="news-date">{html.escape(n.date.strftime("%d/%m/%y"))}</span>'
                 f'  <span class="news-item-title">'
                 f'    <a href="{html.escape(n.url)}" target="_blank" rel="noopener">'
                 f"{html.escape(n.title)}</a>"
@@ -1730,22 +1943,27 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         toggle_lbl = t("card_news_toggle_n", count=nc)
 
     news_section_html = (
-        f'    <div class="news-section">\n'
-        f'      <div class="news-toggle">\n'
-        f'        <div class="news-title">\U0001f5de {html.escape(toggle_lbl)}</div>\n'
-        f'        <span class="news-toggle-icon">\u25bc</span>\n'
-        f"      </div>\n"
-        f"    </div>\n"
-    ) if nc > 0 else ""
-    news_list_html = (
-        f'  <div class="news-list">\n'
-        f"    {news_html}\n"
-        f"  </div>\n"
-    ) if nc > 0 else ""
+        (
+            f'    <div class="news-section">\n'
+            f'      <div class="news-toggle">\n'
+            f'        <div class="news-title">\U0001f5de {html.escape(toggle_lbl)}</div>\n'
+            f'        <span class="news-toggle-icon">\u25bc</span>\n'
+            f"      </div>\n"
+            f"    </div>\n"
+        )
+        if nc > 0
+        else ""
+    )
+    news_list_html = (f'  <div class="news-list">\n    {news_html}\n  </div>\n') if nc > 0 else ""
 
     release_ts = _parse_release_ts(status.release_date)
+    rel_date_display = (
+        datetime.fromtimestamp(release_ts, tz=UTC).strftime("%d/%m/%y")
+        if release_ts > 0
+        else html.escape(status.release_date) or "—"
+    )
     last_update_ts = int(news_list[0].date.timestamp()) if news_list else 0
-    last_all_date = news_list[0].date.strftime("%d/%m/%Y") if news_list else ""
+    last_all_date = news_list[0].date.strftime("%d/%m/%y") if news_list else ""
     last_patch_ts, last_other_ts = 0, 0
     last_patch_date, last_other_date = "", ""
     for _n in news_list:
@@ -1754,10 +1972,10 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         if _primary == "patchnotes":
             if _ts > last_patch_ts:
                 last_patch_ts = _ts
-                last_patch_date = _n.date.strftime("%d/%m/%Y")
+                last_patch_date = _n.date.strftime("%d/%m/%y")
         elif _ts > last_other_ts:
             last_other_ts = _ts
-            last_other_date = _n.date.strftime("%d/%m/%Y")
+            last_other_date = _n.date.strftime("%d/%m/%y")
     placeholder = html.escape(game.name[:2].upper())
     store_tag = "epic" if game.source == "epic" else "steam"
     lib_status_tag = "owned" if game.source in ("owned", "epic") else game.source
@@ -1774,6 +1992,42 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
     _pt_attr = f' data-tooltip="{_tt_pt}"' if game.source == "owned" else ""
     _is_unknown = appid >= SYNTHETIC_APPID_BASE or status.badge == "unknown"
     _unknown_attr = ' data-unknown="true"' if _is_unknown else ""
+    _tt_date_added = html.escape(t("tt_date_added"))
+    if record.time_added > 0:
+        _date_added_str = datetime.fromtimestamp(record.time_added, tz=UTC).strftime("%d/%m/%y")
+        _date_added_html = (
+            f'      <span data-tooltip="{_tt_date_added}">➕ {_date_added_str}</span>\n'
+        )
+    else:
+        _date_added_html = ""
+    _removed_attr = ' data-removed="1"' if record.removed_at else ""
+    _tt_mark_removed = html.escape(t("btn_mark_removed_tooltip"))
+    _tt_reactivate = html.escape(t("btn_reactivate_tooltip"))
+    _tt_delete = html.escape(t("btn_delete_tooltip"))
+    _api_actions_html = (
+        f'  <div class="api-actions">\n'
+        f'    <button class="api-btn btn-mark-removed" data-appid="{appid}"'
+        f' title="{_tt_mark_removed}" aria-label="{_tt_mark_removed}">⛔</button>\n'
+        f'    <button class="api-btn btn-reactivate" data-appid="{appid}"'
+        f' title="{_tt_reactivate}" aria-label="{_tt_reactivate}">↩️</button>\n'
+        f'    <button class="api-btn btn-delete" data-appid="{appid}"'
+        f' title="{_tt_delete}" aria-label="{_tt_delete}">🗑️</button>\n'
+        f"  </div>\n"
+    )
+    if record.removed_at:
+        try:
+            _removed_date_str = html.escape(
+                datetime.fromisoformat(record.removed_at).strftime("%d/%m/%y")
+            )
+        except ValueError:
+            _removed_date_str = ""
+        _tt_removed = html.escape(f"{t('tt_removed_at')} {_removed_date_str}".strip())
+        _removed_badge_html = (
+            f'      <span class="badge badge-removed" data-tooltip="{_tt_removed}">'
+            f"{html.escape(t('badge_removed'))}</span>\n"
+        )
+    else:
+        _removed_badge_html = ""
     return (
         f'<div class="card" data-appid="{appid}" data-status="{status.badge}" '
         f'data-store="{store_tag}" data-lib-status="{lib_status_tag}" data-name="{name.lower()}" '
@@ -1781,8 +2035,9 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         f'data-metacritic="{metacritic_score}" '
         f'data-release="{rel_date}" data-release-ts="{release_ts}" '
         f'data-last-update="{last_update_ts}" '
-        f'data-last-patch-ts="{last_patch_ts}" data-last-other-ts="{last_other_ts}"'
-        f'{_unknown_attr}>\n'
+        f'data-last-patch-ts="{last_patch_ts}" data-last-other-ts="{last_other_ts}" '
+        f'data-time-added="{record.time_added}"'
+        f"{_unknown_attr}{_removed_attr}>\n"
         f'  <span class="card-ext-hint">{store_hint}</span>\n'
         f'  <img class="card-img" src="{html.escape(img_url)}" alt="" loading="lazy"'
         f"    onerror=\"this.style.display='none';this.nextElementSibling.style.display='flex'\">\n"
@@ -1792,22 +2047,25 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         f'    <div class="card-top">\n'
         f'      <div class="card-title">{name}</div>\n'
         f'      <span class="{html.escape(badge_cls)}" data-tooltip="{_tt_badge}">{html.escape(badge_label)}</span>\n'
+        f"{_removed_badge_html}"
         f"    </div>\n"
         f"    </div>\n"
         f'    <div class="col-detail">{detail_row}</div>\n'
         f'    <div class="col-genres">{genres_html}</div>\n'
         f'    <div class="col-meta">\n'
         f'    <div class="card-meta">\n'
-        f'      <span data-tooltip="{_tt_rel}">📅 {rel_date}</span>\n'
+        f'      <span data-tooltip="{_tt_rel}">📅 {rel_date_display}</span>\n'
         f'      <span class="news-date-display" data-tooltip="{_tt_news}"'
         f' data-date-all="{html.escape(last_all_date)}"'
         f' data-date-patch="{html.escape(last_patch_date)}"'
         f' data-date-other="{html.escape(last_other_date)}">'
-        f'\U0001f4f0 {html.escape(last_all_date) or "—"}</span>\n'
-        f'      <span{_pt_attr}>{pt_display}</span>\n'
+        f"\U0001f4f0 {html.escape(last_all_date) or '—'}</span>\n"
+        f"{_date_added_html}"
+        f"      <span{_pt_attr}>{pt_display}</span>\n"
         f"    </div>\n"
         f"    </div>\n"
         f"{news_section_html}"
+        f"{_api_actions_html}"
         f"  </div>\n"
         f"{news_list_html}"
         f"</div>"
@@ -1823,6 +2081,7 @@ def generate_html(
 ) -> str:
     """Render the full HTML page from a list of game records."""
     from .i18n import get_translator  # noqa: PLC0415
+
     t = get_translator(lang)
     cards_html = "\n".join(make_card(r, t) for r in records)
     total = len(records)
@@ -1836,6 +2095,7 @@ def generate_html(
     return _apply_html_t(
         _HTML_TEMPLATE.replace("__SHARED_JS__", _SHARED_JS)
         .replace("__I18N_JS__", _build_i18n_js(t))
+        .replace("__SIDECAR_JS__", _build_sidecar_js())
         .replace("__GENERATED_AT__", now_str)
         .replace("__STEAM_ID__", html.escape(steam_id))
         .replace("__TOTAL__", str(total))
@@ -1859,8 +2119,9 @@ def write_html(
     lang: str | None = None,
 ) -> None:
     """Write the rendered HTML page to *output_path*."""
-    output_path.write_text(generate_html(records, steam_id, alerts_href, diag_href, lang), encoding="utf-8")
-
+    output_path.write_text(
+        generate_html(records, steam_id, alerts_href, diag_href, lang), encoding="utf-8"
+    )
 
 
 def make_alert_card(
@@ -1879,6 +2140,7 @@ def make_alert_card(
     """
     if t is None:
         from .i18n import get_translator  # noqa: PLC0415
+
         t = get_translator()
 
     details = record.details if record else None
@@ -1902,9 +2164,7 @@ def make_alert_card(
     # Store & collection data attributes for filtering
     store_tag = "epic" if game and game.source == "epic" else "steam"
     collection_tag = (
-        ("owned" if game.source in ("owned", "epic") else game.source)
-        if game
-        else "owned"
+        ("owned" if game.source in ("owned", "epic") else game.source) if game else "owned"
     )
     # Game-level data attributes for shared filters
     status_tag = record.status.badge if record else "released"
@@ -1921,16 +2181,13 @@ def make_alert_card(
                     last_patch_ts = _ts
     # Buildid badge
     buildid = details.buildid if details and details.buildid else 0
-    buildid_html = (
-        f'      <span class="alert-buildid">build {buildid}</span>\n'
-        if buildid
-        else ""
-    )
+    buildid_html = f'      <span class="alert-buildid">build {buildid}</span>\n' if buildid else ""
     # Tag for news-type filter: match alert to its NewsItem via source_id/gid
     tag_val = "other"
     if alert.source_type == "news" and record and record.news:
         news_item = next(
-            (n for n in record.news if str(n.gid) == alert.source_id), None,
+            (n for n in record.news if str(n.gid) == alert.source_id),
+            None,
         )
         if news_item and any(t.lower() == "patchnotes" for t in news_item.tags):
             tag_val = "patchnotes"
@@ -1945,12 +2202,13 @@ def make_alert_card(
         f'data-name="{html.escape(alert.game_name.lower())}" '
         f'data-appid="{alert.appid}" data-ts="{ts}" '
         f'data-source="{html.escape(alert.source_type)}" '
+        f'data-source-id="{html.escape(alert.source_id)}" '
         f'data-store="{store_tag}" data-lib-status="{collection_tag}" '
         f'data-status="{status_tag}" data-playtime="{playtime_val}" '
         f'data-metacritic="{metacritic_val}" data-last-patch-ts="{last_patch_ts}" '
         f'data-tag="{tag_val}" data-store-url="{html.escape(store_url)}"'
-        f'{news_url_attr}'
-        f'{_unknown_attr}>\n'
+        f"{news_url_attr}"
+        f"{_unknown_attr}>\n"
         f'  <a class="alert-thumb-link" href="{html.escape(store_url)}" target="_blank" rel="noopener">'
         f'<img class="alert-thumb" src="{html.escape(img_url)}" alt="" loading="lazy"></a>\n'
         f'  <div class="alert-body">\n'
@@ -2419,7 +2677,21 @@ __SHARED_JS__
         if (sort === 'metacritic') return (parseInt(b.getAttribute('data-metacritic')) || 0) - (parseInt(a.getAttribute('data-metacritic')) || 0);
         return (parseInt(b.getAttribute('data-ts')) || 0) - (parseInt(a.getAttribute('data-ts')) || 0);
       });
-      allCards.forEach(function(c) { container.appendChild(c); });
+      // Deduplicate news alerts: same (appid, source_id) = same article matched by
+      // multiple rules. Show only the first occurrence; hide the rest so they stay
+      // fully visible when switching to by-rule or by-game view.
+      var seenNews = new Set();
+      allCards.forEach(function(c) {
+        if (!c.classList.contains('hidden') && c.getAttribute('data-source') === 'news') {
+          var dk = (c.getAttribute('data-appid') || '') + '\x1f' + (c.getAttribute('data-source-id') || '');
+          if (seenNews.has(dk)) {
+            c.classList.add('hidden');
+          } else {
+            seenNews.add(dk);
+          }
+        }
+        container.appendChild(c);
+      });
     }
     updateSections();
     updateCount();
@@ -2838,13 +3110,10 @@ def generate_alerts_html(
     t = get_translator(lang)
     record_map = {r.game.appid: r for r in records}
     sorted_alerts = sorted(alerts, key=lambda a: a.timestamp, reverse=True)
-    cards_html = "\n".join(
-        make_alert_card(a, record_map.get(a.appid), t) for a in sorted_alerts
-    )
+    cards_html = "\n".join(make_alert_card(a, record_map.get(a.appid), t) for a in sorted_alerts)
     now_str = datetime.now().strftime("%d/%m/%Y à %H:%M")
     return _apply_html_t(
-        _ALERTS_TEMPLATE
-        .replace("__SHARED_FILTER_CSS__", _SHARED_FILTER_CSS)
+        _ALERTS_TEMPLATE.replace("__SHARED_FILTER_CSS__", _SHARED_FILTER_CSS)
         .replace("__SHARED_JS__", _SHARED_JS)
         .replace("__GENERATED_AT__", now_str)
         .replace("__STEAM_ID__", html.escape(steam_id))
@@ -2886,7 +3155,8 @@ def write_alerts_html(
         lang: Language code.
     """
     output_path.write_text(
-        generate_alerts_html(alerts, records, steam_id, library_href, diag_href, lang), encoding="utf-8"
+        generate_alerts_html(alerts, records, steam_id, library_href, diag_href, lang),
+        encoding="utf-8",
     )
 
 
@@ -3033,7 +3303,10 @@ document.querySelectorAll('.stat-card[data-filter]').forEach(c=>c.addEventListen
 
 
 def _make_stat_card(
-    value: object, label: str, *, data_filter: str | None = None,
+    value: object,
+    label: str,
+    *,
+    data_filter: str | None = None,
 ) -> str:
     """Render a stat card.  Optionally clickable when *data_filter* is set."""
     attr = f' data-filter="{html.escape(data_filter)}"' if data_filter else ""
@@ -3113,13 +3386,15 @@ def generate_diagnostic_html(
     t = get_translator(lang)
 
     # ── Summary stats ──────────────────────────────────────────────────
-    summary_cards = "".join([
-        _make_stat_card(summary["total_games"], t("diag_total_games")),
-        _make_stat_card(summary["enriched_count"], t("diag_enriched")),
-        _make_stat_card(summary["unenriched_count"], t("diag_unenriched")),
-        _make_stat_card(summary["total_news"], t("diag_total_news")),
-        _make_stat_card(summary["total_alerts"], t("diag_total_alerts")),
-    ])
+    summary_cards = "".join(
+        [
+            _make_stat_card(summary["total_games"], t("diag_total_games")),
+            _make_stat_card(summary["enriched_count"], t("diag_enriched")),
+            _make_stat_card(summary["unenriched_count"], t("diag_unenriched")),
+            _make_stat_card(summary["total_news"], t("diag_total_news")),
+            _make_stat_card(summary["total_alerts"], t("diag_total_alerts")),
+        ]
+    )
 
     # ── Source chips ───────────────────────────────────────────────────
     by_source: dict[str, int] = summary.get("by_source", {})  # type: ignore[assignment]
@@ -3132,19 +3407,25 @@ def generate_diagnostic_html(
     epic_stats_list = [s for s in (discovery_stats or []) if s.source == "epic"]
     if epic_stats_list:
         es = epic_stats_list[0]
-        epic_html = '<div class="stat-grid">' + "".join([
-            _make_stat_card(es.total_api_items, t("diag_api_items")),
-            _make_stat_card(es.accepted_count, t("diag_accepted")),
-            _make_stat_card(es.resolved_count, t("diag_resolved_appids")),
-            _make_stat_card(es.unresolved_count, t("diag_unresolved_appids")),
-            _make_stat_card(len(es.skipped_items), t("diag_skipped")),
-        ]) + "</div>"
+        epic_html = (
+            '<div class="stat-grid">'
+            + "".join(
+                [
+                    _make_stat_card(es.total_api_items, t("diag_api_items")),
+                    _make_stat_card(es.accepted_count, t("diag_accepted")),
+                    _make_stat_card(es.resolved_count, t("diag_resolved_appids")),
+                    _make_stat_card(es.unresolved_count, t("diag_unresolved_appids")),
+                    _make_stat_card(len(es.skipped_items), t("diag_skipped")),
+                ]
+            )
+            + "</div>"
+        )
     else:
         epic_html = f'<p class="info-msg">{t("diag_no_epic")}</p>'
 
     # ── Skipped items ──────────────────────────────────────────────────
     all_skipped: list[SkippedItem] = []
-    for ds in (discovery_stats or []):
+    for ds in discovery_stats or []:
         all_skipped.extend(ds.skipped_items)
     if all_skipped:
         skipped_rows = "".join(_make_skipped_row(s, t) for s in all_skipped)
@@ -3169,7 +3450,7 @@ def generate_diagnostic_html(
         )
         unknown_html = (
             f'<p style="margin-bottom:12px"><span class="badge badge-unresolved">'
-            f'{len(unknown_games)} {t("diag_unknown_count")}</span></p>'
+            f"{len(unknown_games)} {t('diag_unknown_count')}</span></p>"
             '<div class="table-wrap"><table>'
             f"<thead><tr><th>{t('diag_col_name')}</th>"
             f"<th>{t('diag_col_source')}</th>"
@@ -3181,19 +3462,24 @@ def generate_diagnostic_html(
         unknown_html = f'<p class="info-msg">{t("diag_no_unknown")}</p>'
 
     # ── Mappings ───────────────────────────────────────────────────────
-    mapping_stats = "".join([
-        _make_stat_card(summary["total_mappings"], t("diag_total_mappings"), data_filter="all"),
-        _make_stat_card(summary["resolved_mappings"], t("diag_resolved"), data_filter="resolved"),
-        _make_stat_card(summary["unresolved_mappings"], t("diag_unresolved"), data_filter="unresolved"),
-        _make_stat_card(summary["manual_mappings"], t("diag_manual"), data_filter="manual"),
-    ])
+    mapping_stats = "".join(
+        [
+            _make_stat_card(summary["total_mappings"], t("diag_total_mappings"), data_filter="all"),
+            _make_stat_card(
+                summary["resolved_mappings"], t("diag_resolved"), data_filter="resolved"
+            ),
+            _make_stat_card(
+                summary["unresolved_mappings"], t("diag_unresolved"), data_filter="unresolved"
+            ),
+            _make_stat_card(summary["manual_mappings"], t("diag_manual"), data_filter="manual"),
+        ]
+    )
     mapping_rows = "".join(_make_mapping_row(m, t) for m in mappings)
 
     now_str = datetime.now().strftime("%d/%m/%Y à %H:%M")
 
     return _apply_html_t(
-        _DIAGNOSTIC_TEMPLATE
-        .replace("__LIB_HREF__", html.escape(library_href))
+        _DIAGNOSTIC_TEMPLATE.replace("__LIB_HREF__", html.escape(library_href))
         .replace("__ALERTS_HREF__", html.escape(alerts_href))
         .replace("__GENERATED_AT__", now_str)
         .replace("__SUMMARY_STATS__", summary_cards)
@@ -3231,8 +3517,13 @@ def write_diagnostic_html(
     """
     output_path.write_text(
         generate_diagnostic_html(
-            summary, mappings, discovery_stats, unknown_games,
-            library_href, alerts_href, lang,
+            summary,
+            mappings,
+            discovery_stats,
+            unknown_games,
+            library_href,
+            alerts_href,
+            lang,
         ),
         encoding="utf-8",
     )

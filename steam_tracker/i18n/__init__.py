@@ -11,6 +11,7 @@ Usage::
 To add a new language, create ``steam_tracker/i18n/<code>.py`` with a
 ``STRINGS: dict[str, str]`` dictionary (use ``en.py`` as the template).
 """
+
 from __future__ import annotations
 
 import locale

@@ -1,4 +1,5 @@
 """Steam Library Tracker."""
+
 from __future__ import annotations
 
 from importlib.metadata import version

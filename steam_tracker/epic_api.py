@@ -3,6 +3,7 @@
 Handles OAuth2 authentication (authorization code and device auth flows)
 and library retrieval via the undocumented Epic Games API.
 """
+
 from __future__ import annotations
 
 import logging
@@ -12,17 +13,10 @@ import requests
 
 log = logging.getLogger(__name__)
 
-_EPIC_OAUTH_URL = (
-    "https://account-public-service-prod03.ol.epicgames.com"
-    "/account/api/oauth/token"
-)
-_EPIC_LIBRARY_URL = (
-    "https://library-service.live.use1a.on.epicgames.com"
-    "/library/api/public/items"
-)
+_EPIC_OAUTH_URL = "https://account-public-service-prod03.ol.epicgames.com/account/api/oauth/token"
+_EPIC_LIBRARY_URL = "https://library-service.live.use1a.on.epicgames.com/library/api/public/items"
 _EPIC_CATALOG_URL = (
-    "https://catalog-public-service-prod06.ol.epicgames.com"
-    "/catalog/api/shared/namespace"
+    "https://catalog-public-service-prod06.ol.epicgames.com/catalog/api/shared/namespace"
 )
 # EOS overlay / game client used by Legendary and HeroicGamesLauncher.
 # This client has the 'deviceAuths CREATE' permission and is used for all
@@ -32,8 +26,7 @@ _EPIC_CLIENT_SECRET = "daafbccc737745039dffe53d94fc76cf"
 _EPIC_BASIC_AUTH = requests.auth.HTTPBasicAuth(_EPIC_CLIENT_ID, _EPIC_CLIENT_SECRET)
 
 _EPIC_DEVICE_AUTH_BASE = (
-    "https://account-public-service-prod03.ol.epicgames.com"
-    "/account/api/public/account"
+    "https://account-public-service-prod03.ol.epicgames.com/account/api/public/account"
 )
 
 

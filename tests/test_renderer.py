@@ -480,6 +480,13 @@ def test_make_alert_card_has_data_id() -> None:
     assert f'data-id="{alert.id}"' in card
 
 
+def test_make_alert_card_has_data_source_id() -> None:
+    """Card must carry data-source-id for JS combined-view deduplication."""
+    alert = _sample_alert()
+    card = make_alert_card(alert)
+    assert f'data-source-id="{alert.source_id}"' in card
+
+
 def test_make_alert_card_escapes_xss_in_game_name() -> None:
     alert = Alert(
         id="xss123456789012",
@@ -561,6 +568,8 @@ def test_make_alert_card_has_news_url_attr() -> None:
     alert.url = "https://example.com/news"
     card = make_alert_card(alert)
     assert 'data-news-url="https://example.com/news"' in card
+
+
 
 
 # -- data-unknown attribute -------------------------------------------------
@@ -665,6 +674,22 @@ def test_generate_diagnostic_html_unknown_games_none() -> None:
     assert "__UNKNOWN_CONTENT__" not in html
 
 
+# -- date-added attribute ---------------------------------------------------
+
+
+def test_make_card_contains_time_added_attribute(sample_record: GameRecord) -> None:
+    """Game card must carry a data-time-added attribute."""
+    record = sample_record.model_copy(update={"time_added": 1700000000})
+    card = make_card(record)
+    assert 'data-time-added="1700000000"' in card
+
+
+def test_generate_html_has_dateadded_sort_option(sample_record: GameRecord) -> None:
+    """The sort dropdown must include a 'dateadded' option."""
+    html = generate_html([sample_record], steam_id="123")
+    assert 'value="dateadded"' in html
+
+
 def test_make_alert_card_no_news_url_when_empty() -> None:
     """Card without alert.url must not have data-news-url."""
     alert = _sample_alert()
@@ -738,6 +763,12 @@ def test_generate_alerts_html_contains_alert_title(sample_record: GameRecord) ->
 def test_generate_alerts_html_empty_list(sample_record: GameRecord) -> None:
     page = generate_alerts_html([], [sample_record], "76561198000000000")
     assert "__ALERTS__" not in page
+
+
+def test_generate_alerts_html_cards_have_data_source_id(sample_record: GameRecord) -> None:
+    """Every rendered alert card must have a data-source-id attribute."""
+    page = generate_alerts_html([_sample_alert()], [sample_record], "76561198000000000")
+    assert 'data-source-id="' in page
 
 
 def test_write_alerts_html_creates_file(sample_record: GameRecord, tmp_path: Path) -> None:
@@ -854,4 +885,53 @@ def test_generate_diagnostic_html_contains_toggle_script() -> None:
     html = generate_diagnostic_html(_EMPTY_SUMMARY, [], [])
     assert "toggleFilter" in html
     assert "activeFilter" in html
+
+
+# ── soft-delete / availability filter ─────────────────────────────────────────
+
+
+def test_make_card_removed_has_data_attribute() -> None:
+    """A removed game card must carry data-removed=\"1\"."""
+    record = GameRecord(
+        game=OwnedGame(appid=1, name="Delisted"),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+        removed_at="2024-01-01T00:00:00+00:00",
+    )
+    card = make_card(record)
+    assert 'data-removed="1"' in card
+
+
+def test_make_card_active_has_no_removed_attribute() -> None:
+    """An active game card must NOT carry data-removed."""
+    record = GameRecord(
+        game=OwnedGame(appid=1, name="Active"),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+        removed_at=None,
+    )
+    card = make_card(record)
+    assert "data-removed" not in card
+
+
+def test_make_card_removed_has_badge_removed_class() -> None:
+    """A removed game card must contain a badge with class badge-removed."""
+    record = GameRecord(
+        game=OwnedGame(appid=1, name="Delisted"),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+        removed_at="2024-03-15T12:00:00+00:00",
+    )
+    card = make_card(record)
+    assert "badge-removed" in card
+
+
+def test_generate_html_has_availability_filter_group() -> None:
+    """Library page must contain the availability filter panel with availBtns."""
+    record = GameRecord(
+        game=OwnedGame(appid=1, name="Game"),
+        status=GameStatus(label="—", badge="released", release_date="—"),
+    )
+    page = generate_html([record], steam_id="123")
+    assert 'id="availBtns"' in page
+    assert 'data-avail="active"' in page
+    assert 'data-avail="removed"' in page
+    assert 'data-avail="all"' in page
 
