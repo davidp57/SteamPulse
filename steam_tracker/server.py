@@ -561,7 +561,16 @@ def make_handler(
                                 )
                                 return
                         elif k in _BOOL_CONFIG_KEYS:
-                            merged[k] = bool(v)
+                            if v in (True, 1, "true", "1"):
+                                merged[k] = True
+                            elif v in (False, 0, "false", "0"):
+                                merged[k] = False
+                            else:
+                                self._send_json(
+                                    400,
+                                    {"ok": False, "error": f"{k} must be true or false"},
+                                )
+                                return
                         else:
                             merged[k] = v
                 try:

@@ -614,7 +614,7 @@ def test_gog_source_disabled_with_empty_token() -> None:
 
 @resp_mock.activate
 def test_gog_source_discover_games_returns_gog_source_label() -> None:
-    resp_mock.add(resp_mock.GET, _GOG_TOKEN_URL, json=_gog_token_resp())
+    resp_mock.add(resp_mock.POST, _GOG_TOKEN_URL, json=_gog_token_resp())
     resp_mock.add(
         resp_mock.GET,
         _GOG_PRODUCTS_URL,
@@ -631,7 +631,7 @@ def test_gog_source_discover_games_returns_gog_source_label() -> None:
 
 @resp_mock.activate
 def test_gog_source_resolved_appid_used_directly() -> None:
-    resp_mock.add(resp_mock.GET, _GOG_TOKEN_URL, json=_gog_token_resp())
+    resp_mock.add(resp_mock.POST, _GOG_TOKEN_URL, json=_gog_token_resp())
     resp_mock.add(
         resp_mock.GET,
         _GOG_PRODUCTS_URL,
@@ -649,7 +649,7 @@ def test_gog_source_resolved_appid_used_directly() -> None:
 
 @resp_mock.activate
 def test_gog_source_synthetic_appid_when_unresolved() -> None:
-    resp_mock.add(resp_mock.GET, _GOG_TOKEN_URL, json=_gog_token_resp())
+    resp_mock.add(resp_mock.POST, _GOG_TOKEN_URL, json=_gog_token_resp())
     resp_mock.add(
         resp_mock.GET,
         _GOG_PRODUCTS_URL,
@@ -667,7 +667,7 @@ def test_gog_source_synthetic_appid_when_unresolved() -> None:
 @resp_mock.activate
 def test_gog_source_persists_refreshed_token() -> None:
     """discover_games() must update args.gog_refresh_token with the new token."""
-    resp_mock.add(resp_mock.GET, _GOG_TOKEN_URL, json=_gog_token_resp())
+    resp_mock.add(resp_mock.POST, _GOG_TOKEN_URL, json=_gog_token_resp())
     resp_mock.add(resp_mock.GET, _GOG_PRODUCTS_URL, json=_gog_products_page([]))
 
     args = _gog_args(gog_refresh_token="rt_old")
@@ -677,14 +677,14 @@ def test_gog_source_persists_refreshed_token() -> None:
 
 @resp_mock.activate
 def test_gog_source_auth_failure_raises() -> None:
-    resp_mock.add(resp_mock.GET, _GOG_TOKEN_URL, status=401, json={"error": "invalid"})
+    resp_mock.add(resp_mock.POST, _GOG_TOKEN_URL, status=401, json={"error": "invalid"})
     with pytest.raises(requests.HTTPError):
         GogSource().discover_games(_gog_args(gog_refresh_token="bad_token"))
 
 
 @resp_mock.activate
 def test_gog_source_empty_library_returns_empty() -> None:
-    resp_mock.add(resp_mock.GET, _GOG_TOKEN_URL, json=_gog_token_resp())
+    resp_mock.add(resp_mock.POST, _GOG_TOKEN_URL, json=_gog_token_resp())
     resp_mock.add(resp_mock.GET, _GOG_PRODUCTS_URL, json=_gog_products_page([]))
 
     games = GogSource().discover_games(_gog_args(gog_refresh_token="rt"))

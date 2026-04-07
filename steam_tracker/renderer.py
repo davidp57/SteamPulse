@@ -202,6 +202,14 @@ function setupStoreFilter(updateFn) {
   const multiEl = document.getElementById('storeMultiselect');
   if (multiEl) {
     multiEl.addEventListener('change', () => {
+      if (!multiEl.checked) {
+        const active = Array.from(document.querySelectorAll('#storeBtns .store-btn.active'));
+        const keep = active[0] || document.querySelector('#storeBtns .store-btn');
+        document.querySelectorAll('#storeBtns .store-btn').forEach(b => {
+          b.classList.toggle('active', b === keep);
+        });
+        updateFn();
+      }
       saveFilterState();
     });
   }

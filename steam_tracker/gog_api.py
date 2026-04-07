@@ -13,6 +13,7 @@ Note on credentials:
 from __future__ import annotations
 
 import logging
+import os
 from urllib.parse import urlencode
 
 import requests
@@ -24,9 +25,13 @@ log = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-# GOG Galaxy desktop client credentials (publicly known from reverse engineering)
-GOG_CLIENT_ID = "46899977096215655"
-GOG_CLIENT_SECRET = "9d85c43b1482497dbbce61f6e4aa173a433796eeae2ca8c5f6129f2dc4de46d9"
+# GOG Galaxy desktop client credentials (publicly known from reverse engineering).
+# Override via ``STEAMPULSE_GOG_CLIENT_SECRET`` env variable if needed.
+GOG_CLIENT_ID = os.environ.get("STEAMPULSE_GOG_CLIENT_ID", "46899977096215655")
+GOG_CLIENT_SECRET = os.environ.get(
+    "STEAMPULSE_GOG_CLIENT_SECRET",
+    "9d85c43b1482497dbbce61f6e4aa173a433796eeae2ca8c5f6129f2dc4de46d9",
+)
 
 # After the user logs in at GOG_AUTH_URL they are redirected to
 # embed.gog.com/on_login_success and the URL contains ``?code=…``.
@@ -41,9 +46,6 @@ GOG_AUTH_URL = "https://auth.gog.com/auth?" + urlencode(
 
 GOG_TOKEN_URL = "https://auth.gog.com/token"
 GOG_EMBED_BASE = "https://embed.gog.com"
-
-# Number of products returned per page from getFilteredProducts
-_PRODUCTS_PER_PAGE = 100
 
 
 # ---------------------------------------------------------------------------
@@ -102,9 +104,9 @@ def gog_auth_with_code(
         requests.HTTPError: If the token exchange fails.
     """
     s = session or requests.Session()
-    resp = s.get(
+    resp = s.post(
         GOG_TOKEN_URL,
-        params={
+        data={
             "client_id": GOG_CLIENT_ID,
             "client_secret": GOG_CLIENT_SECRET,
             "grant_type": "authorization_code",
@@ -137,9 +139,9 @@ def gog_auth_with_refresh(
         requests.HTTPError: If the refresh fails (e.g. token expired).
     """
     s = session or requests.Session()
-    resp = s.get(
+    resp = s.post(
         GOG_TOKEN_URL,
-        params={
+        data={
             "client_id": GOG_CLIENT_ID,
             "client_secret": GOG_CLIENT_SECRET,
             "grant_type": "refresh_token",

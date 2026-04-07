@@ -498,7 +498,7 @@ Lorsque `steam-serve` tourne (ou dans le conteneur Docker), une page de configur
 
 Si aucun `serve_token` n'est configuré, `/config` est accessible sans authentification. C'est intentionnel : tu peux définir le token pour la première fois directement depuis l'interface.
 
-> ⚠️ En mode bootstrap, aucune authentification n'est requise. Definis un `serve_token` immédiatement si le port est accessible depuis l'extérieur de ta machine.
+> ⚠️ En mode bootstrap, aucune authentification n'est requise. Définis un `serve_token` immédiatement si le port est accessible depuis l'extérieur de ta machine.
 
 ### Champs credentials
 

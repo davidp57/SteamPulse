@@ -870,3 +870,42 @@ class TestApiConfigPost:
         finally:
             httpd.shutdown()
 
+    def test_post_config_bool_string_false_accepted(self, tmp_path: Path) -> None:
+        """POST /api/config must correctly parse 'false' string as bool False."""
+        cfg_path = tmp_path / "config.toml"
+        cfg_path.write_text("[settings]\ngamepass = true\n", encoding="utf-8")
+        port, httpd = _start_server(tmp_path, config_path=cfg_path)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            payload = json.dumps({"gamepass": "false"}).encode()
+            conn.request(
+                "POST", "/api/config", body=payload,
+                headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
+            )
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 200
+            assert data["ok"] is True
+            from steam_tracker.config import load_config  # noqa: PLC0415
+            saved = load_config(cfg_path)
+            assert saved["gamepass"] is False
+        finally:
+            httpd.shutdown()
+
+    def test_post_config_bool_invalid_string_returns_400(self, tmp_path: Path) -> None:
+        """POST /api/config must reject 'gamepass': 'maybe' with 400."""
+        port, httpd = _start_server(tmp_path)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            payload = json.dumps({"gamepass": "maybe"}).encode()
+            conn.request(
+                "POST", "/api/config", body=payload,
+                headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
+            )
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 400
+            assert data["ok"] is False
+        finally:
+            httpd.shutdown()
+

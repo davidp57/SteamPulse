@@ -70,7 +70,7 @@ _PRODUCTS_PAGE_2 = {
 @resp_mock.activate
 def test_gog_auth_with_code_success() -> None:
     resp_mock.add(
-        resp_mock.GET,
+        resp_mock.POST,
         GOG_TOKEN_URL,
         json=_TOKEN_RESP,
         status=200,
@@ -84,7 +84,7 @@ def test_gog_auth_with_code_success() -> None:
 
 @resp_mock.activate
 def test_gog_auth_with_code_http_error() -> None:
-    resp_mock.add(resp_mock.GET, GOG_TOKEN_URL, json={"error": "bad_code"}, status=401)
+    resp_mock.add(resp_mock.POST, GOG_TOKEN_URL, json={"error": "bad_code"}, status=401)
     with pytest.raises(requests.HTTPError):
         gog_auth_with_code("bad_code")
 
@@ -97,7 +97,7 @@ def test_gog_auth_with_code_http_error() -> None:
 @resp_mock.activate
 def test_gog_auth_with_refresh_success() -> None:
     resp_mock.add(
-        resp_mock.GET,
+        resp_mock.POST,
         GOG_TOKEN_URL,
         json=_TOKEN_RESP,
         status=200,
@@ -110,7 +110,7 @@ def test_gog_auth_with_refresh_success() -> None:
 
 @resp_mock.activate
 def test_gog_auth_with_refresh_http_error() -> None:
-    resp_mock.add(resp_mock.GET, GOG_TOKEN_URL, json={"error": "invalid"}, status=401)
+    resp_mock.add(resp_mock.POST, GOG_TOKEN_URL, json={"error": "invalid"}, status=401)
     with pytest.raises(requests.HTTPError):
         gog_auth_with_refresh("expired_token")
 
