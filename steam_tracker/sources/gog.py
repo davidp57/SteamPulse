@@ -127,9 +127,7 @@ class GogSource:
             gog_id = str(product.id)
 
             if not name:
-                skipped.append(
-                    SkippedItem(catalog_id=gog_id, raw_name="", reason="no_title")
-                )
+                skipped.append(SkippedItem(catalog_id=gog_id, raw_name="", reason="no_title"))
                 continue
 
             print(f"\r   [{idx:>{width}}/{total}] {name[:55]:<55}", end="", flush=True)

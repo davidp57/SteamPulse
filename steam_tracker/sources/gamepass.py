@@ -123,9 +123,7 @@ class GamePassSource:
         for idx, store_id in enumerate(store_ids, 1):
             name = titles.get(store_id, "").strip()
             if not name:
-                skipped.append(
-                    SkippedItem(catalog_id=store_id, raw_name="", reason="no_title")
-                )
+                skipped.append(SkippedItem(catalog_id=store_id, raw_name="", reason="no_title"))
                 continue
 
             print(f"\r   [{idx:>{width}}/{total}] {name[:55]:<55}", end="", flush=True)

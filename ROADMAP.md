@@ -102,7 +102,7 @@
 - **Auto-restart on token change** — sidecar cleanly exits when `serve_token` changes from the web UI; supervisord restarts the process; browser polls then redirects to `/login`
 - **Fetch-progress bandeau** — live top banner on the library page showing fetch `idx/total` + game name; reloads page on completion
 - **`GET /api/status`** — public endpoint for live fetch progress state
-- 536 tests total
+- 538 tests total
 
 ---
 

@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [2.1.0] — 2026-04-07
+
 ### Added
 
 - **GOG Galaxy source** — new `--gog-refresh-token` flag (or `[gog] refresh_token` in config TOML) fetches your GOG library via the GOG OAuth2 + embed API; games are tagged `gog` and enriched with Steam AppID via the existing resolver chain; the setup wizard (step 3/6) guides the user through the one-time browser auth flow

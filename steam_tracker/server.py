@@ -352,14 +352,19 @@ def make_handler(
                     _cfg_current = load_config(_cfg_path) if _cfg_path.exists() else {}
                 except Exception:
                     _cfg_current = {}
-                _masked_keys: frozenset[str] = frozenset({
-                    "key", "epic_refresh_token", "epic_account_id",
-                    "gog_refresh_token", "twitch_client_id", "twitch_client_secret",
-                    "serve_token",
-                })
+                _masked_keys: frozenset[str] = frozenset(
+                    {
+                        "key",
+                        "epic_refresh_token",
+                        "epic_account_id",
+                        "gog_refresh_token",
+                        "twitch_client_id",
+                        "twitch_client_secret",
+                        "serve_token",
+                    }
+                )
                 masked = {
-                    k: ("***" if k in _masked_keys and v else v)
-                    for k, v in _cfg_current.items()
+                    k: ("***" if k in _masked_keys and v else v) for k, v in _cfg_current.items()
                 }
                 self._send_json(200, {"ok": True, "config": masked})
                 return

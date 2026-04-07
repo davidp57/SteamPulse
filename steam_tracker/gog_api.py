@@ -26,22 +26,17 @@ log = logging.getLogger(__name__)
 
 # GOG Galaxy desktop client credentials (publicly known from reverse engineering)
 GOG_CLIENT_ID = "46899977096215655"
-GOG_CLIENT_SECRET = (
-    "9d85c43b1482497dbbce61f6e4aa173a433796eeae2ca8c5f6129f2dc4de46d9"
-)
+GOG_CLIENT_SECRET = "9d85c43b1482497dbbce61f6e4aa173a433796eeae2ca8c5f6129f2dc4de46d9"
 
 # After the user logs in at GOG_AUTH_URL they are redirected to
 # embed.gog.com/on_login_success and the URL contains ``?code=…``.
-GOG_AUTH_URL = (
-    "https://auth.gog.com/auth?"
-    + urlencode(
-        {
-            "client_id": GOG_CLIENT_ID,
-            "redirect_uri": "https://embed.gog.com/on_login_success?origin=client",
-            "response_type": "code",
-            "layout": "client2",
-        }
-    )
+GOG_AUTH_URL = "https://auth.gog.com/auth?" + urlencode(
+    {
+        "client_id": GOG_CLIENT_ID,
+        "redirect_uri": "https://embed.gog.com/on_login_success?origin=client",
+        "response_type": "code",
+        "layout": "client2",
+    }
 )
 
 GOG_TOKEN_URL = "https://auth.gog.com/token"

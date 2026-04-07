@@ -2245,9 +2245,11 @@ def make_alert_card(
         f'<p class="alert-details">{html.escape(alert.details)}</p>' if alert.details else ""
     )
     # Store & collection data attributes for filtering
-    store_tag = (game.source if game and game.source in ("epic", "gog", "gamepass") else "steam")
+    store_tag = game.source if game and game.source in ("epic", "gog", "gamepass") else "steam"
     collection_tag = (
-        ("owned" if game.source in ("owned", "epic", "gog", "gamepass") else game.source) if game else "owned"
+        ("owned" if game.source in ("owned", "epic", "gog", "gamepass") else game.source)
+        if game
+        else "owned"
     )
     # Game-level data attributes for shared filters
     status_tag = record.status.badge if record else "released"
