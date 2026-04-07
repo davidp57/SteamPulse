@@ -633,3 +633,279 @@ class TestRefetch:
                 t.join(timeout=3.0)
         finally:
             httpd.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# GET /api/status
+# ---------------------------------------------------------------------------
+
+
+class TestApiStatus:
+    def test_status_idle(self, tmp_path: Path) -> None:
+        """When no fetch is running, /api/status returns fetching=False."""
+        port, httpd = _start_server(tmp_path)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request("GET", "/api/status")
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 200
+            assert data["fetching"] is False
+            assert data["idx"] == 0
+            assert data["total"] == 0
+            assert data["current"] == ""
+        finally:
+            httpd.shutdown()
+
+    def test_status_public_no_auth_required(self, tmp_path: Path) -> None:
+        """GET /api/status must be accessible without a session cookie."""
+        port, httpd = _start_server(tmp_path, token=_TOKEN)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request("GET", "/api/status")
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 200
+            assert "fetching" in data
+        finally:
+            httpd.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# GET /config
+# ---------------------------------------------------------------------------
+
+
+class TestConfigPage:
+    def test_config_page_bootstrap_mode(self, tmp_path: Path) -> None:
+        """GET /config is accessible without auth when no token is configured."""
+        port, httpd = _start_server(tmp_path)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request("GET", "/config")
+            resp = conn.getresponse()
+            body = resp.read()
+            assert resp.status == 200
+            assert b"<form" in body
+            assert b"Bootstrap" in body
+        finally:
+            httpd.shutdown()
+
+    def test_config_page_redirects_unauthenticated_when_token_set(
+        self, tmp_path: Path
+    ) -> None:
+        """GET /config must redirect to /login when a token is set and user is not authed."""
+        port, httpd = _start_server(tmp_path, token=_TOKEN)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request("GET", "/config")
+            resp = conn.getresponse()
+            resp.read()
+            assert resp.status == 302
+            assert resp.getheader("Location") == "/login"
+        finally:
+            httpd.shutdown()
+
+    def test_config_page_accessible_when_authenticated(self, tmp_path: Path) -> None:
+        """GET /config returns 200 when the user is authenticated."""
+        port, httpd = _start_server(tmp_path, token=_TOKEN)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request("GET", "/config", headers={"Cookie": _COOKIE_HDR})
+            resp = conn.getresponse()
+            body = resp.read()
+            assert resp.status == 200
+            assert b"<form" in body
+        finally:
+            httpd.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# GET /api/config
+# ---------------------------------------------------------------------------
+
+
+class TestApiConfigGet:
+    def test_get_config_bootstrap_no_auth_needed(self, tmp_path: Path) -> None:
+        """GET /api/config is accessible without auth in bootstrap mode."""
+        cfg_path = tmp_path / "config.toml"
+        cfg_path.write_text("[steam]\nsteamid = \"12345\"\n", encoding="utf-8")
+        port, httpd = _start_server(tmp_path, config_path=cfg_path)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request("GET", "/api/config")
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 200
+            assert data["ok"] is True
+            assert "config" in data
+            assert data["config"]["steamid"] == "12345"
+        finally:
+            httpd.shutdown()
+
+    def test_get_config_masks_api_key(self, tmp_path: Path) -> None:
+        """GET /api/config must return '***' for the Steam API key."""
+        cfg_path = tmp_path / "config.toml"
+        cfg_path.write_text("[steam]\nkey = \"REAL_KEY\"\n", encoding="utf-8")
+        port, httpd = _start_server(tmp_path, config_path=cfg_path)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request("GET", "/api/config")
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 200
+            assert data["config"].get("key") == "***"
+        finally:
+            httpd.shutdown()
+
+    def test_get_config_requires_auth_when_token_set(self, tmp_path: Path) -> None:
+        """GET /api/config must return 401 when a token is set and user is not authed."""
+        port, httpd = _start_server(tmp_path, token=_TOKEN)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request("GET", "/api/config")
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 401
+            assert data["ok"] is False
+        finally:
+            httpd.shutdown()
+
+    def test_get_config_with_auth_returns_200(self, tmp_path: Path) -> None:
+        """GET /api/config returns 200 when authenticated."""
+        port, httpd = _start_server(tmp_path, token=_TOKEN)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request("GET", "/api/config", headers={"Cookie": _COOKIE_HDR})
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 200
+            assert data["ok"] is True
+        finally:
+            httpd.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# POST /api/config
+# ---------------------------------------------------------------------------
+
+
+class TestApiConfigPost:
+    def test_post_config_saves_settings(self, tmp_path: Path) -> None:
+        """POST /api/config persists non-empty, non-masked values to TOML."""
+        cfg_path = tmp_path / "config.toml"
+        cfg_path.write_text("[steam]\nsteamid = \"111\"\n", encoding="utf-8")
+        port, httpd = _start_server(tmp_path, config_path=cfg_path)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            payload = json.dumps({"workers": 8, "steamid": "222"}).encode()
+            conn.request(
+                "POST", "/api/config", body=payload,
+                headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
+            )
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 200
+            assert data["ok"] is True
+            assert data["restarting"] is False
+            # Verify the config file was updated
+            from steam_tracker.config import load_config  # noqa: PLC0415
+            saved = load_config(cfg_path)
+            assert saved["workers"] == 8
+            assert saved["steamid"] == "222"
+        finally:
+            httpd.shutdown()
+
+    def test_post_config_ignores_masked_values(self, tmp_path: Path) -> None:
+        """POST /api/config must NOT overwrite credentials with '***'."""
+        cfg_path = tmp_path / "config.toml"
+        cfg_path.write_text("[steam]\nkey = \"REAL_KEY\"\n", encoding="utf-8")
+        port, httpd = _start_server(tmp_path, config_path=cfg_path)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            payload = json.dumps({"key": "***"}).encode()
+            conn.request(
+                "POST", "/api/config", body=payload,
+                headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
+            )
+            resp = conn.getresponse()
+            resp.read()
+            from steam_tracker.config import load_config  # noqa: PLC0415
+            saved = load_config(cfg_path)
+            assert saved["key"] == "REAL_KEY"
+        finally:
+            httpd.shutdown()
+
+    def test_post_config_invalid_json_returns_400(self, tmp_path: Path) -> None:
+        """POST /api/config with malformed JSON must return 400."""
+        port, httpd = _start_server(tmp_path)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            payload = b"not json"
+            conn.request(
+                "POST", "/api/config", body=payload,
+                headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
+            )
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 400
+            assert data["ok"] is False
+        finally:
+            httpd.shutdown()
+
+    def test_post_config_requires_auth_when_token_set(self, tmp_path: Path) -> None:
+        """POST /api/config must return 401 when token is set and user is not authed."""
+        port, httpd = _start_server(tmp_path, token=_TOKEN)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            payload = json.dumps({"workers": 4}).encode()
+            conn.request(
+                "POST", "/api/config", body=payload,
+                headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
+            )
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 401
+            assert data["ok"] is False
+        finally:
+            httpd.shutdown()
+
+    def test_post_config_bool_string_false_accepted(self, tmp_path: Path) -> None:
+        """POST /api/config must correctly parse 'false' string as bool False."""
+        cfg_path = tmp_path / "config.toml"
+        cfg_path.write_text("[settings]\ngamepass = true\n", encoding="utf-8")
+        port, httpd = _start_server(tmp_path, config_path=cfg_path)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            payload = json.dumps({"gamepass": "false"}).encode()
+            conn.request(
+                "POST", "/api/config", body=payload,
+                headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
+            )
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 200
+            assert data["ok"] is True
+            from steam_tracker.config import load_config  # noqa: PLC0415
+            saved = load_config(cfg_path)
+            assert saved["gamepass"] is False
+        finally:
+            httpd.shutdown()
+
+    def test_post_config_bool_invalid_string_returns_400(self, tmp_path: Path) -> None:
+        """POST /api/config must reject 'gamepass': 'maybe' with 400."""
+        port, httpd = _start_server(tmp_path)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            payload = json.dumps({"gamepass": "maybe"}).encode()
+            conn.request(
+                "POST", "/api/config", body=payload,
+                headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
+            )
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 400
+            assert data["ok"] is False
+        finally:
+            httpd.shutdown()
+

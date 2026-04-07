@@ -280,6 +280,43 @@ def test_save_cli_credentials_does_not_save_settings_if_not_explicit(
     assert "db" not in loaded
 
 
+# ── GOG config ────────────────────────────────────────────────────────────────
+
+
+def test_load_config_gog_section(tmp_path: Path) -> None:
+    cfg = tmp_path / "config.toml"
+    cfg.write_text('[gog]\nrefresh_token = "GOG_RT"\n', encoding="utf-8")
+    result = load_config(cfg)
+    assert result["gog_refresh_token"] == "GOG_RT"
+
+
+def test_write_config_roundtrip_gog(tmp_path: Path) -> None:
+    p = tmp_path / "config.toml"
+    write_config({"gog_refresh_token": "GOG_RT"}, p)
+    loaded = load_config(p)
+    assert loaded["gog_refresh_token"] == "GOG_RT"
+
+
+def test_save_cli_credentials_saves_gog_refresh_token(tmp_path: Path) -> None:
+    p = tmp_path / "config.toml"
+    save_cli_credentials({"gog_refresh_token": "GOG_RT"}, existing={}, path=p)
+    loaded = load_config(p)
+    assert loaded["gog_refresh_token"] == "GOG_RT"
+
+
+def test_load_config_all_sections_including_gog(tmp_path: Path) -> None:
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[steam]\nkey = "K"\nsteamid = "S"\n\n'
+        '[gog]\nrefresh_token = "GOG_RT"\n\n'
+        '[epic]\nrefresh_token = "RT"\naccount_id = "AID"\n',
+        encoding="utf-8",
+    )
+    result = load_config(cfg)
+    assert result["gog_refresh_token"] == "GOG_RT"
+    assert result["epic_refresh_token"] == "RT"
+
+
 def test_save_cli_credentials_preserves_alert_rules(tmp_path: Path) -> None:
     """Alert rules in config must survive a save_cli_credentials rewrite."""
     p = tmp_path / "config.toml"

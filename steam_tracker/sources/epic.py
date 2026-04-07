@@ -9,7 +9,6 @@ and a non-empty ``external_id``.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import logging
 import re
 from typing import TYPE_CHECKING
@@ -21,15 +20,13 @@ from ..epic_api import (
     epic_get_library,
 )
 from ..i18n import get_translator
-from ..models import SYNTHETIC_APPID_BASE, DiscoveryStats, OwnedGame, SkippedItem
+from ..models import DiscoveryStats, OwnedGame, SkippedItem, hash_synthetic_appid
 from ..resolver import IGDBResolver, SteamStoreResolver, resolve_steam_appid
 
 if TYPE_CHECKING:
     from ..db import Database
 
 log = logging.getLogger(__name__)
-
-_HASH_APPID_RANGE = 100_000_000
 
 # Keys in sandboxName that indicate an environment label, not a real title.
 _SANDBOX_LABELS = frozenset({"Live", "Stage", "Dev", "Cert", "CI"})
@@ -93,12 +90,6 @@ _HEX_ID_RE = re.compile(r"^[a-f0-9]{24,}$")
 def _is_hex_id(name: str) -> bool:
     """Return True if *name* looks like a raw catalog/item hex identifier."""
     return bool(_HEX_ID_RE.match(name))
-
-
-def _hash_appid(catalog_item_id: str) -> int:
-    """Generate a deterministic appid in the reserved range for unresolved games."""
-    digest = hashlib.sha256(catalog_item_id.encode()).hexdigest()
-    return SYNTHETIC_APPID_BASE + int(digest[:8], 16) % _HASH_APPID_RANGE
 
 
 class EpicSource:
@@ -297,7 +288,7 @@ class EpicSource:
                 if db is not None:
                     db.upsert_appid_mapping("epic", external_id, name, steam_appid)
 
-            appid = steam_appid if steam_appid is not None else _hash_appid(catalog_id)
+            appid = steam_appid if steam_appid is not None else hash_synthetic_appid(catalog_id)
             if steam_appid is not None:
                 resolved_count += 1
 

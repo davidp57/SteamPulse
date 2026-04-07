@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -12,9 +13,30 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 
 # AppIDs >= this value are synthetic (hash-based) placeholders assigned to
-# Epic games that could not be resolved to a real Steam AppID.  Real Steam
+# non-Steam games that could not be resolved to a real Steam AppID.  Real Steam
 # AppIDs never exceed a few hundred million, so 2 billion is a safe sentinel.
 SYNTHETIC_APPID_BASE: int = 2_000_000_000
+
+# Range of the synthetic AppID space (100 million slots above the base).
+_HASH_APPID_RANGE: int = 100_000_000
+
+
+def hash_synthetic_appid(external_item_id: str) -> int:
+    """Generate a deterministic AppID in the reserved synthetic range.
+
+    Used for games from non-Steam stores (Epic, GOG, Game Pass…) that cannot
+    be resolved to a real Steam AppID.  The result is always >=
+    :data:`SYNTHETIC_APPID_BASE` and deterministic for a given *external_item_id*.
+
+    Args:
+        external_item_id: A stable external identifier (e.g. Epic catalogItemId,
+            GOG product ID).
+
+    Returns:
+        An integer in ``[SYNTHETIC_APPID_BASE, SYNTHETIC_APPID_BASE + 100_000_000)``.
+    """
+    digest = hashlib.sha256(external_item_id.encode()).hexdigest()
+    return SYNTHETIC_APPID_BASE + int(digest[:8], 16) % _HASH_APPID_RANGE
 
 
 class OwnedGame(BaseModel):

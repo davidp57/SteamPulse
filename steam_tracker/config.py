@@ -30,6 +30,7 @@ _TOML_TO_ARGS: dict[tuple[str, str], str] = {
     ("steam", "steamid"): "steamid",
     ("epic", "refresh_token"): "epic_refresh_token",
     ("epic", "account_id"): "epic_account_id",
+    ("gog", "refresh_token"): "gog_refresh_token",
     ("twitch", "client_id"): "twitch_client_id",
     ("twitch", "client_secret"): "twitch_client_secret",
     ("settings", "db"): "db",
@@ -37,6 +38,7 @@ _TOML_TO_ARGS: dict[tuple[str, str], str] = {
     ("settings", "news_age"): "news_age",
     ("settings", "lang"): "lang",
     ("settings", "serve_token"): "serve_token",
+    ("settings", "gamepass"): "gamepass",
 }
 
 # Reverse mapping for writes
@@ -49,13 +51,14 @@ _CREDENTIAL_KEYS: frozenset[str] = frozenset(
         "steamid",
         "epic_refresh_token",
         "epic_account_id",
+        "gog_refresh_token",
         "twitch_client_id",
         "twitch_client_secret",
     }
 )
 
 # Keys in [settings] — only saved when explicitly passed on CLI
-_SETTINGS_KEYS: frozenset[str] = frozenset({"db", "workers", "news_age", "lang"})
+_SETTINGS_KEYS: frozenset[str] = frozenset({"db", "workers", "news_age", "lang", "gamepass"})
 
 
 # ---------------------------------------------------------------------------
@@ -226,6 +229,7 @@ _SECTION_KEYS: list[tuple[str, list[tuple[str, str]]]] = [
             ("account_id", "epic_account_id"),
         ],
     ),
+    ("gog", [("refresh_token", "gog_refresh_token")]),
     ("twitch", [("client_id", "twitch_client_id"), ("client_secret", "twitch_client_secret")]),
     (
         "settings",
@@ -235,6 +239,7 @@ _SECTION_KEYS: list[tuple[str, list[tuple[str, str]]]] = [
             ("news_age", "news_age"),
             ("lang", "lang"),
             ("serve_token", "serve_token"),
+            ("gamepass", "gamepass"),
         ],
     ),
 ]
@@ -267,7 +272,9 @@ def _build_toml(data: dict[str, Any], alert_rules: list[AlertRule] | None = None
             continue
         lines.append(f"[{section_name}]")
         for toml_key, value in section_values:
-            if isinstance(value, str):
+            if isinstance(value, bool):
+                lines.append(f"{toml_key} = {str(value).lower()}")
+            elif isinstance(value, str):
                 lines.append(f'{toml_key} = "{_toml_escape(value)}"')
             else:
                 lines.append(f"{toml_key} = {value}")

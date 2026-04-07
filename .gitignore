@@ -38,6 +38,9 @@ steam_library*.db*
 steam_library.html
 steam_news.html
 steam_cache.json
+
+# Temporary PR description helper
+.github/pull_request_description.md
 steam_library.py
 *.exe
 steam_alerts.html
