@@ -9,12 +9,15 @@
 3. [Config file](#3-config-file)
 4. [Steam prerequisites](#4-steam-prerequisites)
 5. [Epic Games prerequisites](#5-epic-games-prerequisites)
-6. [All-in-one — `steampulse.exe`](#6-all-in-one--steampulseexe)
-7. [All options](#7-all-options)
-8. [Navigating the interface](#8-navigating-the-interface)
-9. [Cache strategy & refresh](#9-cache-strategy--refresh)
-10. [Advanced usage — separate steps](#10-advanced-usage--separate-steps)
-11. [FAQ](#11-faq)
+6. [GOG Galaxy prerequisites](#6-gog-galaxy-prerequisites)
+7. [Xbox PC Game Pass](#7-xbox-pc-game-pass)
+8. [All-in-one — `steampulse.exe`](#8-all-in-one--steampulseexe)
+9. [All options](#9-all-options)
+10. [Navigating the interface](#10-navigating-the-interface)
+11. [Cache strategy & refresh](#11-cache-strategy--refresh)
+12. [Advanced usage — separate steps](#12-advanced-usage--separate-steps)
+13. [Web configuration (Docker / sidecar)](#13-web-configuration-docker--sidecar)
+14. [FAQ](#14-faq)
 
 ---
 
@@ -64,8 +67,10 @@ steampulse.exe --setup
 
 1. **Steam** — API key and SteamID64
 2. **Epic Games** (optional) — full OAuth2 flow: the wizard displays the auth URL, optionally opens your browser, prompts for the authorization code, and automatically exchanges it for a persistent refresh token. No manual JSON navigation required.
-3. **Twitch/IGDB** (optional) — client ID and secret for better Epic→Steam AppID resolution
-4. **Settings** (optional) — database path, worker threads, news age, language
+3. **GOG Galaxy** (optional) — similar OAuth2 flow; opens a GOG login URL, prompts for the authorization code, and saves a refresh token.
+4. **Xbox PC Game Pass** (optional) — yes/no opt-in; no authentication needed (public catalog).
+5. **Twitch/IGDB** (optional) — client ID and secret for better Epic→Steam AppID resolution
+6. **Settings** (optional) — database path, worker threads, news age, language
 
 At the end, the wizard shows a summary and asks for confirmation before writing the file.
 
@@ -98,6 +103,9 @@ steamid  = "76561198000000000"
 refresh_token = "..."
 account_id    = "..."
 
+[gog]
+refresh_token = "..."
+
 [twitch]
 client_id     = "..."
 client_secret = "..."
@@ -107,6 +115,7 @@ db        = "steam_library.db"
 workers   = 4
 news_age  = 24
 lang      = "en"
+gamepass  = true
 ```
 
 All sections and keys are optional — any not present fall back to CLI defaults.
@@ -175,7 +184,51 @@ Without IGDB, SteamPulse falls back to multi-strategy matching against the Steam
 
 ---
 
-## 6. All-in-one — `steampulse.exe`
+## 6. GOG Galaxy prerequisites
+
+GOG integration is **optional**. Skip this section if you don't use GOG.
+
+### Authentication — setup wizard
+
+Run `steam-setup` and follow step 3 (GOG Galaxy). The wizard opens the GOG login URL in your browser, prompts for the authorization code from the redirect URL, and saves a refresh token to `config.toml`. Subsequent runs reuse the refresh token automatically.
+
+The config entry written by the wizard:
+
+```toml
+[gog]
+refresh_token = "..."
+```
+
+### Authentication — command line
+
+```
+steampulse.exe --key <KEY> --steamid <ID> --gog-refresh-token <TOKEN>
+```
+
+---
+
+## 7. Xbox PC Game Pass
+
+Game Pass integration is **optional** and requires **no authentication** — it reads the public Microsoft catalog.
+
+Enable it in the wizard (step 4) or via config:
+
+```toml
+[settings]
+gamepass = true
+```
+
+Or on the command line:
+
+```
+steampulse.exe --key <KEY> --steamid <ID> --game-pass
+```
+
+Game Pass titles are tagged `gamepass` in the dashboard and enriched with Steam details when a matching Steam AppID is found.
+
+---
+
+## 8. All-in-one — `steampulse.exe`
 
 ```
 steampulse.exe --key <API_KEY> --steamid <STEAMID64>
@@ -215,7 +268,7 @@ For each **Epic** game: the game is resolved to a Steam AppID when possible — 
 
 ---
 
-## 7. All options
+## 9. All options
 
 | Option | Default | Description |
 |---|---|---|
@@ -244,11 +297,23 @@ For each **Epic** game: the game is resolved to a Steam AppID when possible — 
 | `--twitch-client-id` | *(none)* | Twitch/IGDB client ID (better AppID resolution) |
 | `--twitch-client-secret` | *(none)* | Twitch/IGDB client secret |
 
+**GOG Galaxy options:**
+
+| Option | Default | Description |
+|---|---|---|
+| `--gog-refresh-token` | *(none)* | GOG refresh token (saved automatically after wizard) |
+
+**Xbox Game Pass option:**
+
+| Option | Default | Description |
+|---|---|---|
+| `--game-pass` | off | Enable Xbox PC Game Pass library discovery |
+
 > **Note on `--followed`**: the Steam Web API no longer returns followed games with a standard key. This flag is available but will generally return an empty list.
 
 ---
 
-## 8. Navigating the interface
+## 10. Navigating the interface
 
 ### Library page (`steam_library.html`)
 
@@ -376,7 +441,7 @@ This page is useful for diagnosing data quality issues, checking which Epic game
 
 ---
 
-## 9. Cache strategy & refresh
+## 11. Cache strategy & refresh
 
 | Scenario | Behaviour |
 |---|---|
@@ -389,7 +454,7 @@ This page is useful for diagnosing data quality issues, checking which Epic game
 
 ---
 
-## 10. Advanced usage — separate steps
+## 12. Advanced usage — separate steps
 
 If you installed SteamPulse from source, two separate commands are also available to run fetch and render independently:
 
@@ -418,7 +483,31 @@ Reads the SQLite database and regenerates the HTML from existing data. Useful fo
 
 ---
 
-## 11. FAQ
+## 13. Web configuration (Docker / sidecar)
+
+When running `steam-serve` (or the Docker container), a configuration page is available at `/config`. It lets you edit all credentials and settings directly from the browser — no SSH or file editing required.
+
+### Bootstrap mode
+
+When no `serve_token` is configured, `/config` is accessible without authentication. This is intentional: you can set up the token for the first time directly from the UI.
+
+> ⚠️ In bootstrap mode there is no authentication. Set a `serve_token` immediately if the port is reachable from outside your machine.
+
+### Credential fields
+
+Credential fields (API key, tokens, secrets) are never pre-filled. When a value is already set, the field shows `● ● ●  (already set)` as a placeholder. Submitting the form without changing a credential field leaves the stored value unchanged.
+
+### Saving and restart
+
+Click **Save configuration** to write to `config.toml`. If you change `serve_token`, the sidecar will restart automatically (via supervisord in Docker) and your browser will redirect to `/login` once it comes back up.
+
+### Fetch-progress bandeau
+
+While a background fetch is running (triggered from the UI via the ⬇ button), a cyan banner appears at the top of the library page showing live progress (`idx/total · game name`). The page reloads automatically when the fetch completes.
+
+---
+
+## 14. FAQ
 
 **I have games on Epic that don't appear with store details — why?**  
 SteamPulse tries to match each Epic game to a Steam AppID using fuzzy name matching (and IGDB if you provide Twitch credentials). If no match is found, the game still appears in the dashboard with the 🎮 Epic badge, but without Steam details or news.
@@ -440,7 +529,7 @@ Press `Ctrl+C` — in-flight tasks are cancelled cleanly and already-collected d
 
 ---
 
-## 12. Docker deployment
+## 15. Docker deployment
 
 > **TL;DR** — Copy your `config.toml`, download `docker-compose.yml` from the
 > release page, place them in the same folder, run `docker compose up -d`, open

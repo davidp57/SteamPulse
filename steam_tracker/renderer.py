@@ -8,7 +8,7 @@ import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .models import SYNTHETIC_APPID_BASE, Alert, DiscoveryStats, GameRecord, SkippedItem
 
@@ -28,6 +28,9 @@ _SHARED_FILTER_CSS = """\
   .store-btn { padding:6px 14px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:12px; cursor:pointer; transition:all .2s; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px; }
   .store-btn:hover { border-color:var(--accent); color:var(--accent); }
   .store-btn.active { background:var(--accent); border-color:var(--accent); color:#000; font-weight:500; }
+  .store-multi-label { display:inline-flex; align-items:center; gap:4px; font-size:10px; color:var(--muted); cursor:pointer; margin-left:10px; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px; vertical-align:middle; }
+  .store-multi-label input[type=checkbox] { width:12px; height:12px; cursor:pointer; accent-color:var(--accent); margin:0; }
+  .store-multi-label:hover { color:var(--accent); }
   .tag-btn { padding:6px 14px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:12px; cursor:pointer; transition:all .2s; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px; }
   .tag-btn:hover { border-color:var(--accent); color:var(--accent); }
   .tag-btn.active { background:var(--accent); border-color:var(--accent); color:#000; font-weight:500; }
@@ -181,12 +184,27 @@ function checkMcFilter(mc, card) {
 function setupStoreFilter(updateFn) {
   document.querySelectorAll('#storeBtns .store-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const active = document.querySelectorAll('#storeBtns .store-btn.active');
-      if (active.length === 1 && btn.classList.contains('active')) return;
-      btn.classList.toggle('active');
+      const multiEl = document.getElementById('storeMultiselect');
+      const multi = multiEl && multiEl.checked;
+      if (multi) {
+        // Multiselect mode: toggle, but prevent deactivating the last active store
+        const active = document.querySelectorAll('#storeBtns .store-btn.active');
+        if (active.length === 1 && btn.classList.contains('active')) return;
+        btn.classList.toggle('active');
+      } else {
+        // Exclusive mode (default): select only this store
+        document.querySelectorAll('#storeBtns .store-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      }
       updateFn();
     });
   });
+  const multiEl = document.getElementById('storeMultiselect');
+  if (multiEl) {
+    multiEl.addEventListener('change', () => {
+      saveFilterState();
+    });
+  }
 }
 // Load stores state from URL hash; also handles legacy source= parameter.
 function loadStoreHash(p) {
@@ -228,6 +246,8 @@ function saveFilterState() {
     var ukEl = document.getElementById('unknownToggle');
     if (ukEl && ukEl.classList.contains('active')) state.unknown = '1';
     if (getAvailFilter() !== 'active') state.avail = getAvailFilter();
+    var smEl = document.getElementById('storeMultiselect');
+    if (smEl && smEl.checked) state.storeMulti = '1';
     var json = JSON.stringify(state);
     window.name = SP_WIN_PREFIX + json;
     try { localStorage.setItem(SP_FILTER_KEY, json); } catch(e2) {}
@@ -274,6 +294,10 @@ function loadFilterState() {
     }
     if (state.avail) {
       activateBtn('#availBtns .filter-btn', 'avail', state.avail);
+    }
+    if (state.storeMulti === '1') {
+      var smEl = document.getElementById('storeMultiselect');
+      if (smEl) { smEl.checked = true; }
     }
   } catch(e) {}
 }"""
@@ -1090,6 +1114,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   body.sp-auth-ui:not(.sp-authenticated) .sp-login-btn  { display: inline-block; }
   .sp-logout-btn { display: none; }
   body.sp-auth-ui.sp-authenticated .sp-logout-btn { display: inline-block; }
+  .sp-config-btn { display: none; }
+  body.sp-auth-ui .sp-config-btn { display: inline-block; }
   /* ── Modal overlay for refetch progress ─────────────────────────────────────── */
   .sp-modal { display: none; position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,.6); align-items: center; justify-content: center; }
   .sp-modal.open { display: flex; }
@@ -1141,6 +1167,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     <button id="sp-refetch-btn"  class="sp-ctrl-btn" title="__T_btn_refetch__" aria-label="__T_btn_refetch__">&#11123;</button>
     <a class="sp-auth-btn sp-login-btn" href="/login" title="__T_btn_sidecar_login__" aria-label="__T_btn_sidecar_login__">&#128273;</a>
     <a class="sp-auth-btn sp-logout-btn" href="/api/logout" title="__T_btn_sidecar_logout__" aria-label="__T_btn_sidecar_logout__">&#128275;</a>
+    <a class="sp-auth-btn sp-config-btn" href="/config" title="__T_btn_sidecar_config__" aria-label="__T_btn_sidecar_config__">&#9881;</a>
   </div>
 </header>
 
@@ -1178,10 +1205,12 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       </div>
     </div>
     <div class="filter-group">
-      <div class="filter-group-label">__T_filter_store__</div>
+      <div class="filter-group-label">__T_filter_store__ <label class="store-multi-label" title="__T_tt_store_multi__"><input type="checkbox" id="storeMultiselect"> __T_lbl_store_multi__</label></div>
       <div class="filter-btns" id="storeBtns">
         <button class="store-btn active" data-store="steam">🎮 Steam</button>
         <button class="store-btn active" data-store="epic">⚡ Epic</button>
+        <button class="store-btn active" data-store="gog">🌌 GOG</button>
+        <button class="store-btn active" data-store="gamepass">🎯 Game Pass</button>
       </div>
     </div>
     <div class="filter-group">
@@ -1723,6 +1752,48 @@ def _build_sidecar_js() -> str:
       if (window.confirm(I18N.delete_confirm)) apiPost('/api/delete/' + appid);
     }
   });
+
+  // ── Fetch-progress bandeau ─────────────────────────────────────────────
+  // Polls /api/status every 3 s. Shows a top banner while fetching is in
+  // progress and reloads the page automatically when it completes.
+  (function() {
+    var _bandeau = null;
+    var _wasFetching = false;
+    function _showBandeau(msg) {
+      if (!_bandeau) {
+        _bandeau = document.createElement('div');
+        _bandeau.style.cssText = [
+          'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:9999',
+          'background:#1db9ff', 'color:#000', 'text-align:center',
+          'padding:6px 12px', 'font-size:.8rem', 'font-weight:700',
+          'letter-spacing:.03em', 'box-shadow:0 2px 8px rgba(0,0,0,.4)',
+        ].join(';');
+        document.body.prepend(_bandeau);
+      }
+      _bandeau.textContent = msg;
+      _bandeau.style.display = 'block';
+    }
+    function _hideBandeau() {
+      if (_bandeau) _bandeau.style.display = 'none';
+    }
+    setInterval(function() {
+      fetch('/api/status')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(d) {
+          if (!d) return;
+          if (d.fetching) {
+            _wasFetching = true;
+            var prog = d.total > 0 ? ' (' + d.idx + '/' + d.total + ')' : '';
+            var cur  = d.current ? ': ' + d.current : '';
+            _showBandeau('\U0001f504 Fetching' + prog + cur + '\u2026');
+          } else {
+            if (_wasFetching) { _wasFetching = false; window.location.reload(); }
+            _hideBandeau();
+          }
+        })
+        .catch(function() {});
+    }, 3000);
+  }());
 })();
 </script>"""
 
@@ -1977,18 +2048,29 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
             last_other_ts = _ts
             last_other_date = _n.date.strftime("%d/%m/%y")
     placeholder = html.escape(game.name[:2].upper())
-    store_tag = "epic" if game.source == "epic" else "steam"
-    lib_status_tag = "owned" if game.source in ("owned", "epic") else game.source
+    store_tag = game.source if game.source in ("epic", "gog", "gamepass") else "steam"
+    lib_status_tag = "owned" if game.source in ("owned", "epic", "gog", "gamepass") else game.source
     if game.source == "wishlist":
         pt_display = t("source_wishlist")
     elif game.source == "followed":
         pt_display = t("source_followed")
     elif game.source == "epic":
         pt_display = t("source_epic")
+    elif game.source == "gog":
+        pt_display = t("source_gog")
+    elif game.source == "gamepass":
+        pt_display = t("source_gamepass")
     else:
         pt_display = f"🕹 {pt_fmt}"
     metacritic_score = details.metacritic_score if details else 0
-    store_hint = "🎮 Epic" if game.source == "epic" else "↗ Steam"
+    if game.source == "epic":
+        store_hint = "⚡ Epic"
+    elif game.source == "gog":
+        store_hint = "🌌 GOG"
+    elif game.source == "gamepass":
+        store_hint = "🎯 Game Pass"
+    else:
+        store_hint = "↗ Steam"
     _pt_attr = f' data-tooltip="{_tt_pt}"' if game.source == "owned" else ""
     _is_unknown = appid >= SYNTHETIC_APPID_BASE or status.badge == "unknown"
     _unknown_attr = ' data-unknown="true"' if _is_unknown else ""
@@ -2162,9 +2244,9 @@ def make_alert_card(
         f'<p class="alert-details">{html.escape(alert.details)}</p>' if alert.details else ""
     )
     # Store & collection data attributes for filtering
-    store_tag = "epic" if game and game.source == "epic" else "steam"
+    store_tag = (game.source if game and game.source in ("epic", "gog", "gamepass") else "steam")
     collection_tag = (
-        ("owned" if game.source in ("owned", "epic") else game.source) if game else "owned"
+        ("owned" if game.source in ("owned", "epic", "gog", "gamepass") else game.source) if game else "owned"
     )
     # Game-level data attributes for shared filters
     status_tag = record.status.badge if record else "released"
@@ -2404,10 +2486,12 @@ __SHARED_FILTER_CSS__
       </div>
     </div>
     <div class="filter-group">
-      <div class="filter-group-label">__T_filter_store__</div>
+      <div class="filter-group-label">__T_filter_store__ <label class="store-multi-label" title="__T_tt_store_multi__"><input type="checkbox" id="storeMultiselect"> __T_lbl_store_multi__</label></div>
       <div class="filter-btns" id="storeBtns">
         <button class="store-btn active" data-store="steam">🎮 Steam</button>
         <button class="store-btn active" data-store="epic">⚡ Epic</button>
+        <button class="store-btn active" data-store="gog">🌌 GOG</button>
+        <button class="store-btn active" data-store="gamepass">🎯 Game Pass</button>
       </div>
     </div>
     <div class="filter-group">
@@ -3527,3 +3611,258 @@ def write_diagnostic_html(
         ),
         encoding="utf-8",
     )
+
+
+# ---------------------------------------------------------------------------
+# Config page
+# ---------------------------------------------------------------------------
+
+_CREDENTIAL_FIELD_NAMES: frozenset[str] = frozenset(
+    {
+        "key",
+        "epic_refresh_token",
+        "epic_account_id",
+        "gog_refresh_token",
+        "twitch_client_id",
+        "twitch_client_secret",
+        "serve_token",
+    }
+)
+
+_CONFIG_SECTIONS: list[tuple[str, list[tuple[str, str, str]]]] = [
+    # (section_label, [(field_key, input_type, label_text), ...])
+    (
+        "Steam",
+        [
+            ("key", "password", "Steam API Key"),
+            ("steamid", "text", "SteamID64"),
+        ],
+    ),
+    (
+        "Epic Games",
+        [
+            ("epic_refresh_token", "password", "Refresh Token"),
+            ("epic_account_id", "text", "Account ID"),
+        ],
+    ),
+    (
+        "GOG Galaxy",
+        [
+            ("gog_refresh_token", "password", "Refresh Token"),
+        ],
+    ),
+    (
+        "Xbox Game Pass",
+        [
+            ("gamepass", "checkbox", "Enable Game Pass titles"),
+        ],
+    ),
+    (
+        "Twitch / IGDB",
+        [
+            ("twitch_client_id", "text", "Client ID"),
+            ("twitch_client_secret", "password", "Client Secret"),
+        ],
+    ),
+    (
+        "Settings",
+        [
+            ("db", "text", "Database path"),
+            ("workers", "number", "Worker threads"),
+            ("news_age", "number", "News age (hours)"),
+            ("lang", "text", "Language (en / fr)"),
+            ("serve_token", "password", "Auth token for steam-serve"),
+        ],
+    ),
+]
+
+
+def render_config_page(
+    config: dict[str, Any],
+    lang: str | None = None,
+    is_bootstrap: bool = False,
+) -> str:
+    """Render the web configuration page as a self-contained HTML string.
+
+    This page is served at ``/config`` by the sidecar server.  It displays a
+    form with all configurable fields, posts JSON to ``/api/config`` on save,
+    and handles the restart dance when *serve_token* changes.
+
+    Credential fields (API keys, tokens) are never pre-filled; the current
+    value is shown only as ``****`` when one is already set.
+
+    Args:
+        config: Current flat config dict (from :func:`~steam_tracker.config.load_config`).
+        lang: Language code (currently unused — page is English-only).
+        is_bootstrap: When ``True``, reminds the user they are in bootstrap mode.
+
+    Returns:
+        A self-contained HTML page string.
+    """
+    from . import __version__  # local import avoids circular at module level
+
+    def _field(key: str, input_type: str, label: str) -> str:
+        val = config.get(key)
+        is_credential = key in _CREDENTIAL_FIELD_NAMES
+        if input_type == "checkbox":
+            checked = " checked" if val else ""
+            return (
+                f'<div class="field field-checkbox">'
+                f'<label><input type="checkbox" name="{html.escape(key)}"{checked}>'
+                f"  {html.escape(label)}</label>"
+                f"</div>"
+            )
+        if is_credential:
+            placeholder = "● ● ●  (already set)" if val else "Not configured"
+            return (
+                f'<div class="field">'
+                f'<label class="field-label">{html.escape(label)}</label>'
+                f'<input type="password" name="{html.escape(key)}" '
+                f'placeholder="{html.escape(placeholder)}" autocomplete="new-password">'
+                f"</div>"
+            )
+        display_val = html.escape(str(val)) if val is not None else ""
+        return (
+            f'<div class="field">'
+            f'<label class="field-label">{html.escape(label)}</label>'
+            f'<input type="{html.escape(input_type)}" name="{html.escape(key)}" value="{display_val}">'
+            f"</div>"
+        )
+
+    sections_html = ""
+    for section_label, fields in _CONFIG_SECTIONS:
+        fields_html = "".join(_field(k, t, lbl) for k, t, lbl in fields)
+        sections_html += (
+            f'<section class="cfg-section">'
+            f'<h2 class="cfg-section-title">{html.escape(section_label)}</h2>'
+            f"{fields_html}"
+            f"</section>"
+        )
+
+    bootstrap_banner = (
+        '<div class="banner-bootstrap">'
+        "&#9888; Bootstrap mode: no auth token is set.  "
+        "Set a token in the Settings section below to secure this page."
+        "</div>"
+        if is_bootstrap
+        else ""
+    )
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SteamPulse \u2013 Configuration</title>
+<style>
+:root {{
+  --bg: #13191f; --surface: #111722; --border: #1f2d45;
+  --accent: #1db9ff; --text: #c8d8ef; --muted: #6278a0;
+  --error: #e44; --success: #3d9;
+}}
+*, *::before, *::after {{ box-sizing: border-box; }}
+body {{ margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; }}
+header {{ background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 16px; }}
+header h1 {{ margin: 0; font-size: 1rem; color: var(--accent); }}
+header .version {{ color: var(--muted); font-size: 0.8rem; margin-left: auto; }}
+a.home {{ color: var(--accent); text-decoration: none; font-size: 0.85rem; }}
+main {{ max-width: 680px; margin: 32px auto; padding: 0 16px 64px; }}
+.banner-bootstrap {{ background: #2a1a00; border: 1px solid #b06000; color: #f0a000; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 0.85rem; }}
+.cfg-section {{ background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 20px; }}
+.cfg-section-title {{ margin: 0 0 16px; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }}
+.field {{ margin-bottom: 14px; }}
+.field:last-child {{ margin-bottom: 0; }}
+.field-label {{ display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 4px; }}
+.field-checkbox label {{ font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; gap: 8px; }}
+input[type=text], input[type=password], input[type=number] {{
+  width: 100%; padding: 8px 12px; background: #0a0e14; border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); font-size: 0.9rem; outline: none;
+}}
+input[type=text]:focus, input[type=password]:focus, input[type=number]:focus {{
+  border-color: var(--accent);
+}}
+.actions {{ margin-top: 24px; display: flex; gap: 12px; align-items: center; }}
+button.save-btn {{
+  padding: 10px 28px; background: var(--accent); color: #000; border: none;
+  border-radius: 8px; font-size: 0.9rem; font-weight: 700; cursor: pointer;
+}}
+button.save-btn:hover {{ background: #48caff; }}
+button.save-btn:disabled {{ background: var(--muted); cursor: default; }}
+#status-msg {{ font-size: 0.85rem; }}
+.ok {{ color: var(--success); }}
+.err {{ color: var(--error); }}
+</style>
+</head>
+<body>
+<header>
+  <h1>&#9881; SteamPulse Configuration</h1>
+  <span class="version">v{html.escape(__version__)}</span>
+  <a class="home" href="/">&#8592; Back</a>
+</header>
+<main>
+{bootstrap_banner}
+<form id="cfg-form">
+{sections_html}
+<div class="actions">
+  <button type="submit" class="save-btn">Save configuration</button>
+  <span id="status-msg"></span>
+</div>
+</form>
+</main>
+<script>
+document.getElementById('cfg-form').addEventListener('submit', async function(e) {{
+  e.preventDefault();
+  const btn = this.querySelector('.save-btn');
+  const msg = document.getElementById('status-msg');
+  btn.disabled = true;
+  btn.textContent = 'Saving\u2026';
+  msg.textContent = '';
+  const data = {{}};
+  const fd = new FormData(this);
+  // Collect all checkboxes (unchecked ones are absent from FormData)
+  this.querySelectorAll('input[type=checkbox]').forEach(cb => {{
+    data[cb.name] = cb.checked;
+  }});
+  // Other fields: only include non-empty values
+  for (const [k, v] of fd.entries()) {{
+    if (k && v !== '') data[k] = v;
+  }}
+  try {{
+    const resp = await fetch('/api/config', {{
+      method: 'POST',
+      headers: {{'Content-Type': 'application/json'}},
+      body: JSON.stringify(data),
+    }});
+    const result = await resp.json();
+    if (result.restarting) {{
+      msg.className = 'ok';
+      msg.textContent = 'Config saved. Restarting\u2026';
+      btn.textContent = 'Restarting\u2026';
+      // Poll /api/ping until the server comes back
+      const poll = setInterval(async () => {{
+        try {{
+          const r = await fetch('/api/ping');
+          if (r.ok) {{ clearInterval(poll); window.location.href = '/login'; }}
+        }} catch(_) {{}}
+      }}, 800);
+    }} else if (result.ok) {{
+      msg.className = 'ok';
+      msg.textContent = '\u2714 Configuration saved.';
+      btn.disabled = false;
+      btn.textContent = 'Save configuration';
+    }} else {{
+      msg.className = 'err';
+      msg.textContent = '\u26a0 ' + (result.error || 'Unknown error');
+      btn.disabled = false;
+      btn.textContent = 'Save configuration';
+    }}
+  }} catch (err) {{
+    msg.className = 'err';
+    msg.textContent = '\u26a0 Network error: ' + err.message;
+    btn.disabled = false;
+    btn.textContent = 'Save configuration';
+  }}
+}});
+</script>
+</body>
+</html>"""

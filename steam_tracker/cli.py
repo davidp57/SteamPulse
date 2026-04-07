@@ -33,6 +33,7 @@ _SETTINGS_FLAG_TO_DEST: dict[str, str] = {
     "--workers": "workers",
     "--news-age": "news_age",
     "--lang": "lang",
+    "--game-pass": "gamepass",
 }
 
 

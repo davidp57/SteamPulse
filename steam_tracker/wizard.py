@@ -15,6 +15,7 @@ from typing import Any
 from .alerts import DEFAULT_ALERT_RULES
 from .config import get_config_path, load_config, write_config
 from .epic_api import epic_auth_with_code
+from .gog_api import GOG_AUTH_URL, gog_auth_with_code
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -110,7 +111,7 @@ def run_wizard(config_path: Path | None = None) -> None:
     # ------------------------------------------------------------------
     # Step 1 — Steam credentials
     # ------------------------------------------------------------------
-    print("[1/4] Steam credentials")
+    print("[1/6] Steam credentials")
     print("  Steam API key:")
     print("    1. Go to https://steamcommunity.com/dev/apikey")
     print("    2. Log in and enter any domain (e.g. 'localhost')")
@@ -126,7 +127,7 @@ def run_wizard(config_path: Path | None = None) -> None:
     # ------------------------------------------------------------------
     # Step 2 — Epic Games (optional)
     # ------------------------------------------------------------------
-    print("[2/4] Epic Games integration (optional)")
+    print("[2/6] Epic Games integration (optional)")
     _epic_keys = ("epic_refresh_token", "epic_account_id")
     _has_epic = all(k in existing for k in _epic_keys)
     if _yes_no("  Enable Epic Games support?", default_yes=_has_epic):
@@ -162,9 +163,54 @@ def run_wizard(config_path: Path | None = None) -> None:
     print()
 
     # ------------------------------------------------------------------
-    # Step 3 — Twitch / IGDB (optional)
+    # Step 3 — GOG Galaxy (optional)
     # ------------------------------------------------------------------
-    print("[3/4] Twitch/IGDB credentials (optional, for game metadata enrichment)")
+    print("[3/6] GOG Galaxy integration (optional)")
+    _has_gog = bool(existing.get("gog_refresh_token"))
+    if _yes_no("  Enable GOG Galaxy support?", default_yes=_has_gog):
+        if _has_gog:
+            print("  GOG credentials are already configured.")
+            _gog_reauth = _yes_no("  Re-authenticate to replace them?", default_yes=False)
+        else:
+            _gog_reauth = True
+        if _gog_reauth:
+            print()
+            print("  GOG authentication — how it works:")
+            print("    1. Open the URL below in your browser and log in to your GOG account.")
+            print("    2. You will be redirected to a page with '?code=…' in the URL.")
+            print("    3. Copy the value of the 'code' parameter.")
+            print(f"  URL: {GOG_AUTH_URL}")
+            if _yes_no("  Open URL in browser automatically?", default_yes=False):
+                webbrowser.open(GOG_AUTH_URL)
+            gog_code = _ask("  Paste the code value here")
+            try:
+                gog_token = gog_auth_with_code(gog_code)
+                data["gog_refresh_token"] = gog_token.refresh_token
+                print("  ✔ GOG credentials obtained successfully.")
+            except Exception as exc:  # noqa: BLE001
+                print(f"  ✘ GOG authentication failed: {exc}")
+                print("  Skipping GOG setup.")
+        else:
+            data["gog_refresh_token"] = existing["gog_refresh_token"]
+            print("  ✔ Keeping existing GOG credentials.")
+    print()
+
+    # ------------------------------------------------------------------
+    # Step 4 — Xbox Game Pass (optional)
+    # ------------------------------------------------------------------
+    print("[4/6] Xbox PC Game Pass integration (optional)")
+    _has_gamepass = bool(existing.get("gamepass"))
+    if _yes_no("  Include Xbox PC Game Pass titles?", default_yes=_has_gamepass):
+        data["gamepass"] = True
+        print("  ✔ Game Pass enabled.")
+    else:
+        data["gamepass"] = False
+    print()
+
+    # ------------------------------------------------------------------
+    # Step 5 — Twitch / IGDB (optional)
+    # ------------------------------------------------------------------
+    print("[5/6] Twitch/IGDB credentials (optional, for game metadata enrichment)")
     _has_twitch = "twitch_client_id" in existing
     if _yes_no("  Enable Twitch/IGDB integration?", default_yes=_has_twitch):
         print()
@@ -187,9 +233,9 @@ def run_wizard(config_path: Path | None = None) -> None:
     print()
 
     # ------------------------------------------------------------------
-    # Step 4 — Settings
+    # Step 6 — Settings
     # ------------------------------------------------------------------
-    print("[4/4] Settings (press Enter to keep defaults)")
+    print("[6/6] Settings (press Enter to keep defaults)")
     _def_db = existing.get("db", "steam_library.db")
     db = _ask("  Database path", default=_def_db)
     if db and (db != "steam_library.db" or "db" in existing):

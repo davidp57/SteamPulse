@@ -93,6 +93,17 @@
 - **Version display** — `--version` flag; startup banner prints version at launch
 - 378 tests total
 
+### v2.1.0 — New stores + web configuration
+- **GOG Galaxy source** (`GogSource`) — OAuth2 browser flow via `steam-setup` wizard; refresh token persisted in TOML; games tagged `gog`; enriched via Steam AppID resolver chain
+- **Xbox PC Game Pass source** (`GamePassSource`) — public Microsoft catalog API; no authentication required; `--game-pass` flag; games tagged `gamepass`
+- **Web configuration page (`/config`)** — browser form served by `steam-serve` for editing all credentials and settings; accessible without auth in bootstrap mode; credential fields shown as masked placeholders to prevent accidental exposure
+- **`POST /api/config`** — saves submitted config to TOML; ignores masked `***` values to protect existing secrets
+- **`GET /api/config`** — returns current config as JSON with all credentials masked
+- **Auto-restart on token change** — sidecar cleanly exits when `serve_token` changes from the web UI; supervisord restarts the process; browser polls then redirects to `/login`
+- **Fetch-progress bandeau** — live top banner on the library page showing fetch `idx/total` + game name; reloads page on completion
+- **`GET /api/status`** — public endpoint for live fetch progress state
+- 536 tests total
+
 ---
 
 ### v2.0.0 — Sidecar server & self-hosted mode
@@ -118,9 +129,7 @@
 - `manual=True` entries already protected in DB — just needs a CLI surface
 
 ### Additional store plugins
-- **GOG** — GOG Galaxy API or `gogdl` approach
-- **Xbox Game Pass** — Xbox / Microsoft Store API
-- **Amazon Prime Gaming** — library discovery
+- **Amazon Prime Gaming** — library discovery (no viable public API identified yet)
 - Plugin architecture is already in place; adding a store = new `sources/<store>.py` file
 
 ### Collections

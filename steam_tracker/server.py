@@ -25,10 +25,10 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
-from .config import get_config_path, load_config
+from .config import get_config_path, load_alert_rules, load_config, write_config
 from .db import Database
 from .models import SYNTHETIC_APPID_BASE
-from .renderer import write_alerts_html, write_diagnostic_html, write_html
+from .renderer import render_config_page, write_alerts_html, write_diagnostic_html, write_html
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +39,9 @@ log = logging.getLogger(__name__)
 DEFAULT_PORT: int = 8080
 
 _ROUTE_PING = "/api/ping"
+_ROUTE_STATUS = "/api/status"
+_ROUTE_CONFIG = "/config"
+_ROUTE_API_CONFIG = "/api/config"
 _ROUTE_MARK_REMOVED = re.compile(r"^/api/mark-removed/(\d+)$")
 _ROUTE_MARK_ACTIVE = re.compile(r"^/api/mark-active/(\d+)$")
 _ROUTE_DELETE = re.compile(r"^/api/delete/(\d+)$")
@@ -57,6 +60,9 @@ _ROUTE_REFETCH: str = "/api/refetch"
 
 # Strip ANSI colour codes and carriage-returns from subprocess output.
 _ANSI_ESCAPE: re.Pattern[str] = re.compile(r"\x1b\[[0-9;]*[mGKHF]")
+
+# Pattern matching fetch progress lines: e.g.  "[42/500] Half-Life 3"
+_PROGRESS_RE: re.Pattern[str] = re.compile(r"^\s*\[(\d+)/(\d+)\]\s+(.+)$")
 
 # Minimal self-contained login page.  $FORM_ERROR$ is replaced at runtime.
 _LOGIN_PAGE: str = """\
@@ -204,6 +210,12 @@ def make_handler(
     """
     # One lock per server instance — prevents concurrent fetch runs.
     _fetch_lock = threading.Lock()
+    # Shared mutable fetch progress state updated by the SSE thread.
+    _fetch_running = [False]  # list so inner functions can rebind
+    _fetch_current: list[str] = [""]
+    _fetch_idx = [0]
+    _fetch_total = [0]
+    _state_lock = threading.Lock()
 
     class _Handler(BaseHTTPRequestHandler):
         # ── logging ──────────────────────────────────────────────────────────
@@ -289,6 +301,65 @@ def make_handler(
                 )
                 return
 
+            if path == _ROUTE_STATUS:
+                # Public endpoint — no auth required.
+                with _state_lock:
+                    self._send_json(
+                        200,
+                        {
+                            "fetching": _fetch_running[0],
+                            "current": _fetch_current[0],
+                            "idx": _fetch_idx[0],
+                            "total": _fetch_total[0],
+                        },
+                    )
+                return
+
+            if path == _ROUTE_CONFIG:
+                # Accessible without auth during bootstrap (no token set).
+                _is_bootstrap = token is None
+                if not _is_bootstrap and not self._is_authenticated():
+                    self._send_redirect("/login")
+                    return
+                try:
+                    _cfg_path = config_path or get_config_path()
+                    _current_cfg = load_config(_cfg_path) if _cfg_path.exists() else {}
+                except Exception:
+                    _current_cfg = {}
+                _lang = _current_cfg.get("lang") or lang
+                body = render_config_page(
+                    _current_cfg, lang=str(_lang) if _lang else None, is_bootstrap=_is_bootstrap
+                ).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
+            if path == _ROUTE_API_CONFIG:
+                # Protected unless bootstrap mode (no token configured).
+                _is_bootstrap_cfg = token is None
+                if not _is_bootstrap_cfg and not self._is_authenticated():
+                    self._send_json(401, {"ok": False, "error": "authentication required"})
+                    return
+                try:
+                    _cfg_path = config_path or get_config_path()
+                    _cfg_current = load_config(_cfg_path) if _cfg_path.exists() else {}
+                except Exception:
+                    _cfg_current = {}
+                _masked_keys: frozenset[str] = frozenset({
+                    "key", "epic_refresh_token", "epic_account_id",
+                    "gog_refresh_token", "twitch_client_id", "twitch_client_secret",
+                    "serve_token",
+                })
+                masked = {
+                    k: ("***" if k in _masked_keys and v else v)
+                    for k, v in _cfg_current.items()
+                }
+                self._send_json(200, {"ok": True, "config": masked})
+                return
+
             if path == _ROUTE_LOGIN:
                 self._serve_login_page()
                 return
@@ -349,16 +420,34 @@ def make_handler(
                         )
                         ok = True
                         assert proc.stdout is not None
+                        with _state_lock:
+                            _fetch_running[0] = True
+                            _fetch_current[0] = ""
+                            _fetch_idx[0] = 0
+                            _fetch_total[0] = 0
                         try:
                             for raw_line in proc.stdout:
                                 line = _ANSI_ESCAPE.sub("", raw_line).split("\r")[-1].strip()
                                 if line:
+                                    # Update shared progress state if this is a progress line.
+                                    m = _PROGRESS_RE.match(line)
+                                    if m:
+                                        with _state_lock:
+                                            _fetch_idx[0] = int(m.group(1))
+                                            _fetch_total[0] = int(m.group(2))
+                                            _fetch_current[0] = m.group(3).strip()
                                     _data = json.dumps({"msg": line})
                                     self.wfile.write(f"data: {_data}\n\n".encode())
                                     self.wfile.flush()
                         except (BrokenPipeError, ConnectionResetError):
                             proc.kill()
                             return
+                        finally:
+                            with _state_lock:
+                                _fetch_running[0] = False
+                                _fetch_current[0] = ""
+                                _fetch_idx[0] = 0
+                                _fetch_total[0] = 0
                         proc.wait()
                         ok = proc.returncode == 0
                         if ok:
@@ -376,6 +465,9 @@ def make_handler(
                         self.wfile.flush()
                     except (BrokenPipeError, ConnectionResetError):
                         pass
+                    finally:
+                        with _state_lock:
+                            _fetch_running[0] = False
                 finally:
                     _fetch_lock.release()
                 return
@@ -425,6 +517,45 @@ def make_handler(
             # All mutation endpoints require authentication
             if token and not self._is_authenticated():
                 self._send_json(401, {"ok": False, "error": "authentication required"})
+                return
+
+            if path == _ROUTE_API_CONFIG:
+                # Protected unless bootstrap mode (no token configured).
+                _is_bootstrap_post = token is None
+                if not _is_bootstrap_post and not self._is_authenticated():
+                    self._send_json(401, {"ok": False, "error": "authentication required"})
+                    return
+                length = int(self.headers.get("Content-Length", 0))
+                raw = self.rfile.read(max(0, length)).decode(errors="replace")
+                try:
+                    new_data: dict[str, Any] = json.loads(raw)
+                except (json.JSONDecodeError, ValueError):
+                    self._send_json(400, {"ok": False, "error": "invalid JSON"})
+                    return
+                _cfg_path2 = config_path or get_config_path()
+                _existing = load_config(_cfg_path2) if _cfg_path2.exists() else {}
+                _new_token = new_data.get("serve_token", "")
+                _token_changed = (
+                    bool(_new_token)
+                    and _new_token not in ("", "***")
+                    and _new_token != _existing.get("serve_token", "")
+                )
+                merged: dict[str, Any] = {**_existing}
+                for k, v in new_data.items():
+                    if v is not None and v not in ("", "***"):
+                        merged[k] = v
+                try:
+                    _rules = load_alert_rules(_cfg_path2)[1:]  # strip builtin ALL_NEWS_RULE
+                    write_config(merged, path=_cfg_path2, alert_rules=_rules or None)
+                except Exception as _exc:
+                    log.error("save config failed: %s", _exc)
+                    self._send_json(500, {"ok": False, "error": str(_exc)})
+                    return
+                if _token_changed:
+                    threading.Timer(0.5, os._exit, [0]).start()  # noqa: SLF001
+                    self._send_json(200, {"ok": True, "restarting": True})
+                else:
+                    self._send_json(200, {"ok": True, "restarting": False})
                 return
 
             if path == _ROUTE_RERENDER:
