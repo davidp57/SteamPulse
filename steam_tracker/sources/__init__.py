@@ -111,6 +111,8 @@ def get_all_sources() -> list[GameSource]:
         internal registry.
     """
     from .epic import EpicSource  # local imports avoid circular dependency
+    from .gamepass import GamePassSource
+    from .gog import GogSource
     from .steam import SteamSource
 
-    return [SteamSource(), EpicSource()]
+    return [SteamSource(), EpicSource(), GogSource(), GamePassSource()]

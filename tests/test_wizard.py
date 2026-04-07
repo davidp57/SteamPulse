@@ -24,6 +24,8 @@ def _steam_only(
     key: str = "STEAMKEY",
     steamid: str = "76561198001",
     skip_epic: str = "n",
+    skip_gog: str = "n",
+    enable_gamepass: str = "n",
     skip_twitch: str = "n",
     db: str = "",
     workers: str = "",
@@ -33,7 +35,10 @@ def _steam_only(
     confirm: str = "y",
 ) -> tuple[str, ...]:
     """Return a standard set of inputs for a Steam-only wizard run."""
-    return (key, steamid, skip_epic, skip_twitch, db, workers, news_age, lang, serve_token, confirm)
+    return (
+        key, steamid, skip_epic, skip_gog, enable_gamepass, skip_twitch,
+        db, workers, news_age, lang, serve_token, confirm,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +135,7 @@ def test_wizard_prefills_existing_serve_token(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     write_config({"key": "K", "steamid": "S", "serve_token": "OLD-TOKEN"}, path=config_path)
     # All Enter: keep all existing values
-    inputs = _inputs("", "", "n", "n", "", "", "", "", "", "")
+    inputs = _inputs("", "", "n", "n", "n", "n", "", "", "", "", "", "")
     with patch("builtins.input", inputs):
         run_wizard(config_path=config_path)
     cfg = load_config(config_path)
@@ -157,10 +162,12 @@ def test_wizard_summary_masks_serve_token(
 def test_wizard_saves_twitch_credentials(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     inputs = _inputs(
-        "STEAMKEY", "76561198001",           # Steam
+        "STEAMKEY", "76561198001",            # Steam
         "n",                                  # Skip Epic
+        "n",                                  # Skip GOG
+        "n",                                  # Disable GamePass
         "y", "TCLIENTID", "TCLIENTSECRET",    # Twitch
-        "", "", "", "", "",                   # Default settings
+        "", "", "", "", "",                    # Default settings
         "y",                                  # Confirm
     )
     with patch("builtins.input", inputs):
@@ -191,6 +198,8 @@ def test_wizard_saves_epic_refresh_credentials(tmp_path: Path) -> None:
         "y",                          # Enable Epic
         "n",                          # Don't open browser automatically
         "AUTHCODE123",                # Paste auth code
+        "n",                          # Skip GOG
+        "n",                          # Disable GamePass
         "n",                          # Skip Twitch
         "", "", "", "", "",           # Default settings
         "y",                          # Confirm
@@ -223,7 +232,9 @@ def test_wizard_epic_auth_failure_continues(tmp_path: Path) -> None:
         "y",
         "n",
         "BADCODE",
-        "n",
+        "n",  # Skip GOG
+        "n",  # Disable GamePass
+        "n",  # Skip Twitch
         "", "", "", "", "",
         "y",
     )
@@ -246,7 +257,9 @@ def test_wizard_prints_epic_auth_url(tmp_path: Path, capsys: pytest.CaptureFixtu
         "y",
         "n",         # Don't open browser
         "AUTHCODE",
-        "n",
+        "n",  # Skip GOG
+        "n",  # Disable GamePass
+        "n",  # Skip Twitch
         "", "", "", "", "",
         "y",
     )
@@ -267,7 +280,9 @@ def test_wizard_opens_browser_when_requested(tmp_path: Path) -> None:
         "y",
         "y",         # Open browser automatically
         "AUTHCODE",
-        "n",
+        "n",  # Skip GOG
+        "n",  # Disable GamePass
+        "n",  # Skip Twitch
         "", "", "", "", "",
         "y",
     )
@@ -292,8 +307,8 @@ def test_wizard_prefills_steam_credentials(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     write_config({"key": "OLDKEY", "steamid": "OLDSTEAMID"}, path=config_path)
 
-    # All Enter: keep existing Steam creds, skip Epic, skip Twitch, keep settings
-    inputs = _inputs("", "", "n", "n", "", "", "", "", "", "")
+    # All Enter: keep existing Steam creds, skip Epic/GOG/GamePass/Twitch, keep settings
+    inputs = _inputs("", "", "n", "n", "n", "n", "", "", "", "", "", "")
     with patch("builtins.input", inputs):
         run_wizard(config_path=config_path)
     cfg = load_config(config_path)
@@ -308,7 +323,7 @@ def test_wizard_shows_hint_when_existing_config(
     config_path = tmp_path / "config.toml"
     write_config({"key": "K", "steamid": "S"}, path=config_path)
 
-    inputs = _inputs("", "", "n", "n", "", "", "", "", "", "")
+    inputs = _inputs("", "", "n", "n", "n", "n", "", "", "", "", "", "")
     with patch("builtins.input", inputs):
         run_wizard(config_path=config_path)
     out = capsys.readouterr().out
@@ -328,8 +343,8 @@ def test_wizard_keeps_existing_epic_when_no_reauth(tmp_path: Path) -> None:
         path=config_path,
     )
     # Enter x2 (steam), Enter (epic enabled by default), Enter (no reauth by default),
-    # n (skip twitch), Enter x4 (settings), Enter x2 (serve_token + confirm)
-    inputs = _inputs("", "", "", "", "n", "", "", "", "", "", "")
+    # n (skip GOG), n (disable GamePass), n (skip twitch), Enter x5 (settings), Enter (confirm)
+    inputs = _inputs("", "", "", "", "n", "n", "n", "", "", "", "", "", "")
     with patch("builtins.input", inputs):
         run_wizard(config_path=config_path)
     cfg = load_config(config_path)
@@ -349,9 +364,10 @@ def test_wizard_prefills_twitch_credentials(tmp_path: Path) -> None:
         },
         path=config_path,
     )
-    # Enter x2 (steam), n (skip epic), Enter (twitch enabled by default),
-    # Enter x2 (keep twitch creds), Enter x4 (settings), Enter x2 (serve_token + confirm)
-    inputs = _inputs("", "", "n", "", "", "", "", "", "", "", "", "")
+    # Enter x2 (steam), n (skip epic), n (skip GOG), n (disable GamePass),
+    # Enter (twitch enabled by default), Enter x2 (keep twitch creds),
+    # Enter x5 (settings), Enter (confirm)
+    inputs = _inputs("", "", "n", "n", "n", "", "", "", "", "", "", "", "", "")
     with patch("builtins.input", inputs):
         run_wizard(config_path=config_path)
     cfg = load_config(config_path)
@@ -373,6 +389,8 @@ def test_wizard_summary_masks_key_secret_and_token(
         "y",  # enable Epic
         "n",  # skip opening browser
         "MYAUTHCODE",  # auth code
+        "n",  # skip GOG
+        "n",  # disable GamePass
         "n",  # skip twitch
         "", "", "", "", "",  # settings defaults
         "y",  # confirm
@@ -389,3 +407,131 @@ def test_wizard_summary_masks_key_secret_and_token(
     assert "epic_refresh_token = ***" in captured
     assert "RT_SECRET" not in captured
     assert "MYKEY" not in captured
+
+
+# ---------------------------------------------------------------------------
+# GOG section
+# ---------------------------------------------------------------------------
+
+# After wizard update the full prompt order is:
+# Steam (2), Epic (3: skip/open/code), GOG (2: skip/open/code), GamePass (1),
+# Twitch (3: skip/id/secret), Settings (5: db/workers/news_age/lang/serve_token), Confirm
+
+
+def _with_gog_setup(
+    key: str = "STEAMKEY",
+    steamid: str = "76561198001",
+    gog_auth_code: str = "GOG_CODE",
+    skip_twitch: str = "n",
+    confirm: str = "y",
+) -> tuple[str, ...]:
+    """Return inputs for a wizard run that skips Epic, sets up GOG, skips GamePass and Twitch."""
+    return (
+        key, steamid,  # Steam
+        "n",           # Skip Epic
+        "y",           # Enable GOG
+        "n",           # Don't open browser
+        gog_auth_code, # Paste GOG auth code
+        "n",           # Skip GamePass
+        skip_twitch,   # Skip Twitch
+        "", "", "", "", "",  # Default settings
+        confirm,
+    )
+
+
+def test_wizard_saves_gog_refresh_credentials(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    mock_token = MagicMock(refresh_token="GOG_RT")
+    with (
+        patch("builtins.input", _inputs(*_with_gog_setup())),
+        patch("steam_tracker.wizard.gog_auth_with_code", return_value=mock_token),
+    ):
+        run_wizard(config_path=config_path)
+    cfg = load_config(config_path)
+    assert cfg["gog_refresh_token"] == "GOG_RT"
+
+
+def test_wizard_no_gog_when_skipped(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    inputs = _inputs(
+        "STEAMKEY", "76561198001",  # Steam
+        "n",  # Skip Epic
+        "n",  # Skip GOG
+        "n",  # Skip GamePass
+        "n",  # Skip Twitch
+        "", "", "", "", "",  # Default settings
+        "y",  # Confirm
+    )
+    with patch("builtins.input", inputs):
+        run_wizard(config_path=config_path)
+    cfg = load_config(config_path)
+    assert "gog_refresh_token" not in cfg
+
+
+def test_wizard_gog_auth_failure_continues(tmp_path: Path) -> None:
+    """If GOG auth fails, the wizard skips GOG and continues."""
+    config_path = tmp_path / "config.toml"
+    with (
+        patch("builtins.input", _inputs(*_with_gog_setup(gog_auth_code="BAD_CODE"))),
+        patch(
+            "steam_tracker.wizard.gog_auth_with_code",
+            side_effect=Exception("auth failed"),
+        ),
+    ):
+        run_wizard(config_path=config_path)
+    cfg = load_config(config_path)
+    assert cfg["key"] == "STEAMKEY"
+    assert "gog_refresh_token" not in cfg
+
+
+def test_wizard_prints_gog_auth_url(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """The wizard must print the GOG auth URL for the user to open manually."""
+    config_path = tmp_path / "config.toml"
+    mock_token = MagicMock(refresh_token="GOG_RT")
+    with (
+        patch("builtins.input", _inputs(*_with_gog_setup())),
+        patch("steam_tracker.wizard.gog_auth_with_code", return_value=mock_token),
+    ):
+        run_wizard(config_path=config_path)
+    out = capsys.readouterr().out
+    assert "gog.com" in out.lower() or "auth.gog" in out.lower()
+
+
+# ---------------------------------------------------------------------------
+# GamePass section
+# ---------------------------------------------------------------------------
+
+
+def test_wizard_saves_gamepass_enabled(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    inputs = _inputs(
+        "STEAMKEY", "76561198001",  # Steam
+        "n",  # Skip Epic
+        "n",  # Skip GOG
+        "y",  # Enable GamePass
+        "n",  # Skip Twitch
+        "", "", "", "", "",  # Default settings
+        "y",  # Confirm
+    )
+    with patch("builtins.input", inputs):
+        run_wizard(config_path=config_path)
+    cfg = load_config(config_path)
+    assert cfg.get("gamepass") is True
+
+
+def test_wizard_no_gamepass_when_disabled(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    inputs = _inputs(
+        "STEAMKEY", "76561198001",
+        "n",  # Skip Epic
+        "n",  # Skip GOG
+        "n",  # Disable GamePass
+        "n",  # Skip Twitch
+        "", "", "", "", "",
+        "y",
+    )
+    with patch("builtins.input", inputs):
+        run_wizard(config_path=config_path)
+    cfg = load_config(config_path)
+    # gamepass=False or absent means disabled
+    assert not cfg.get("gamepass", False)

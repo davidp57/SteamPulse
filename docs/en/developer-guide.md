@@ -26,15 +26,20 @@ steam_tracker/
 ├── models.py      # Pydantic v2 domain models
 ├── api.py         # Typed Steam API wrappers (enrichment only: details + news)
 ├── epic_api.py    # Epic Games OAuth2 + library API wrappers
+├── gog_api.py     # GOG Galaxy OAuth2 + library API wrappers
+├── gamepass_api.py# Xbox Game Pass public catalog API
 ├── resolver.py    # Steam AppID resolver chain (IGDB, Steam Store Search)
 ├── db.py          # SQLite persistence layer
 ├── fetcher.py     # Multi-threaded fetcher + rate limiter
-├── renderer.py    # Static HTML generator
+├── renderer.py    # Static HTML generator + sidecar config page
+├── server.py      # Sidecar HTTP server (steam-serve)
 ├── cli.py         # steam-fetch / steam-render / steampulse entry points
 ├── sources/
-│   ├── __init__.py  # GameSource Protocol + get_all_sources() registry
-│   ├── steam.py     # SteamSource: owned library, wishlist, followed games
-│   └── epic.py      # EpicSource: Epic Games Store library
+│   ├── __init__.py    # GameSource Protocol + get_all_sources() registry
+│   ├── steam.py       # SteamSource: owned library, wishlist, followed games
+│   ├── epic.py        # EpicSource: Epic Games Store library
+│   ├── gog.py         # GogSource: GOG Galaxy library
+│   └── gamepass.py    # GamePassSource: Xbox PC Game Pass catalog
 └── i18n/
     ├── __init__.py  # Translator, get_translator(), detect_lang()
     ├── en.py        # English strings
@@ -45,8 +50,11 @@ tests/
 ├── test_db.py
 ├── test_epic.py
 ├── test_fetcher.py
+├── test_gog_api.py
+├── test_gamepass_api.py
 ├── test_renderer.py
 ├── test_resolver.py
+├── test_server.py
 └── test_sources.py
 docs/
 ├── en/            # English documentation
@@ -230,7 +238,7 @@ New columns are added via `_MIGRATIONS` in `db.py` — a list of `(table, column
 
 ### Source priority in upserts
 
-When the same game appears in multiple sources, `upsert_game` uses a SQL `CASE WHEN` expression to enforce the priority: **owned = epic > wishlist > followed**. Playtime and timestamps are only updated for `source = 'owned'` games.
+When the same game appears in multiple sources, `upsert_game` uses a SQL `CASE WHEN` expression to enforce the priority: **owned > epic > gog > gamepass > wishlist > followed**. Playtime and timestamps are only updated for `source = 'owned'` games.
 
 ---
 
@@ -301,16 +309,20 @@ SteamFetcher(
 
 ### `renderer.py`
 
-Public functions: `write_html` (library page) and `write_alerts_html` (alerts page). Both accept a `steam_id` string for the header, an output `Path`, an optional cross-link href, and an optional `lang` code. `write_html` takes a `list[GameRecord]`, while `write_alerts_html` takes a `list[Alert]` and a `dict[int, GameRecord]`.
+Public functions: `write_html` (library page), `write_alerts_html` (alerts page), and `render_config_page` (sidecar config page). `write_html` and `write_alerts_html` accept a `steam_id` string for the header, an output `Path`, an optional cross-link href, and an optional `lang` code. `write_html` takes a `list[GameRecord]`, while `write_alerts_html` takes a `list[Alert]` and a `dict[int, GameRecord]`.
+
+`render_config_page(config, lang, is_bootstrap)` returns a self-contained HTML string with a form for all configurable fields. Credential fields are shown as masked password inputs. The function is used by the sidecar server at `GET /config`.
 
 The HTML is built by string interpolation into `_HTML_TEMPLATE` and `_ALERTS_TEMPLATE` raw strings. No external templating library is used. Visible labels use `__T_key__` placeholders replaced at render time via `_apply_html_t()`; JavaScript strings are injected as a `const I18N = {...}` block via `_build_i18n_js()`.
+
+`_build_sidecar_js()` builds the feature-detection block that probes `/api/ping`, handles action buttons, and polls `/api/status` every 3 seconds to display a fetch-progress bandeau.
 
 ### `sources/__init__.py — GameSource`
 
 | Symbol | Description |
 |---|---|
 | `GameSource` | `runtime_checkable` Protocol — any class with `name`, `add_arguments()`, `is_enabled()`, `discover_games()` satisfies it |
-| `get_all_sources()` | Returns a new list of all registered `GameSource` instances |
+| `get_all_sources()` | Returns a new list of all registered `GameSource` instances: `SteamSource`, `EpicSource`, `GogSource`, `GamePassSource` |
 
 ### `sources/steam.py — SteamSource`
 
@@ -329,6 +341,37 @@ The HTML is built by string interpolation into `_HTML_TEMPLATE` and `_ALERTS_TEM
 - If resolved: sets `appid = steam_appid` for full enrichment
 - If unresolved: generates a deterministic hash-based appid (≥ 2,000,000,000)
 - All games get `source="epic"` and `external_id="epic:<catalogItemId>"`
+
+### `sources/gog.py — GogSource`
+
+`GogSource` implements `GameSource` for GOG Galaxy. It registers `--gog-refresh-token` as a CLI argument.
+
+`is_enabled(args)` returns `True` if `args.gog_refresh_token` is set.
+
+`discover_games(args)` calls `gog_auth_with_refresh()`, saves the renewed token back to the config, fetches the full GOG library via `gog_get_all_products()`, and resolves each game to a Steam AppID. Unresolved games get a synthetic hash-based appid. All games get `source="gog"` and `external_id="gog:<productId>"`.
+
+### `sources/gamepass.py — GamePassSource`
+
+`GamePassSource` implements `GameSource` for Xbox PC Game Pass. It registers `--game-pass` (store_true) as a CLI argument. No authentication is required — the catalog is public.
+
+`is_enabled(args)` returns `True` if `args.gamepass` is truthy.
+
+`discover_games(args)` calls `gamepass_get_catalog_ids()` then `gamepass_get_titles()` and resolves each title to a Steam AppID. Unresolved games get a synthetic hash-based appid. All games get `source="gamepass"` and `external_id="gamepass:<storeId>"`.
+
+### `gog_api.py`
+
+| Function | Description |
+|---|---|
+| `gog_auth_with_code(auth_code)` | Exchange a GOG authorization code for a token (OAuth2, GET request) |
+| `gog_auth_with_refresh(refresh_token)` | Renew the session using a saved refresh token |
+| `gog_get_all_products(access_token, session=None)` | Fetch the full GOG library (paginated `embed.gog.com` API) |
+
+### `gamepass_api.py`
+
+| Function | Description |
+|---|---|
+| `gamepass_get_catalog_ids(session=None)` | Fetch the list of Game Pass store IDs from the Microsoft `catalog.gamepass.com/sigls/v2` endpoint |
+| `gamepass_get_titles(store_ids, session=None)` | Batch-resolve store IDs to human-readable titles via `displaycatalog.mp.microsoft.com` (batches of 20) |
 
 ### `resolver.py`
 

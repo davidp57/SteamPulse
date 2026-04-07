@@ -9,10 +9,23 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **GOG Galaxy source** — new `--gog-refresh-token` flag (or `[gog] refresh_token` in config TOML) fetches your GOG library via the GOG OAuth2 + embed API; games are tagged `gog` and enriched with Steam AppID via the existing resolver chain; the setup wizard (step 3/6) guides the user through the one-time browser auth flow
+- **Xbox PC Game Pass source** — new `--game-pass` flag (or `gamepass = true` in config) fetches all current PC Game Pass titles from the public Microsoft catalog; no authentication required; games are tagged `gamepass`
+- **Web configuration page (`/config`)** — served by the `steam-serve` sidecar at `/config`; lets users view and edit all credentials and settings in a browser form without touching the TOML file directly; accessible without authentication in bootstrap mode (no `serve_token` configured); credential fields are never pre-filled (shown as `● ● ●` placeholder if already set)
+- **`POST /api/config`** — JSON endpoint that saves the submitted config fields to the TOML file; ignores empty-string and `***` values so masked credential placeholders can never accidentally overwrite real secrets
+- **`GET /api/config`** — returns the current config as JSON with all credential fields masked as `***`
+- **Auto-restart on token change** — when `serve_token` is changed via the web UI, the sidecar calls `os._exit(0)` after a 0.5 s delay (relying on supervisord autorestart) and the browser polls `/api/ping` until the server comes back up, then redirects to `/login`
+- **Fetch-progress bandeau** — the library page now shows a fixed top banner while a background fetch is running (polling `/api/status` every 3 s); the banner displays current progress (`idx/total` + game name) and automatically reloads the page when the fetch completes
+- **`GET /api/status`** — public endpoint returning live fetch state (`fetching`, `current`, `idx`, `total`); used by the progress bandeau
+- **GOG & Game Pass store filter buttons** — library and alerts filter panels now include dedicated `🌌 GOG` and `🎯 Game Pass` store buttons alongside the existing Steam and Epic buttons
+- **Store filter multiselect toggle** — a small "multi" checkbox next to the Store filter label switches between exclusive mode (click = select only that store, default) and multi-select mode (click = toggle individual store); state persisted in `localStorage` and URL hash
+- **Config icon in auth dock** — ⚙ icon link to `/config` added to the sidecar auth panel in the library page header; visible whenever `steam-serve` is running, regardless of authentication state
+
 ### Fixed
 
-- **`steam-serve` sidecar missing in Docker** — `supervisord.conf` now starts `steam-serve` on `127.0.0.1:8081`; `nginx.conf` proxies `/api/` and `/login` to the sidecar so mutation buttons and the re-fetch/re-render UI work out of the box in the Docker container
-- **`SERVE_TOKEN` env var support in Docker** — when generating `config.toml` from environment variables, the `SERVE_TOKEN` env var is now written as `serve_token` under `[settings]`
+- **`SYNTHETIC_APPID_BASE` unused in `sources/epic.py`** — removed stale import; `hash_synthetic_appid` is sufficient
 
 ---
 

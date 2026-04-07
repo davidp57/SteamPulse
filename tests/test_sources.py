@@ -1,4 +1,7 @@
-"""Tests for steam_tracker.sources (GameSource protocol + SteamSource + EpicSource plugin)."""
+"""Tests for steam_tracker.sources.
+
+Covers the GameSource protocol, SteamSource, EpicSource, GogSource, and GamePassSource.
+"""
 from __future__ import annotations
 
 import argparse
@@ -10,6 +13,8 @@ import responses as resp_mock
 from steam_tracker.models import SYNTHETIC_APPID_BASE, OwnedGame
 from steam_tracker.sources import GameSource, get_all_sources
 from steam_tracker.sources.epic import EpicSource
+from steam_tracker.sources.gamepass import GamePassSource
+from steam_tracker.sources.gog import GogSource
 from steam_tracker.sources.steam import SteamSource
 
 _STEAM_API = "https://api.steampowered.com"
@@ -516,6 +521,309 @@ def test_epic_discover_games_persists_refreshed_token() -> None:
 
     assert args.epic_refresh_token == "rt_rotated"
     assert args.epic_account_id == "acc_456"
+
+
+# ===========================================================================
+# GogSource
+# ===========================================================================
+
+_GOG_TOKEN_URL = "https://auth.gog.com/token"
+_GOG_PRODUCTS_URL = "https://embed.gog.com/account/getFilteredProducts"
+_STEAM_STORE_SEARCH_URL = "https://store.steampowered.com/api/storesearch/"
+
+
+def _gog_args(**kwargs: str | None) -> argparse.Namespace:
+    base: dict[str, str | None] = {
+        "gog_refresh_token": None,
+        "twitch_client_id": None,
+        "twitch_client_secret": None,
+        "lang": None,
+    }
+    base.update(kwargs)
+    return argparse.Namespace(**base)
+
+
+def _gog_token_resp() -> dict:  # type: ignore[type-arg]
+    return {
+        "access_token": "gog_access_abc",
+        "refresh_token": "gog_refresh_new",
+        "expires_in": 3600,
+        "token_type": "bearer",
+        "user_id": "gog_user_1",
+    }
+
+
+def _gog_products_page(products: list[dict], total_pages: int = 1) -> dict:  # type: ignore[type-arg]
+    return {"products": products, "totalPages": total_pages, "page": 1}
+
+
+# ---------------------------------------------------------------------------
+# GogSource — protocol conformance & registry
+# ---------------------------------------------------------------------------
+
+
+def test_gog_source_name() -> None:
+    assert GogSource().name == "gog"
+
+
+def test_gog_source_is_runtime_checkable() -> None:
+    assert isinstance(GogSource(), GameSource)
+
+
+def test_get_all_sources_contains_gog_source() -> None:
+    sources = get_all_sources()
+    assert any(isinstance(s, GogSource) for s in sources)
+
+
+# ---------------------------------------------------------------------------
+# GogSource — CLI argument registration
+# ---------------------------------------------------------------------------
+
+
+def test_gog_source_registers_refresh_token_argument() -> None:
+    parser = argparse.ArgumentParser()
+    GogSource().add_arguments(parser)
+    dests = {a.dest for a in parser._actions}
+    assert "gog_refresh_token" in dests
+
+
+# ---------------------------------------------------------------------------
+# GogSource — is_enabled
+# ---------------------------------------------------------------------------
+
+
+def test_gog_source_disabled_without_token() -> None:
+    args = _gog_args()
+    assert GogSource().is_enabled(args) is False
+
+
+def test_gog_source_enabled_with_token() -> None:
+    args = _gog_args(gog_refresh_token="some_token")
+    assert GogSource().is_enabled(args) is True
+
+
+def test_gog_source_disabled_with_empty_token() -> None:
+    args = _gog_args(gog_refresh_token="")
+    assert GogSource().is_enabled(args) is False
+
+
+# ---------------------------------------------------------------------------
+# GogSource — discover_games
+# ---------------------------------------------------------------------------
+
+
+@resp_mock.activate
+def test_gog_source_discover_games_returns_gog_source_label() -> None:
+    resp_mock.add(resp_mock.GET, _GOG_TOKEN_URL, json=_gog_token_resp())
+    resp_mock.add(
+        resp_mock.GET,
+        _GOG_PRODUCTS_URL,
+        json=_gog_products_page([{"id": 1001, "title": "The Witcher 3", "image": ""}]),
+    )
+    resp_mock.add(resp_mock.GET, _STEAM_STORE_SEARCH_URL, json={"total": 0, "items": []})
+
+    games = GogSource().discover_games(_gog_args(gog_refresh_token="rt"))
+    assert len(games) == 1
+    assert games[0].source == "gog"
+    assert games[0].external_id == "gog:1001"
+    assert games[0].name == "The Witcher 3"
+
+
+@resp_mock.activate
+def test_gog_source_resolved_appid_used_directly() -> None:
+    resp_mock.add(resp_mock.GET, _GOG_TOKEN_URL, json=_gog_token_resp())
+    resp_mock.add(
+        resp_mock.GET,
+        _GOG_PRODUCTS_URL,
+        json=_gog_products_page([{"id": 1002, "title": "Cyberpunk 2077", "image": ""}]),
+    )
+    resp_mock.add(
+        resp_mock.GET,
+        _STEAM_STORE_SEARCH_URL,
+        json={"total": 1, "items": [{"name": "Cyberpunk 2077", "id": 1091500}]},
+    )
+
+    games = GogSource().discover_games(_gog_args(gog_refresh_token="rt"))
+    assert games[0].appid == 1091500
+
+
+@resp_mock.activate
+def test_gog_source_synthetic_appid_when_unresolved() -> None:
+    resp_mock.add(resp_mock.GET, _GOG_TOKEN_URL, json=_gog_token_resp())
+    resp_mock.add(
+        resp_mock.GET,
+        _GOG_PRODUCTS_URL,
+        json=_gog_products_page(
+            [{"id": 9999, "title": "Some Exclusive GOG Game", "image": ""}]
+        ),
+    )
+    resp_mock.add(resp_mock.GET, _STEAM_STORE_SEARCH_URL, json={"total": 0, "items": []})
+
+    games = GogSource().discover_games(_gog_args(gog_refresh_token="rt"))
+    assert games[0].appid >= SYNTHETIC_APPID_BASE
+    assert games[0].external_id == "gog:9999"
+
+
+@resp_mock.activate
+def test_gog_source_persists_refreshed_token() -> None:
+    """discover_games() must update args.gog_refresh_token with the new token."""
+    resp_mock.add(resp_mock.GET, _GOG_TOKEN_URL, json=_gog_token_resp())
+    resp_mock.add(resp_mock.GET, _GOG_PRODUCTS_URL, json=_gog_products_page([]))
+
+    args = _gog_args(gog_refresh_token="rt_old")
+    GogSource().discover_games(args)
+    assert args.gog_refresh_token == "gog_refresh_new"
+
+
+@resp_mock.activate
+def test_gog_source_auth_failure_raises() -> None:
+    resp_mock.add(resp_mock.GET, _GOG_TOKEN_URL, status=401, json={"error": "invalid"})
+    with pytest.raises(requests.HTTPError):
+        GogSource().discover_games(_gog_args(gog_refresh_token="bad_token"))
+
+
+@resp_mock.activate
+def test_gog_source_empty_library_returns_empty() -> None:
+    resp_mock.add(resp_mock.GET, _GOG_TOKEN_URL, json=_gog_token_resp())
+    resp_mock.add(resp_mock.GET, _GOG_PRODUCTS_URL, json=_gog_products_page([]))
+
+    games = GogSource().discover_games(_gog_args(gog_refresh_token="rt"))
+    assert games == []
+
+
+# ===========================================================================
+# GamePassSource
+# ===========================================================================
+
+_GAMEPASS_CATALOG_URL = "https://catalog.gamepass.com/sigls/v2"
+_MS_CATALOG_URL = "https://displaycatalog.mp.microsoft.com/v7.0/products"
+
+
+def _gamepass_args(**kwargs: object) -> argparse.Namespace:
+    base: dict[str, object] = {
+        "gamepass": False,
+        "twitch_client_id": None,
+        "twitch_client_secret": None,
+        "lang": None,
+    }
+    base.update(kwargs)
+    return argparse.Namespace(**base)
+
+
+# ---------------------------------------------------------------------------
+# GamePassSource — protocol conformance & registry
+# ---------------------------------------------------------------------------
+
+
+def test_gamepass_source_name() -> None:
+    assert GamePassSource().name == "gamepass"
+
+
+def test_gamepass_source_is_runtime_checkable() -> None:
+    assert isinstance(GamePassSource(), GameSource)
+
+
+def test_get_all_sources_contains_gamepass_source() -> None:
+    sources = get_all_sources()
+    assert any(isinstance(s, GamePassSource) for s in sources)
+
+
+# ---------------------------------------------------------------------------
+# GamePassSource — CLI argument registration
+# ---------------------------------------------------------------------------
+
+
+def test_gamepass_source_registers_game_pass_argument() -> None:
+    parser = argparse.ArgumentParser()
+    GamePassSource().add_arguments(parser)
+    dests = {a.dest for a in parser._actions}
+    assert "gamepass" in dests
+
+
+# ---------------------------------------------------------------------------
+# GamePassSource — is_enabled
+# ---------------------------------------------------------------------------
+
+
+def test_gamepass_source_disabled_by_default() -> None:
+    assert GamePassSource().is_enabled(_gamepass_args()) is False
+
+
+def test_gamepass_source_enabled_with_flag() -> None:
+    assert GamePassSource().is_enabled(_gamepass_args(gamepass=True)) is True
+
+
+# ---------------------------------------------------------------------------
+# GamePassSource — discover_games
+# ---------------------------------------------------------------------------
+
+
+@resp_mock.activate
+def test_gamepass_source_discover_games_returns_gamepass_source_label() -> None:
+    resp_mock.add(
+        resp_mock.GET,
+        _GAMEPASS_CATALOG_URL,
+        json=[{"id": "9NBLGGH4NNS1"}, {"id": "9N5TD916686K"}],
+    )
+    resp_mock.add(
+        resp_mock.GET,
+        _MS_CATALOG_URL,
+        json={
+            "Products": [
+                {
+                    "ProductId": "9NBLGGH4NNS1",
+                    "LocalizedProperties": [{"ProductTitle": "Halo Infinite"}],
+                },
+                {
+                    "ProductId": "9N5TD916686K",
+                    "LocalizedProperties": [{"ProductTitle": "Forza Horizon 5"}],
+                },
+            ]
+        },
+    )
+    resp_mock.add(resp_mock.GET, _STEAM_STORE_SEARCH_URL, json={"total": 0, "items": []})
+    resp_mock.add(resp_mock.GET, _STEAM_STORE_SEARCH_URL, json={"total": 0, "items": []})
+
+    games = GamePassSource().discover_games(_gamepass_args(gamepass=True))
+    assert len(games) == 2
+    assert all(g.source == "gamepass" for g in games)
+    external_ids = {g.external_id for g in games}
+    assert "gamepass:9NBLGGH4NNS1" in external_ids
+    assert "gamepass:9N5TD916686K" in external_ids
+
+
+@resp_mock.activate
+def test_gamepass_source_synthetic_appid_when_unresolved() -> None:
+    resp_mock.add(
+        resp_mock.GET,
+        _GAMEPASS_CATALOG_URL,
+        json=[{"id": "9NFAKEID0001"}],
+    )
+    resp_mock.add(
+        resp_mock.GET,
+        _MS_CATALOG_URL,
+        json={
+            "Products": [
+                {
+                    "ProductId": "9NFAKEID0001",
+                    "LocalizedProperties": [{"ProductTitle": "Xbox Exclusive"}],
+                }
+            ]
+        },
+    )
+    resp_mock.add(resp_mock.GET, _STEAM_STORE_SEARCH_URL, json={"total": 0, "items": []})
+
+    games = GamePassSource().discover_games(_gamepass_args(gamepass=True))
+    assert games[0].appid >= SYNTHETIC_APPID_BASE
+    assert games[0].external_id == "gamepass:9NFAKEID0001"
+
+
+@resp_mock.activate
+def test_gamepass_source_empty_catalog_returns_empty() -> None:
+    resp_mock.add(resp_mock.GET, _GAMEPASS_CATALOG_URL, json=[])
+
+    games = GamePassSource().discover_games(_gamepass_args(gamepass=True))
+    assert games == []
 
 
 @resp_mock.activate

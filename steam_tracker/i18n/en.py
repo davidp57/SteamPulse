@@ -19,10 +19,12 @@ STRINGS: dict[str, str] = {
     "js_delete_confirm": "Permanently delete this game from the database?",
     "btn_sidecar_login": "Login",
     "btn_sidecar_logout": "Logout",
+    "btn_sidecar_config": "Configuration",
     "btn_rerender": "Re-render pages",
     "btn_refetch": "Fetch \u0026 re-render",
     "js_refetch_running": "Fetching & rendering\u2026",
     "js_refetch_error": "\u26a0 Fetch failed \u2014 check the log",
+    "js_fetching": "Fetching",
     # ── CLI ──────────────────────────────────────────────────────────────────
     "cli_banner": "🚀 SteamPulse v{version}",
     "cli_fetching_library": "📦 Fetching Steam library...",
@@ -97,6 +99,8 @@ STRINGS: dict[str, str] = {
     "title_theme": "Toggle theme",
     "filter_status": "Status",
     "filter_store": "Store",
+    "lbl_store_multi": "multi",
+    "tt_store_multi": "Multi-select: toggle each store individually (unchecked = exclusive)",
     "filter_collection": "Collection",
     "filter_news_type": "News type",
     "filter_playtime": "Playtime",
@@ -239,6 +243,41 @@ STRINGS: dict[str, str] = {
     "diag_reason_sandbox": "Sandbox label",
     "diag_reason_production_label": "Production label (not a playable game)",
     "diag_reason_duplicate": "Duplicate entry in Epic catalog",
+    # ── CLI – GOG –––––––––––––––––––––––––––––––––––––––––––––––––
+    "cli_gog_auth_error": "   ⚠ GOG authentication failed ({error})",
+    "cli_gog_authenticated": "   ✅ GOG authenticated",
+    "cli_gog_library_count": "   ✅ {count} game(s) in GOG library",
+    "cli_gog_library_error": "   ⚠ GOG library unavailable ({error})",
+    "cli_gog_resolving": "🎮 Resolving GOG games to Steam AppIDs...",
+    "cli_gog_resolved_done": "   ✅ {resolved}/{total} resolved to a Steam AppID ({unresolved} unresolved)",  # noqa: E501
+    "cli_gog_skipped": "   ⏭ {count} item(s) skipped (no title)",
+    # ── CLI – Game Pass –––––––––––––––––––––––––––––––––––––––––––––
+    "cli_gamepass_catalog_error": "   ⚠ Game Pass catalog unavailable ({error})",
+    "cli_gamepass_catalog_count": "   ✅ {count} Game Pass title(s) in catalog",
+    "cli_gamepass_titles_error": "   ⚠ Game Pass title lookup failed ({error})",
+    "cli_gamepass_titles_count": "   ✅ {count} title(s) retrieved from Microsoft catalog",
+    "cli_gamepass_resolving": "🎮 Resolving Game Pass titles to Steam AppIDs...",
+    "cli_gamepass_resolved_done": "   ✅ {resolved}/{total} resolved to a Steam AppID ({unresolved} unresolved)",  # noqa: E501
+    "cli_gamepass_skipped": "   ⏭ {count} item(s) skipped (no title)",
+    # ── Card – GOG / Game Pass source badges ─────────────────────────
+    "source_gog": "🟣 GOG",
+    "source_gamepass": "🟢 Game Pass",
+    # ── Wizard – GOG ─────────────────────────────────────────────────
+    "cli_wizard_gog_intro": "── Step {step}/{total}: GOG Galaxy ─────────────────",
+    "cli_wizard_gog_enable": "Add your GOG library? (y/N): ",
+    "cli_wizard_gog_url": "  Open this URL in your browser to sign in to GOG:",
+    "cli_wizard_gog_browser": "  Open URL in default browser? (y/N): ",
+    "cli_wizard_gog_code_prompt": "  Paste the code= value from the redirect URL: ",
+    "cli_wizard_gog_skip": "   Skipping GOG.",
+    "cli_wizard_gog_auth_ok": "   ✅ GOG authenticated!",
+    "cli_wizard_gog_auth_fail": "   ⚠ GOG authentication failed: {error}. Skipping.",
+    # ── Wizard – Game Pass ───────────────────────────────────────────
+    "cli_wizard_gamepass_intro": "── Step {step}/{total}: Xbox PC Game Pass ──────────",
+    "cli_wizard_gamepass_enable": "Include Xbox PC Game Pass titles? (y/N): ",
+    "cli_wizard_gamepass_enabled": "   ✅ Game Pass enabled.",
+    "cli_wizard_gamepass_skip": "   Skipping Game Pass.",
+    # ── Filter – GOG / Game Pass ──────────────────────────────────────
+    "tt_filter_lib_owned_all": "Games you own (Steam + Epic + GOG + Game Pass)",
     "diag_no_skipped": "No items were skipped during the last fetch.",
     "diag_section_epic": "Epic Discovery Stats",
     "diag_api_items": "API items received",

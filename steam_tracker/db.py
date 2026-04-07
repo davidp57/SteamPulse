@@ -451,10 +451,14 @@ class Database:
                     img_logo_url = CASE WHEN excluded.img_logo_url != ''
                         THEN excluded.img_logo_url ELSE img_logo_url END,
                     source = CASE
-                        WHEN source = 'owned'          THEN 'owned'
-                        WHEN excluded.source = 'owned' THEN 'owned'
-                        WHEN source = 'epic'           THEN 'epic'
-                        WHEN excluded.source = 'epic'  THEN 'epic'
+                        WHEN source = 'owned'             THEN 'owned'
+                        WHEN excluded.source = 'owned'    THEN 'owned'
+                        WHEN source = 'epic'              THEN 'epic'
+                        WHEN excluded.source = 'epic'     THEN 'epic'
+                        WHEN source = 'gog'               THEN 'gog'
+                        WHEN excluded.source = 'gog'      THEN 'gog'
+                        WHEN source = 'gamepass'          THEN 'gamepass'
+                        WHEN excluded.source = 'gamepass' THEN 'gamepass'
                         WHEN source = 'wishlist'          THEN 'wishlist'
                         WHEN excluded.source = 'wishlist' THEN 'wishlist'
                         ELSE excluded.source
