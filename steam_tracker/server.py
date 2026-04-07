@@ -309,74 +309,73 @@ def make_handler(
                     return
                 try:
                     # Pre-flight: check that Steam credentials exist in the config.
-                    # Wrapped in try/finally so the lock is always released on error.
-                    _effective_path = config_path or get_config_path()
-                    _cfg = load_config(_effective_path)
-                    if not _cfg.get("key") or not _cfg.get("steamid"):
+                    try:
+                        _effective_path = config_path or get_config_path()
+                        _cfg = load_config(_effective_path)
+                        if not _cfg.get("key") or not _cfg.get("steamid"):
+                            self.send_response(200)
+                            self.send_header("Content-Type", "text/event-stream")
+                            self.send_header("Cache-Control", "no-cache")
+                            self.end_headers()
+                            _msg = "\u26a0 No Steam credentials. Run 'steam-setup' first."
+                            _err = json.dumps({"msg": _msg})
+                            _done = json.dumps({"done": True, "status": "error"})
+                            self.wfile.write(f"data: {_err}\n\ndata: {_done}\n\n".encode())
+                            return
+                        # Start SSE stream — this thread blocks until fetch completes.
                         self.send_response(200)
                         self.send_header("Content-Type", "text/event-stream")
                         self.send_header("Cache-Control", "no-cache")
+                        self.send_header("Connection", "keep-alive")
+                        self.send_header("X-Accel-Buffering", "no")
                         self.end_headers()
-                        _msg = "\u26a0 No Steam credentials. Run 'steam-setup' first."
-                        _err = json.dumps({"msg": _msg})
-                        _done = json.dumps({"done": True, "status": "error"})
-                        self.wfile.write(f"data: {_err}\n\ndata: {_done}\n\n".encode())
+                    except Exception as _pre_exc:
+                        log.error("refetch pre-flight failed: %s", _pre_exc)
+                        self._send_json(500, {"ok": False, "error": str(_pre_exc)})
                         return
-                    # Start SSE stream — this thread blocks until fetch completes.
-                    self.send_response(200)
-                    self.send_header("Content-Type", "text/event-stream")
-                    self.send_header("Cache-Control", "no-cache")
-                    self.send_header("Connection", "keep-alive")
-                    self.send_header("X-Accel-Buffering", "no")
-                    self.end_headers()
-                except Exception as _pre_exc:
-                    log.error("refetch pre-flight failed: %s", _pre_exc)
-                    _fetch_lock.release()
-                    self._send_json(500, {"ok": False, "error": str(_pre_exc)})
-                    return
-                try:
-                    cmd = _build_fetch_cmd(config_path, db_path)
-                    _env = os.environ.copy()
-                    _env["PYTHONUTF8"] = "1"
-                    proc = subprocess.Popen(
-                        cmd,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        stdin=subprocess.DEVNULL,
-                        text=True,
-                        encoding="utf-8",
-                        bufsize=1,
-                        env=_env,
-                    )
-                    ok = True
-                    assert proc.stdout is not None
                     try:
-                        for raw_line in proc.stdout:
-                            line = _ANSI_ESCAPE.sub("", raw_line).split("\r")[-1].strip()
-                            if line:
-                                _data = json.dumps({"msg": line})
-                                self.wfile.write(f"data: {_data}\n\n".encode())
-                                self.wfile.flush()
-                    except (BrokenPipeError, ConnectionResetError):
-                        proc.kill()
-                        return
-                    proc.wait()
-                    ok = proc.returncode == 0
-                    if ok:
-                        _data = json.dumps({"msg": "\U0001f3a8 Rendering HTML pages..."})
-                        self.wfile.write(f"data: {_data}\n\n".encode())
-                        self.wfile.flush()
+                        cmd = _build_fetch_cmd(config_path, db_path)
+                        _env = os.environ.copy()
+                        _env["PYTHONUTF8"] = "1"
+                        proc = subprocess.Popen(
+                            cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT,
+                            stdin=subprocess.DEVNULL,
+                            text=True,
+                            encoding="utf-8",
+                            bufsize=1,
+                            env=_env,
+                        )
+                        ok = True
+                        assert proc.stdout is not None
                         try:
-                            _rerender(Database(db_path), steamid, output_dir, lang)
-                        except Exception as _exc:
-                            ok = False
-                            log.error("re-render after fetch failed: %s", _exc)
-                    _status = "ok" if ok else "error"
-                    _done = json.dumps({"done": True, "status": _status})
-                    self.wfile.write(f"data: {_done}\n\n".encode())
-                    self.wfile.flush()
-                except (BrokenPipeError, ConnectionResetError):
-                    pass
+                            for raw_line in proc.stdout:
+                                line = _ANSI_ESCAPE.sub("", raw_line).split("\r")[-1].strip()
+                                if line:
+                                    _data = json.dumps({"msg": line})
+                                    self.wfile.write(f"data: {_data}\n\n".encode())
+                                    self.wfile.flush()
+                        except (BrokenPipeError, ConnectionResetError):
+                            proc.kill()
+                            return
+                        proc.wait()
+                        ok = proc.returncode == 0
+                        if ok:
+                            _data = json.dumps({"msg": "\U0001f3a8 Rendering HTML pages..."})
+                            self.wfile.write(f"data: {_data}\n\n".encode())
+                            self.wfile.flush()
+                            try:
+                                _rerender(Database(db_path), steamid, output_dir, lang)
+                            except Exception as _exc:
+                                ok = False
+                                log.error("re-render after fetch failed: %s", _exc)
+                        _status = "ok" if ok else "error"
+                        _done = json.dumps({"done": True, "status": _status})
+                        self.wfile.write(f"data: {_done}\n\n".encode())
+                        self.wfile.flush()
+                    except (BrokenPipeError, ConnectionResetError):
+                        pass
                 finally:
                     _fetch_lock.release()
                 return

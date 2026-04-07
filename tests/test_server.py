@@ -562,6 +562,26 @@ class TestRefetch:
         finally:
             httpd.shutdown()
 
+    def test_refetch_lock_released_after_no_credentials(self, tmp_path: Path) -> None:
+        """Lock must be released after the early-return SSE error path (no credentials).
+
+        A second sequential /api/refetch call must NOT return 409 (lock stuck),
+        it must get another SSE error event just like the first call.
+        """
+        cfg_path = tmp_path / "config.toml"
+        cfg_path.write_text("[steam]\nkey = \"\"\nsteamid = \"\"\n", encoding="utf-8")
+        port, httpd = _start_server(tmp_path, config_path=cfg_path)
+        try:
+            for _ in range(2):
+                conn = HTTPConnection("127.0.0.1", port)
+                conn.request("GET", "/api/refetch")
+                resp = conn.getresponse()
+                assert resp.status == 200, "expected SSE 200, got 409 (lock leaked)"
+                raw = resp.read().decode()
+                assert "error" in raw
+        finally:
+            httpd.shutdown()
+
     def test_refetch_concurrent_returns_409(self, tmp_path: Path) -> None:
         """A second concurrent refetch request must be rejected with 409."""
         from unittest.mock import patch  # noqa: PLC0415

@@ -461,7 +461,9 @@ class Database:
                     END,
                     external_id = CASE WHEN excluded.external_id != ''
                         THEN excluded.external_id ELSE external_id END,
-                    last_seen_at = excluded.last_seen_at
+                    last_seen_at = excluded.last_seen_at,
+                    time_added = CASE WHEN time_added = 0
+                        THEN excluded.time_added ELSE time_added END
                 """,
                 (
                     game.appid,
