@@ -24,6 +24,7 @@ STRINGS: dict[str, str] = {
     "btn_refetch": "Actualiser les donn\u00e9es",
     "js_refetch_running": "Actualisation en cours\u2026",
     "js_refetch_error": "\u26a0 \u00c9chec \u2014 voir le log",
+    "js_fetching": "R\u00e9cup\u00e9ration",
     # ── CLI ──────────────────────────────────────────────────────────────────
     "cli_banner": "🚀 SteamPulse v{version}",
     "cli_fetching_library": "📦 Récupération de la bibliothèque Steam...",

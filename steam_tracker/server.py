@@ -46,6 +46,10 @@ _ROUTE_MARK_REMOVED = re.compile(r"^/api/mark-removed/(\d+)$")
 _ROUTE_MARK_ACTIVE = re.compile(r"^/api/mark-active/(\d+)$")
 _ROUTE_DELETE = re.compile(r"^/api/delete/(\d+)$")
 
+# Config fields that must be stored as specific Python types.
+_INT_CONFIG_KEYS: frozenset[str] = frozenset({"workers", "news_age"})
+_BOOL_CONFIG_KEYS: frozenset[str] = frozenset({"gamepass"})
+
 # Only allow plain filenames — no path traversal, no directories.
 _SAFE_FILENAME = re.compile(r"^[\w\-. ]+\.html$")
 
@@ -543,7 +547,18 @@ def make_handler(
                 merged: dict[str, Any] = {**_existing}
                 for k, v in new_data.items():
                     if v is not None and v not in ("", "***"):
-                        merged[k] = v
+                        if k in _INT_CONFIG_KEYS:
+                            try:
+                                merged[k] = int(v)
+                            except (TypeError, ValueError):
+                                self._send_json(
+                                    400, {"ok": False, "error": f"{k} must be an integer"}
+                                )
+                                return
+                        elif k in _BOOL_CONFIG_KEYS:
+                            merged[k] = bool(v)
+                        else:
+                            merged[k] = v
                 try:
                     _rules = load_alert_rules(_cfg_path2)[1:]  # strip builtin ALL_NEWS_RULE
                     write_config(merged, path=_cfg_path2, alert_rules=_rules or None)

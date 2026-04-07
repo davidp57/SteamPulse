@@ -24,6 +24,7 @@ STRINGS: dict[str, str] = {
     "btn_refetch": "Fetch \u0026 re-render",
     "js_refetch_running": "Fetching & rendering\u2026",
     "js_refetch_error": "\u26a0 Fetch failed \u2014 check the log",
+    "js_fetching": "Fetching",
     # ── CLI ──────────────────────────────────────────────────────────────────
     "cli_banner": "🚀 SteamPulse v{version}",
     "cli_fetching_library": "📦 Fetching Steam library...",

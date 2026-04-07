@@ -1627,6 +1627,7 @@ def _build_i18n_js(t: Translator) -> str:
         "delete_confirm": t("js_delete_confirm"),
         "refetch_running": t("js_refetch_running"),
         "refetch_error": t("js_refetch_error"),
+        "fetching": t("js_fetching"),
     }
     entries = ", ".join(f"{k}: {json.dumps(v)}" for k, v in data.items())
     return f"const I18N = {{{entries}}};"
@@ -1785,7 +1786,7 @@ def _build_sidecar_js() -> str:
             _wasFetching = true;
             var prog = d.total > 0 ? ' (' + d.idx + '/' + d.total + ')' : '';
             var cur  = d.current ? ': ' + d.current : '';
-            _showBandeau('\U0001f504 Fetching' + prog + cur + '\u2026');
+            _showBandeau('\U0001f504 ' + I18N.fetching + prog + cur + '\u2026');
           } else {
             if (_wasFetching) { _wasFetching = false; window.location.reload(); }
             _hideBandeau();
@@ -3688,8 +3689,8 @@ def render_config_page(
     form with all configurable fields, posts JSON to ``/api/config`` on save,
     and handles the restart dance when *serve_token* changes.
 
-    Credential fields (API keys, tokens) are never pre-filled; the current
-    value is shown only as ``****`` when one is already set.
+    Credential fields (API keys, tokens) are never pre-filled; when one is
+    already set, the UI shows ``\u25cf \u25cf \u25cf  (already set)`` instead of the value.
 
     Args:
         config: Current flat config dict (from :func:`~steam_tracker.config.load_config`).
@@ -3819,13 +3820,24 @@ document.getElementById('cfg-form').addEventListener('submit', async function(e)
   msg.textContent = '';
   const data = {{}};
   const fd = new FormData(this);
+  const checkboxFieldNames = new Set(
+    Array.from(this.querySelectorAll('input[type=checkbox][name]'), cb => cb.name)
+  );
+  const numberFieldNames = new Set(
+    Array.from(this.querySelectorAll('input[type=number][name]'), inp => inp.name)
+  );
   // Collect all checkboxes (unchecked ones are absent from FormData)
   this.querySelectorAll('input[type=checkbox]').forEach(cb => {{
     data[cb.name] = cb.checked;
   }});
-  // Other fields: only include non-empty values
+  // Other fields: only include non-empty values, coerce numbers
   for (const [k, v] of fd.entries()) {{
-    if (k && v !== '') data[k] = v;
+    if (!k || v === '' || checkboxFieldNames.has(k)) continue;
+    if (numberFieldNames.has(k)) {{
+      const n = Number(v);
+      if (Number.isFinite(n)) {{ data[k] = n; continue; }}
+    }}
+    data[k] = v;
   }}
   try {{
     const resp = await fetch('/api/config', {{
