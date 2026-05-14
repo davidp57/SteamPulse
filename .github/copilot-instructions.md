@@ -24,6 +24,39 @@ Core features: smart cache (re-fetch only new games), multilingual UI (EN/FR), s
 | Type checking  | `mypy` >= 1.10 (strict mode)                            |
 | Frontend       | Vanilla HTML/CSS/JS embedded as Python string templates |
 
+## Git Flow
+
+This project follows **Git Flow**:
+- `main` — tagged production releases only
+- `develop` — integration branch, always deployable
+- `feature/*` — new features branched from `develop`
+- `fix/*` — bug fixes branched from `develop`
+- `hotfix/*` — urgent fixes branched from `main`
+- `release/*` — release preparation branched from `develop`
+
+**Rules:**
+- Never commit directly to `main` or `develop`.
+- All work happens on `feature/*` or `fix/*` branches, opened as PRs into `develop`.
+- When preparing a release (version bump, CHANGELOG freeze, release notes), always work on a dedicated `release/x.y.z` branch. If the current branch is not `release/*`, create it first.
+
+**Multi-machine workflow:** always run `git pull --rebase` before starting work on a branch to avoid non-fast-forward push conflicts.
+
+## Conventional Commits
+
+All commit messages follow the **Conventional Commits** format (`type(scope): description` in English):
+
+```
+feat(cli): add --refresh flag to force re-fetch all games
+fix(db): correct migration guard for appid_mappings table
+docs(user-guide): document GOG OAuth2 setup steps
+test(resolver): add unit tests for edition-suffix stripping
+refactor(fetcher): extract rate-limiter to separate module
+chore(deps): upgrade requests to 2.32
+ci(workflows): add Python 3.13 to test matrix
+```
+
+Types: `feat` · `fix` · `docs` · `test` · `refactor` · `chore` · `ci`
+
 ## Development Principles
 
 ### TDD — Test-Driven Development
@@ -136,52 +169,100 @@ steampulse/
 │   ├── en/
 │   │   ├── user-guide.md
 │   │   └── developer-guide.md
-│   └── fr/
-│       ├── user-guide.md
-│       └── developer-guide.md
+│   ├── fr/
+│   │   ├── user-guide.md
+│   │   └── developer-guide.md
+│   └── releases/
+│       └── vX.Y.Z.md             # Per-release notes (EN)
 ├── README.md                     # Bilingual EN + FR
-└── CHANGELOG.md                  # Keep a Changelog format, semver
+├── CHANGELOG.md                  # Keep a Changelog format, semver
+└── BACKLOG.md                    # Project backlog — single source of truth
 ```
 
-### PR preparation workflow
+### Commit, push and PR workflow
 
-When the user asks to prepare a PR, follow these steps in order:
+When the user asks to commit, push and/or open a PR, follow these steps **in order**:
 
-1. **Tests** — verify existing tests still pass; add or complete tests for all new/changed behavior.
-2. **Documentation** — verify and update all relevant docs (user guides EN + FR, README, docstrings).
-3. **Roadmap** — update `ROADMAP.md`: move completed features from "Planned" to a new "Done" section with the version label; keep the "Planned" and "Ideas" sections accurate.
-4. **Quality checks** — run `ruff check`, `mypy`, and `pytest`; fix all issues before proceeding.
-5. **Changelog** — edit `CHANGELOG.md`: move/add entries under `## [Unreleased]`. **Never create a new version section or bump the version number** — that is the user's decision.
-6. **Temporary PR description** — create a temporary markdown file in English (e.g. `.github/pull_request_description.md`) to help the user fill in the PR on GitHub. This file must **not** be committed.
-7. **Commit** — commit all the above changes (tests, docs, changelog, roadmap) in one clean commit. Do **not** commit the PR description file.
-
-### Commit workflow
-
-When the user asks to commit, follow these steps **in order** before creating the commit:
-
-1. **Tests** — verify existing tests still pass; add or update tests for all new/changed behavior.
-2. **Quality checks** — run `ruff check`, `mypy`, and `pytest`; fix all issues before proceeding.
-3. **Documentation** — verify and update all relevant docs:
-   - `CHANGELOG.md` — add/update entries under `## [Unreleased]`. **Never create a new version section or bump the version number.**
-   - `ROADMAP.md` — move completed features from "Planned" to "Done" if applicable; keep "Planned" and "Ideas" accurate.
-   - `README.md` — update any affected info (test count, feature list, etc.).
-   - `docs/en/` and `docs/fr/` user guides — update if the change affects user-facing behavior.
-   - Docstrings — update if public API signatures or behavior changed.
-4. **Commit** — stage all modified files (code + tests + docs) and commit in one clean commit with a descriptive message.
+1. **Run the full quality gate** — all checks must be green (see **Quality gate** section below)
+2. **Verify zero errors in VS Code**
+3. **Apply the per-change checklist** — CHANGELOG, BACKLOG.md, patch bump (see **Per-change checklist** section below)
+4. **Commit** using Conventional Commits format
+5. **Push** the branch
+6. **Open a PR on GitHub** targeting the correct base branch (follow Git Flow):
+   - `feature/*` / `fix/*` → PR into `develop`
+   - `release/*` → PR into `main`
+   - Provide the PR title and description as copyable markdown blocks in the chat
+   - Request a **Copilot review** on the PR
+   - When preparing the PR description: create a temporary file `.github/pull_request_description.md` for the user's convenience; this file must **not** be committed (it is listed in `.gitignore`)
+7. **Monitor reviews** — check for review comments every ~2 minutes until the review is complete:
+   - Address every comment: fix the code, re-run the quality gate
+   - Resolve the review thread once the fix is applied
+   - Push the updated commits
+   - Repeat until all threads are resolved and the PR is approved
 
 ### Release workflow
 
-When the user asks to do a release, follow these steps in order:
+When the user asks to do a release, follow these steps **in order**:
 
-1. **Ask for the version number** — never choose it yourself. Wait for the user to confirm (e.g. `v1.4.0`).
-2. **Bump version** — update `version` in `pyproject.toml` to the new value.
-3. **Finalize CHANGELOG** — move everything under `## [Unreleased]` into a new section `## [X.Y.Z] — YYYY-MM-DD` (today's date). Keep the empty `## [Unreleased]` header for future entries.
-4. **Update ROADMAP** — ensure the new version appears in the "Done" section with an accurate feature summary; verify "Planned" and "Ideas" sections are still correct.
-5. **Update README** — update any version-specific info (test count, badge, etc.) if needed.
-6. **Quality checks** — run `ruff check`, `mypy`, and `pytest`; fix all issues before proceeding.
-7. **Commit** — one clean commit: `release: vX.Y.Z`.
-8. **Tag** — create an annotated git tag `vX.Y.Z`.
-9. **Push** — ask the user before pushing the commit and tag to GitHub (this triggers CI: PyInstaller EXE build, GitHub Release, Docker image publish to GHCR).
+1. **Ensure branch is `release/x.y.z`** — if the current branch is not `release/*`, create or switch to it before continuing.
+2. **Ask for the version number** — never choose it yourself. Wait for the user to confirm (e.g. `v2.2.0`).
+3. **Bump version** — update `version` in `pyproject.toml` to the new value.
+4. **Finalize CHANGELOG** — move everything under `## [Unreleased]` into a new section `## [X.Y.Z] — YYYY-MM-DD` (today's date). Keep the empty `## [Unreleased]` header for future entries.
+5. **Update BACKLOG.md** — ensure completed lots are marked with today's completion date.
+6. **Update ROADMAP.md** — ensure the new version appears with an accurate feature summary; verify Planned and Ideas sections are still correct.
+7. **Update README** — update test count and any version-specific info.
+8. **Create release notes** — `docs/releases/vX.Y.Z.md` (English only) with a short summary, new features, and fixes.
+9. **Quality gate** — run the full gate; fix all issues before proceeding.
+10. **Commit** — `chore(release): bump version to X.Y.Z`
+11. **Tag** — create an annotated git tag `vX.Y.Z`.
+12. **Ask before pushing** — wait for user confirmation before pushing the commit and tag to GitHub (triggers CI: PyInstaller EXE build, GitHub Release, Docker image publish to GHCR).
+
+### Release collection checklist
+
+Before finalising release documentation, verify all points below:
+
+1. `git log <last_tag>..HEAD --oneline` reviewed, grouped by ticket type (BIZ/TEC/CHR).
+2. Every major feature appears in `CHANGELOG.md` under the correct section.
+3. `docs/en/` and `docs/fr/` user guides updated for new or changed user-facing workflows.
+4. `BACKLOG.md` lot statuses aligned with delivered tickets.
+5. `ROADMAP.md` version entry accurate (functional lots detailed, technical lots one-liner).
+6. `docs/releases/vX.Y.Z.md` exists and matches CHANGELOG scope.
+7. `README.md` updated (test count, feature list if applicable).
+8. Final consistency pass: no significant feature present in code/commits but absent from release docs.
+
+### Quality gate
+
+Run the following checks **before every push**. All must be green. Never bypass with `--no-verify`.
+
+```bash
+ruff check steam_tracker/ tests/
+ruff format --check steam_tracker/ tests/   # fix with: ruff format steam_tracker/ tests/
+mypy steam_tracker/
+pytest --tb=short -q
+```
+
+### Per-change checklist
+
+After every change (feature, fix, refactor):
+
+1. Add or update tests (TDD: write the test first)
+2. Run the full quality gate — all green
+3. Verify zero errors in VS Code
+4. Update `CHANGELOG.md` under `## [Unreleased]`. **Never create a new version section or bump the version number.**
+5. Update `BACKLOG.md` — advance or close the relevant ticket
+6. **Bump the patch version** in `pyproject.toml` (e.g. `2.1.0` → `2.1.1`) — every merge on `develop` increments the patch
+
+### Backlog management
+
+`BACKLOG.md` (repo root) is the single source of truth for all tracked work items.
+
+- **Ticket types**: `BIZ-NNN` (user-visible feature), `TEC-NNN` (technical/refactor), `CHR-NNN` (chore/maintenance)
+- **Priorities**: P1 (critical / blocks users), P2 (important), P3 (nice to have)
+- **Lots**: group related tickets into named lots with a target version; each lot maps to a `feature/*` branch and a PR
+- **Hors lots**: items not yet assigned to a lot live in the "Hors lots" table
+- When a ticket is completed, move it to the "Lots terminés" section with a completion date
+- Update `BACKLOG.md` immediately when identifying, starting, or completing any ticket
+- **Estimation formula**: estimate raw implementation time × 1.15 (15 % margin), rounded to nearest 5 min; per-lot total = sum of ticket estimates + 15 min project management
 
 ### Commands
 

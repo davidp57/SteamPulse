@@ -1,5 +1,26 @@
 # SteamPulse — Roadmap
 
+> See [BACKLOG.md](BACKLOG.md) for all planned and in-progress work items.
+
+## Version overview
+
+| Version | Scope | Status |
+| --- | --- | --- |
+| **1.0** | Core CLI, standalone EXE, CI/CD | ✅ Released |
+| **1.1** | UI & i18n (two-layer toolbar, EN/FR, URL hash) | ✅ Released |
+| **1.2** | Multi-store plugin architecture + Epic Games source | ✅ Released |
+| **1.3** | TOML config file, setup wizard, UI polish (tooltips, overlays) | ✅ Released |
+| **1.4** | SteamCMD API, alerts engine, field history, 6 default rules | ✅ Released |
+| **1.5** | Alerts UX redesign, Epic title fix, automatic DB cleanup | ✅ Released |
+| **1.6** | Diagnostic page, Epic data quality, resolver improvements | ✅ Released |
+| **2.0** | Sidecar HTTP server, cookie auth, SSE refetch, soft-delete | ✅ Released |
+| **2.1** | GOG + Game Pass sources, web config UI, store multiselect | ✅ Released 2026-04-07 |
+| **2.2** | Manual AppID mappings CLI + Collections | 🔵 Planned |
+
+Test suite: **538 tests — 0 failures.**
+
+---
+
 ## ✅ Done
 
 ### v1.0.0 — Core
@@ -123,26 +144,15 @@
 
 ---
 
-## 🔵 Planned / Not yet started
-- Interface to add/edit manual `appid_mappings` entries (e.g. `steam-fetch --add-mapping epic:Flier 1234567`)
-- Useful for games that fail automatic resolution (e.g. Epic exclusives with no Steam page)
-- `manual=True` entries already protected in DB — just needs a CLI surface
+## 🔵 Planned
 
-### Additional store plugins
-- **Amazon Prime Gaming** — library discovery (no viable public API identified yet)
-- Plugin architecture is already in place; adding a store = new `sources/<store>.py` file
+See [BACKLOG.md](BACKLOG.md) for details, estimates, and lot assignments.
 
-### Collections
-- User-defined groups to organize games across stores and statuses (e.g. "À finir", "Co-op avec amis", "Abandonné")
-- Collections stored in the DB (`collections` and `collection_games` tables — additive migration)
-- CLI surface to manage collections: `steam-fetch --add-to <collection> <appid|name>`, `--remove-from`, `--list-collections`
-- HTML dashboard: collection filter group alongside Store / Collection status filters; a game can belong to multiple collections (multi-select, OR logic)
-- Collections exported as part of the generated HTML (no server required)
-
----
-
-## 💡 Ideas (not committed)
-
-- Game price history tracking (store prices as time series)
-- Export to CSV / JSON
-- **Per-game news timeline** — dedicated view (or expandable panel on the card) showing the full update history for a single game: chronological list of patch notes and news entries, each with its date, title, type tag (patch note / news), and a direct link to the article; useful to quickly assess how actively a game is maintained
+| ID | Feature | Priority |
+| --- | --- | --- |
+| BIZ-001 | CLI interface for manual AppID mappings (`--add-mapping`) | P2 |
+| BIZ-002 | Amazon Prime Gaming source plugin | P3 |
+| BIZ-003 | User-defined game collections (filter group, CLI management) | P2 |
+| BIZ-004 | Game price history tracking (time-series storage + chart) | P3 |
+| BIZ-005 | Export to CSV / JSON | P3 |
+| BIZ-006 | Per-game news timeline (chronological update history panel) | P3 |
