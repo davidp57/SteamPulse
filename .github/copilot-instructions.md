@@ -250,7 +250,6 @@ After every change (feature, fix, refactor):
 3. Verify zero errors in VS Code
 4. Update `CHANGELOG.md` under `## [Unreleased]`. **Never create a new version section or bump the version number.**
 5. Update `BACKLOG.md` — advance or close the relevant ticket
-6. **Bump the patch version** in `pyproject.toml` (e.g. `2.1.0` → `2.1.1`) — every merge on `develop` increments the patch
 
 ### Backlog management
 

@@ -28,10 +28,6 @@ STRINGS: dict[str, str] = {
     # ── HTML – Playnite integration ───────────────────────────────────────
     "btn_open_playnite": "Open in Playnite",
     "tt_playnite": "Show in Playnite",
-    "lbl_playnite_import": "Import Playnite Library",
-    "lbl_playnite_hint": "Default location: %APPDATA%\\\\Playnite\\\\library\\\\",
-    "lbl_playnite_imported": "{n} game(s) imported",
-    "lbl_playnite_skipped": "{n} game(s) skipped (non-Steam)",
     # ── CLI ──────────────────────────────────────────────────────────────────
     "cli_banner": "🚀 SteamPulse v{version}",
     "cli_fetching_library": "📦 Fetching Steam library...",

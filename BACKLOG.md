@@ -63,15 +63,16 @@ Commande `steam-render --export-csv` ou `--export-json` pour exporter la bibliot
 Vue dédiée (ou panneau expansible sur la carte) affichant l'historique complet des mises à jour d'un jeu : liste chronologique des patch notes et news, chaque entrée avec date, titre, tag de type (patch note / news), et lien direct vers l'article. Utile pour évaluer rapidement l'activité de maintenance d'un jeu.
 
 ### BIZ-007 — Intégration Playnite : bouton "Ouvrir dans Playnite"
+*(EN) Add an optional button on each game card to open the game directly in Playnite via its URI protocol. The button uses `playnite://playnite/search/<encoded name>` for all games and all stores (Steam, Epic, GOG, Xbox…).*
 
 Ajouter sur chaque carte de la bibliothèque un bouton optionnel pour ouvrir le jeu directement dans Playnite via son protocole URI. Le bouton utilise systématiquement `playnite://playnite/search/<nom encodé>` pour tous les jeux et toutes les stores (Steam, Epic, GOG, Xbox…).
 
-**Activation :**
+**Activation / Activation:**
 - Config TOML : `[playnite] enabled = true`.
-- CLI : `--playnite` flag.
-- Sans activation, aucun bouton n'est rendu.
+- CLI : `--playnite` flag (available on `steam-render` and `steampulse`).
+- Sans activation, aucun bouton n'est rendu / Without activation, no button is rendered.
 
-**URI utilisée :** `playnite://playnite/search/<nom encodé>` — ouvre Playnite et lance une recherche. Universel, fonctionne sans configuration côté serveur.
+**URI utilisée / URI used:** `playnite://playnite/search/<nom encodé>` — ouvre Playnite et lance une recherche. Universel, fonctionne sans configuration côté serveur.
 
 **Note :** Le mode enrichi (import CSV → UUID → `showgame` URI) a été abandonné car l'approche était fragile (dépendance au chemin exact de la DB, jointure complexe pour Epic). La recherche par nom couvre 100 % des jeux sans import.
 

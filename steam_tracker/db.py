@@ -116,13 +116,6 @@ CREATE TABLE IF NOT EXISTS alerts (
 CREATE INDEX IF NOT EXISTS idx_alerts_rule ON alerts(rule_name);
 CREATE INDEX IF NOT EXISTS idx_alerts_appid ON alerts(appid);
 CREATE INDEX IF NOT EXISTS idx_alerts_ts    ON alerts(timestamp);
-
-CREATE TABLE IF NOT EXISTS playnite_mappings (
-    game_key      TEXT    PRIMARY KEY,
-    playnite_uuid TEXT    NOT NULL,
-    name          TEXT    NOT NULL DEFAULT '',
-    updated_at    INTEGER NOT NULL
-);
 """
 
 # Columns added after initial release — added via ALTER TABLE for existing DBs.

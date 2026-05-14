@@ -2127,7 +2127,7 @@ def make_card(
     if playnite_enabled:
         import urllib.parse  # noqa: PLC0415
 
-        _playnite_uri = f"playnite://playnite/search/{urllib.parse.quote(game.name)}"
+        _playnite_uri = f"playnite://playnite/search/{urllib.parse.quote(game.name, safe='')}"
         _tt_playnite = html.escape(t("tt_playnite"))
         _playnite_btn_html = (
             f'  <a class="card-playnite-hint btn-playnite" href="{html.escape(_playnite_uri)}"'

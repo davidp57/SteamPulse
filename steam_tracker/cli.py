@@ -365,6 +365,9 @@ def cmd_render() -> None:
     )
     parser.add_argument("--output", default="steam_library.html", help="HTML output path")
     parser.add_argument("--lang", default=None, help="Language code (e.g. en, fr); default: system")
+    parser.add_argument(
+        "--playnite", action="store_true", help="Enable Playnite search buttons on each card"
+    )
     parser.add_argument("--config", default=None, help="Path to config TOML file")
     parser.set_defaults(**config)
     args = parser.parse_args()
@@ -445,6 +448,9 @@ def cmd_run() -> None:
     )
     parser.add_argument("--verbose", "-v", action="store_true")
     parser.add_argument("--lang", default=None, help="Language code (e.g. en, fr); default: system")
+    parser.add_argument(
+        "--playnite", action="store_true", help="Enable Playnite search buttons on each card"
+    )
     parser.add_argument("--config", default=None, help="Path to config TOML file")
     parser.add_argument(
         "--setup", action="store_true", help="Run the interactive setup wizard and exit"
