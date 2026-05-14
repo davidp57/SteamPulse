@@ -1,4 +1,5 @@
 """Shared pytest fixtures."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -85,7 +86,5 @@ def sample_record(
         game=sample_game,
         details=sample_details,
         news=sample_news,
-        status=GameStatus(
-            label="Sorti (1.0)", badge="released", release_date="16 novembre 2004"
-        ),
+        status=GameStatus(label="Sorti (1.0)", badge="released", release_date="16 novembre 2004"),
     )

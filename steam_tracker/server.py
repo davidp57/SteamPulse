@@ -48,7 +48,7 @@ _ROUTE_DELETE = re.compile(r"^/api/delete/(\d+)$")
 
 # Config fields that must be stored as specific Python types.
 _INT_CONFIG_KEYS: frozenset[str] = frozenset({"workers", "news_age"})
-_BOOL_CONFIG_KEYS: frozenset[str] = frozenset({"gamepass"})
+_BOOL_CONFIG_KEYS: frozenset[str] = frozenset({"gamepass", "playnite"})
 
 # Only allow plain filenames — no path traversal, no directories.
 _SAFE_FILENAME = re.compile(r"^[\w\-. ]+\.html$")
@@ -109,7 +109,13 @@ $FORM_ERROR$<form method="POST" action="/login">
 # ---------------------------------------------------------------------------
 
 
-def _rerender(db: Database, steamid: str, output_dir: Path, lang: str | None) -> None:
+def _rerender(
+    db: Database,
+    steamid: str,
+    output_dir: Path,
+    lang: str | None,
+    config_path: Path | None = None,
+) -> None:
     """Re-render all HTML pages after a mutation.
 
     Does nothing when *steamid* is empty (no credentials configured).
@@ -119,10 +125,19 @@ def _rerender(db: Database, steamid: str, output_dir: Path, lang: str | None) ->
         steamid: User's SteamID64.  Skipped when empty string.
         output_dir: Directory containing the HTML output files.
         lang: Language code (or None for system default).
+        config_path: Path to the TOML config file, or ``None`` for the
+            platform default.  Used to read Playnite settings.
     """
     if not steamid:
         return
     records = db.get_all_game_records()
+    # Load playnite settings from config
+    try:
+        _cfg_path = config_path or get_config_path()
+        _cfg = load_config(_cfg_path) if _cfg_path.exists() else {}
+    except Exception:
+        _cfg = {}
+    _playnite_enabled = bool(_cfg.get("playnite", False))
     lib_path = output_dir / "steam_library.html"
     alerts_path = output_dir / "steam_alerts.html"
     diag_path = output_dir / "steam_diagnostic.html"
@@ -136,6 +151,7 @@ def _rerender(db: Database, steamid: str, output_dir: Path, lang: str | None) ->
         alerts_href=alerts_path.name,
         diag_href=diag_path.name,
         lang=lang,
+        playnite_enabled=_playnite_enabled,
     )
     write_alerts_html(
         db.get_alerts(),
@@ -464,7 +480,13 @@ def make_handler(
                             self.wfile.write(f"data: {_data}\n\n".encode())
                             self.wfile.flush()
                             try:
-                                _rerender(Database(db_path), steamid, output_dir, lang)
+                                _rerender(
+                                    Database(db_path),
+                                    steamid,
+                                    output_dir,
+                                    lang,
+                                    config_path=config_path,
+                                )
                             except Exception as _exc:
                                 ok = False
                                 log.error("re-render after fetch failed: %s", _exc)
@@ -590,7 +612,7 @@ def make_handler(
             if path == _ROUTE_RERENDER:
                 _db = Database(db_path)
                 try:
-                    _rerender(_db, steamid, output_dir, lang)
+                    _rerender(_db, steamid, output_dir, lang, config_path=config_path)
                     self._send_json(200, {"ok": True})
                 except Exception as _exc:
                     log.error("rerender failed: %s", _exc)
@@ -600,14 +622,14 @@ def make_handler(
                 db = Database(db_path)
                 changed = db.mark_removed({appid})
                 if changed:
-                    _rerender(db, steamid, output_dir, lang)
+                    _rerender(db, steamid, output_dir, lang, config_path=config_path)
                 self._send_json(200, {"ok": True, "appid": appid, "changed": changed})
             elif m := _ROUTE_MARK_ACTIVE.match(path):
                 appid = int(m.group(1))
                 db = Database(db_path)
                 changed = db.mark_active({appid})
                 if changed:
-                    _rerender(db, steamid, output_dir, lang)
+                    _rerender(db, steamid, output_dir, lang, config_path=config_path)
                 self._send_json(200, {"ok": True, "appid": appid, "changed": changed})
             elif m := _ROUTE_DELETE.match(path):
                 appid = int(m.group(1))
@@ -616,7 +638,7 @@ def make_handler(
                 if changed == 0:
                     self._send_json(404, {"ok": False, "error": "not found", "appid": appid})
                 else:
-                    _rerender(db, steamid, output_dir, lang)
+                    _rerender(db, steamid, output_dir, lang, config_path=config_path)
                     self._send_json(200, {"ok": True, "appid": appid, "changed": changed})
             else:
                 self._not_found()

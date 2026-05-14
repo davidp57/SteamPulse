@@ -1,4 +1,5 @@
 """Tests for the SteamPulse sidecar HTTP server (steam_tracker/server.py)."""
+
 from __future__ import annotations
 
 import json
@@ -314,6 +315,7 @@ def test_make_handler_returns_handler_class(tmp_path: Path) -> None:
     Database(db_path)
     handler_cls = make_handler(db_path, tmp_path, steamid="", lang=None)
     from http.server import BaseHTTPRequestHandler  # noqa: PLC0415
+
     assert issubclass(handler_cls, BaseHTTPRequestHandler)
 
 
@@ -344,7 +346,9 @@ class TestLoginPage:
             conn = HTTPConnection("127.0.0.1", port)
             body = f"token={_TOKEN}".encode()
             conn.request(
-                "POST", "/login", body=body,
+                "POST",
+                "/login",
+                body=body,
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
             resp = conn.getresponse()
@@ -363,7 +367,9 @@ class TestLoginPage:
             conn = HTTPConnection("127.0.0.1", port)
             body = b"token=wrongpassword"
             conn.request(
-                "POST", "/login", body=body,
+                "POST",
+                "/login",
+                body=body,
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
             resp = conn.getresponse()
@@ -455,7 +461,8 @@ class TestAuthProtection:
         try:
             conn = HTTPConnection("127.0.0.1", port)
             conn.request(
-                "POST", "/api/mark-removed/56",
+                "POST",
+                "/api/mark-removed/56",
                 headers={"Cookie": _COOKIE_HDR},
             )
             resp = conn.getresponse()
@@ -547,7 +554,7 @@ class TestRefetch:
     def test_refetch_no_credentials_sends_sse_error(self, tmp_path: Path) -> None:
         """When no config exists (no key/steamid), the SSE stream emits an error event."""
         cfg_path = tmp_path / "config.toml"
-        cfg_path.write_text("[steam]\nkey = \"\"\nsteamid = \"\"\n", encoding="utf-8")
+        cfg_path.write_text('[steam]\nkey = ""\nsteamid = ""\n', encoding="utf-8")
         port, httpd = _start_server(tmp_path, config_path=cfg_path)
         try:
             conn = HTTPConnection("127.0.0.1", port)
@@ -569,7 +576,7 @@ class TestRefetch:
         it must get another SSE error event just like the first call.
         """
         cfg_path = tmp_path / "config.toml"
-        cfg_path.write_text("[steam]\nkey = \"\"\nsteamid = \"\"\n", encoding="utf-8")
+        cfg_path.write_text('[steam]\nkey = ""\nsteamid = ""\n', encoding="utf-8")
         port, httpd = _start_server(tmp_path, config_path=cfg_path)
         try:
             for _ in range(2):
@@ -589,9 +596,7 @@ class TestRefetch:
         cfg_path = tmp_path / "config.toml"
         # Provide non-empty credentials so the pre-flight check passes and the
         # handler reaches the subprocess call (where the lock is still held).
-        cfg_path.write_text(
-            "[steam]\nkey = \"FAKE\"\nsteamid = \"12345\"\n", encoding="utf-8"
-        )
+        cfg_path.write_text('[steam]\nkey = "FAKE"\nsteamid = "12345"\n', encoding="utf-8")
         port, httpd = _start_server(tmp_path, config_path=cfg_path)
 
         # Use an Event so the mock subprocess blocks until we release it.
@@ -691,9 +696,7 @@ class TestConfigPage:
         finally:
             httpd.shutdown()
 
-    def test_config_page_redirects_unauthenticated_when_token_set(
-        self, tmp_path: Path
-    ) -> None:
+    def test_config_page_redirects_unauthenticated_when_token_set(self, tmp_path: Path) -> None:
         """GET /config must redirect to /login when a token is set and user is not authed."""
         port, httpd = _start_server(tmp_path, token=_TOKEN)
         try:
@@ -729,7 +732,7 @@ class TestApiConfigGet:
     def test_get_config_bootstrap_no_auth_needed(self, tmp_path: Path) -> None:
         """GET /api/config is accessible without auth in bootstrap mode."""
         cfg_path = tmp_path / "config.toml"
-        cfg_path.write_text("[steam]\nsteamid = \"12345\"\n", encoding="utf-8")
+        cfg_path.write_text('[steam]\nsteamid = "12345"\n', encoding="utf-8")
         port, httpd = _start_server(tmp_path, config_path=cfg_path)
         try:
             conn = HTTPConnection("127.0.0.1", port)
@@ -746,7 +749,7 @@ class TestApiConfigGet:
     def test_get_config_masks_api_key(self, tmp_path: Path) -> None:
         """GET /api/config must return '***' for the Steam API key."""
         cfg_path = tmp_path / "config.toml"
-        cfg_path.write_text("[steam]\nkey = \"REAL_KEY\"\n", encoding="utf-8")
+        cfg_path.write_text('[steam]\nkey = "REAL_KEY"\n', encoding="utf-8")
         port, httpd = _start_server(tmp_path, config_path=cfg_path)
         try:
             conn = HTTPConnection("127.0.0.1", port)
@@ -794,13 +797,15 @@ class TestApiConfigPost:
     def test_post_config_saves_settings(self, tmp_path: Path) -> None:
         """POST /api/config persists non-empty, non-masked values to TOML."""
         cfg_path = tmp_path / "config.toml"
-        cfg_path.write_text("[steam]\nsteamid = \"111\"\n", encoding="utf-8")
+        cfg_path.write_text('[steam]\nsteamid = "111"\n', encoding="utf-8")
         port, httpd = _start_server(tmp_path, config_path=cfg_path)
         try:
             conn = HTTPConnection("127.0.0.1", port)
             payload = json.dumps({"workers": 8, "steamid": "222"}).encode()
             conn.request(
-                "POST", "/api/config", body=payload,
+                "POST",
+                "/api/config",
+                body=payload,
                 headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
             )
             resp = conn.getresponse()
@@ -810,6 +815,7 @@ class TestApiConfigPost:
             assert data["restarting"] is False
             # Verify the config file was updated
             from steam_tracker.config import load_config  # noqa: PLC0415
+
             saved = load_config(cfg_path)
             assert saved["workers"] == 8
             assert saved["steamid"] == "222"
@@ -819,18 +825,21 @@ class TestApiConfigPost:
     def test_post_config_ignores_masked_values(self, tmp_path: Path) -> None:
         """POST /api/config must NOT overwrite credentials with '***'."""
         cfg_path = tmp_path / "config.toml"
-        cfg_path.write_text("[steam]\nkey = \"REAL_KEY\"\n", encoding="utf-8")
+        cfg_path.write_text('[steam]\nkey = "REAL_KEY"\n', encoding="utf-8")
         port, httpd = _start_server(tmp_path, config_path=cfg_path)
         try:
             conn = HTTPConnection("127.0.0.1", port)
             payload = json.dumps({"key": "***"}).encode()
             conn.request(
-                "POST", "/api/config", body=payload,
+                "POST",
+                "/api/config",
+                body=payload,
                 headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
             )
             resp = conn.getresponse()
             resp.read()
             from steam_tracker.config import load_config  # noqa: PLC0415
+
             saved = load_config(cfg_path)
             assert saved["key"] == "REAL_KEY"
         finally:
@@ -843,7 +852,9 @@ class TestApiConfigPost:
             conn = HTTPConnection("127.0.0.1", port)
             payload = b"not json"
             conn.request(
-                "POST", "/api/config", body=payload,
+                "POST",
+                "/api/config",
+                body=payload,
                 headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
             )
             resp = conn.getresponse()
@@ -860,7 +871,9 @@ class TestApiConfigPost:
             conn = HTTPConnection("127.0.0.1", port)
             payload = json.dumps({"workers": 4}).encode()
             conn.request(
-                "POST", "/api/config", body=payload,
+                "POST",
+                "/api/config",
+                body=payload,
                 headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
             )
             resp = conn.getresponse()
@@ -879,7 +892,9 @@ class TestApiConfigPost:
             conn = HTTPConnection("127.0.0.1", port)
             payload = json.dumps({"gamepass": "false"}).encode()
             conn.request(
-                "POST", "/api/config", body=payload,
+                "POST",
+                "/api/config",
+                body=payload,
                 headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
             )
             resp = conn.getresponse()
@@ -887,6 +902,7 @@ class TestApiConfigPost:
             assert resp.status == 200
             assert data["ok"] is True
             from steam_tracker.config import load_config  # noqa: PLC0415
+
             saved = load_config(cfg_path)
             assert saved["gamepass"] is False
         finally:
@@ -899,7 +915,9 @@ class TestApiConfigPost:
             conn = HTTPConnection("127.0.0.1", port)
             payload = json.dumps({"gamepass": "maybe"}).encode()
             conn.request(
-                "POST", "/api/config", body=payload,
+                "POST",
+                "/api/config",
+                body=payload,
                 headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
             )
             resp = conn.getresponse()
@@ -908,4 +926,3 @@ class TestApiConfigPost:
             assert data["ok"] is False
         finally:
             httpd.shutdown()
-

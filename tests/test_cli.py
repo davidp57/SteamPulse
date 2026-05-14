@@ -1,4 +1,5 @@
 """Tests for steam_tracker.cli helpers."""
+
 from __future__ import annotations
 
 from steam_tracker import __version__

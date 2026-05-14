@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- **Playnite integration simplified** — the 🎮 button now always uses `playnite://playnite/search/<game name>` for all games and all stores (Steam, Epic, GOG, Xbox…); the CSV import machinery (`playnite_mappings` DB table, `POST /api/playnite/import/csv`, `POST /api/playnite/import` JSON endpoint, import UI on the `/config` page) has been removed
+
 ---
 
 ## [2.1.0] — 2026-04-07

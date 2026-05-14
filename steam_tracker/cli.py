@@ -365,6 +365,9 @@ def cmd_render() -> None:
     )
     parser.add_argument("--output", default="steam_library.html", help="HTML output path")
     parser.add_argument("--lang", default=None, help="Language code (e.g. en, fr); default: system")
+    parser.add_argument(
+        "--playnite", action="store_true", help="Enable Playnite search buttons on each card"
+    )
     parser.add_argument("--config", default=None, help="Path to config TOML file")
     parser.set_defaults(**config)
     args = parser.parse_args()
@@ -383,6 +386,7 @@ def cmd_render() -> None:
     alerts_out = out.parent / "steam_alerts.html"
     diag_out = out.parent / "steam_diagnostic.html"
     all_alerts = db.get_alerts()
+    _playnite_enabled = bool(getattr(args, "playnite", False))
     write_html(
         records,
         args.steamid,
@@ -390,6 +394,7 @@ def cmd_render() -> None:
         alerts_href=alerts_out.name,
         diag_href=diag_out.name,
         lang=args.lang,
+        playnite_enabled=_playnite_enabled,
     )
     write_alerts_html(
         all_alerts,
@@ -443,6 +448,9 @@ def cmd_run() -> None:
     )
     parser.add_argument("--verbose", "-v", action="store_true")
     parser.add_argument("--lang", default=None, help="Language code (e.g. en, fr); default: system")
+    parser.add_argument(
+        "--playnite", action="store_true", help="Enable Playnite search buttons on each card"
+    )
     parser.add_argument("--config", default=None, help="Path to config TOML file")
     parser.add_argument(
         "--setup", action="store_true", help="Run the interactive setup wizard and exit"
@@ -573,6 +581,7 @@ def cmd_run() -> None:
     alerts_out = out.parent / "steam_alerts.html"
     diag_out = out.parent / "steam_diagnostic.html"
     all_alerts = db.get_alerts()
+    _playnite_enabled_run = bool(getattr(args, "playnite", False))
     write_html(
         records,
         args.steamid,
@@ -580,6 +589,7 @@ def cmd_run() -> None:
         alerts_href=alerts_out.name,
         diag_href=diag_out.name,
         lang=args.lang,
+        playnite_enabled=_playnite_enabled_run,
     )
     write_alerts_html(
         all_alerts,

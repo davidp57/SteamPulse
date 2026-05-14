@@ -1,4 +1,5 @@
 """Tests for steam_tracker.api."""
+
 from __future__ import annotations
 
 import pytest
@@ -309,4 +310,3 @@ def test_get_owned_games_401_redacts_key() -> None:
         get_owned_games("MY_SECRET_KEY", "76561198000000000")
     assert "MY_SECRET_KEY" not in str(exc_info.value)
     assert "REDACTED" in str(exc_info.value)
-

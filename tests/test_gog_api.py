@@ -1,4 +1,5 @@
 """Tests for steam_tracker.gog_api — GOG Galaxy API wrappers."""
+
 from __future__ import annotations
 
 import pytest

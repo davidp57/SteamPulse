@@ -1,4 +1,5 @@
 """Tests for steam_tracker.resolver — Steam AppID resolution from game names."""
+
 from __future__ import annotations
 
 import pytest

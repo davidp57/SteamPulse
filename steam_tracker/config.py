@@ -39,6 +39,7 @@ _TOML_TO_ARGS: dict[tuple[str, str], str] = {
     ("settings", "lang"): "lang",
     ("settings", "serve_token"): "serve_token",
     ("settings", "gamepass"): "gamepass",
+    ("playnite", "enabled"): "playnite",
 }
 
 # Reverse mapping for writes
@@ -58,7 +59,9 @@ _CREDENTIAL_KEYS: frozenset[str] = frozenset(
 )
 
 # Keys in [settings] — only saved when explicitly passed on CLI
-_SETTINGS_KEYS: frozenset[str] = frozenset({"db", "workers", "news_age", "lang", "gamepass"})
+_SETTINGS_KEYS: frozenset[str] = frozenset(
+    {"db", "workers", "news_age", "lang", "gamepass", "playnite"}
+)
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +245,7 @@ _SECTION_KEYS: list[tuple[str, list[tuple[str, str]]]] = [
             ("gamepass", "gamepass"),
         ],
     ),
+    ("playnite", [("enabled", "playnite")]),
 ]
 
 

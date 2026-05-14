@@ -967,6 +967,19 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
   }
   .card:hover .card-ext-hint { opacity: 1; }
   .card { position: relative; }
+  /* ── Playnite hover hint (mirrors card-ext-hint, shown top-left on hover) ───── */
+  .card-playnite-hint {
+    position: absolute; top: 8px; left: 8px;
+    background: rgba(0,0,0,.65); border-radius: 4px;
+    padding: 2px 6px; font-size: 10px; color: var(--muted);
+    opacity: 0; transition: opacity .2s;
+    text-decoration: none;
+    font-family: 'IBM Plex Mono', monospace;
+    z-index: 2;
+  }
+  .card:hover .card-playnite-hint { opacity: 1; }
+  .card-playnite-hint:hover { color: var(--text); }
+  .grid.list-view .card-playnite-hint { display: none; }
 
   /* CONTENT VISIBILITY PERF */
   .card { content-visibility: auto; contain-intrinsic-size: 340px 320px; will-change: transform; }
@@ -1591,7 +1604,7 @@ document.addEventListener('click', e => {
 // Open Steam store on card click
 document.querySelectorAll('.card').forEach(card => {
   card.addEventListener('click', e => {
-    if (e.target.closest('.news-toggle') || e.target.closest('.news-list')) return;
+    if (e.target.closest('.news-toggle') || e.target.closest('.news-list') || e.target.closest('a')) return;
     const appid = card.dataset.appid;
     if (appid) { var w = window.open('https://store.steampowered.com/app/' + appid, '_blank', 'noopener,noreferrer'); if (w) w.opener = null; }
   });
@@ -1937,7 +1950,12 @@ def _platform_html(details: object, t: Translator | None = None) -> str:
     return f'<span class="platform-icons">{"".join(icons)}</span>' if icons else ""
 
 
-def make_card(record: GameRecord, t: Translator | None = None) -> str:
+def make_card(
+    record: GameRecord,
+    t: Translator | None = None,
+    *,
+    playnite_enabled: bool = False,
+) -> str:
     """Return the HTML string for a single game card."""
     if t is None:
         from .i18n import get_translator  # noqa: PLC0415
@@ -2105,6 +2123,16 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         f' title="{_tt_delete}" aria-label="{_tt_delete}">🗑️</button>\n'
         f"  </div>\n"
     )
+    _playnite_btn_html = ""
+    if playnite_enabled:
+        import urllib.parse  # noqa: PLC0415
+
+        _playnite_uri = f"playnite://playnite/search/{urllib.parse.quote(game.name, safe='')}"
+        _tt_playnite = html.escape(t("tt_playnite"))
+        _playnite_btn_html = (
+            f'  <a class="card-playnite-hint btn-playnite" href="{html.escape(_playnite_uri)}"'
+            f' title="{_tt_playnite}" aria-label="{_tt_playnite}">🎮</a>\n'
+        )
     if record.removed_at:
         try:
             _removed_date_str = html.escape(
@@ -2130,6 +2158,7 @@ def make_card(record: GameRecord, t: Translator | None = None) -> str:
         f'data-time-added="{record.time_added}"'
         f"{_unknown_attr}{_removed_attr}>\n"
         f'  <span class="card-ext-hint">{store_hint}</span>\n'
+        f"{_playnite_btn_html}"
         f'  <img class="card-img" src="{html.escape(img_url)}" alt="" loading="lazy"'
         f"    onerror=\"this.style.display='none';this.nextElementSibling.style.display='flex'\">\n"
         f'  <div class="card-img-placeholder" style="display:none">{placeholder}</div>\n'
@@ -2169,12 +2198,13 @@ def generate_html(
     alerts_href: str = "steam_alerts.html",
     diag_href: str = "steam_diagnostic.html",
     lang: str | None = None,
+    playnite_enabled: bool = False,
 ) -> str:
     """Render the full HTML page from a list of game records."""
     from .i18n import get_translator  # noqa: PLC0415
 
     t = get_translator(lang)
-    cards_html = "\n".join(make_card(r, t) for r in records)
+    cards_html = "\n".join(make_card(r, t, playnite_enabled=playnite_enabled) for r in records)
     total = len(records)
     ea = sum(r.status.badge == "earlyaccess" for r in records)
     released = sum(r.status.badge == "released" for r in records)
@@ -2208,10 +2238,19 @@ def write_html(
     alerts_href: str = "steam_alerts.html",
     diag_href: str = "steam_diagnostic.html",
     lang: str | None = None,
+    playnite_enabled: bool = False,
 ) -> None:
     """Write the rendered HTML page to *output_path*."""
     output_path.write_text(
-        generate_html(records, steam_id, alerts_href, diag_href, lang), encoding="utf-8"
+        generate_html(
+            records,
+            steam_id,
+            alerts_href,
+            diag_href,
+            lang,
+            playnite_enabled=playnite_enabled,
+        ),
+        encoding="utf-8",
     )
 
 
@@ -3669,6 +3708,12 @@ _CONFIG_SECTIONS: list[tuple[str, list[tuple[str, str, str]]]] = [
         ],
     ),
     (
+        "Playnite",
+        [
+            ("playnite", "checkbox", "Enable Playnite integration"),
+        ],
+    ),
+    (
         "Twitch / IGDB",
         [
             ("twitch_client_id", "text", "Client ID"),
@@ -3819,6 +3864,7 @@ button.save-btn:disabled {{ background: var(--muted); cursor: default; }}
   <span id="status-msg"></span>
 </div>
 </form>
+
 </main>
 <script>
 document.getElementById('cfg-form').addEventListener('submit', async function(e) {{
