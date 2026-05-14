@@ -191,45 +191,6 @@ def test_upsert_appid_mapping_insert(db: Database) -> None:
     assert db.get_appid_mapping("epic", "abc123") == 1145360
 
 
-# ─── playnite_mappings ───────────────────────────────────────────────────────
-
-
-class TestPlayniteMappings:
-    def test_get_playnite_mappings_empty(self, db: Database) -> None:
-        assert db.get_playnite_mappings() == {}
-
-    def test_upsert_playnite_mappings_stores_entries(self, db: Database) -> None:
-        entries = [{"game_key": "420", "playnite_uuid": "uuid-1234", "name": "Half-Life 2"}]
-        count = db.upsert_playnite_mappings(entries)
-        assert count == 1
-        mappings = db.get_playnite_mappings()
-        assert mappings["420"] == "uuid-1234"
-
-    def test_upsert_playnite_mappings_overwrites_on_conflict(self, db: Database) -> None:
-        db.upsert_playnite_mappings(
-            [{"game_key": "420", "playnite_uuid": "old-uuid", "name": "HL2"}]
-        )
-        db.upsert_playnite_mappings(
-            [{"game_key": "420", "playnite_uuid": "new-uuid", "name": "HL2"}]
-        )
-        mappings = db.get_playnite_mappings()
-        assert mappings["420"] == "new-uuid"
-
-    def test_upsert_playnite_mappings_multiple_entries(self, db: Database) -> None:
-        entries = [
-            {"game_key": "420", "playnite_uuid": "uuid-a", "name": "Half-Life 2"},
-            {"game_key": "730", "playnite_uuid": "uuid-b", "name": "CS2"},
-        ]
-        count = db.upsert_playnite_mappings(entries)
-        assert count == 2
-        mappings = db.get_playnite_mappings()
-        assert len(mappings) == 2
-        assert mappings["730"] == "uuid-b"
-
-    def test_upsert_playnite_mappings_empty_list(self, db: Database) -> None:
-        assert db.upsert_playnite_mappings([]) == 0
-
-
 def test_upsert_appid_mapping_update(db: Database) -> None:
     db.upsert_appid_mapping("epic", "abc123", "Hades", None)
     assert db.get_appid_mapping("epic", "abc123") is None

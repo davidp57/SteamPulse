@@ -1300,60 +1300,6 @@ class Database:
             for r in rows
         ]
 
-    # ── Playnite UUID mappings ─────────────────────────────────────────────
-
-    def upsert_playnite_mappings(self, entries: list[dict[str, object]]) -> int:
-        """Insert or replace Playnite UUID mappings.
-
-        Args:
-            entries: List of dicts, each with ``game_key`` (str),
-                ``playnite_uuid`` (str), and optional ``name`` (str).
-
-        Returns:
-            Number of entries processed.
-        """
-        if not entries:
-            return 0
-        now = int(datetime.now(tz=UTC).timestamp())
-        with self._connect() as con:
-            con.executemany(
-                "INSERT OR REPLACE INTO playnite_mappings "
-                "(game_key, playnite_uuid, name, updated_at) VALUES (?, ?, ?, ?)",
-                [
-                    (
-                        str(e["game_key"]),
-                        str(e["playnite_uuid"]),
-                        str(e.get("name", "")),
-                        now,
-                    )
-                    for e in entries
-                ],
-            )
-        return len(entries)
-
-    def get_playnite_mappings(self) -> dict[str, str]:
-        """Return Playnite UUID mappings keyed by game ``appid`` string.
-
-        Steam entries are stored with ``game_key`` equal to the numeric AppID
-        string and are returned as-is.  Epic entries are stored with
-        ``game_key = "epic:<catalogId>"``; the JOIN resolves these to the
-        synthetic ``appid`` used in the ``games`` table so that the renderer
-        can look up by ``str(appid)`` uniformly.
-
-        Returns:
-            Dict mapping ``str(appid)`` to Playnite UUID string.
-        """
-        with self._connect() as con:
-            rows = con.execute(
-                """
-                SELECT COALESCE(CAST(g.appid AS TEXT), pm.game_key),
-                       pm.playnite_uuid
-                FROM playnite_mappings pm
-                LEFT JOIN games g ON g.external_id = pm.game_key
-                """
-            ).fetchall()
-        return {str(r[0]): str(r[1]) for r in rows}
-
     def get_diagnostic_summary(self) -> dict[str, object]:
         """Return aggregate counts useful for the diagnostic page.
 

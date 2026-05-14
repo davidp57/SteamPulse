@@ -1955,7 +1955,6 @@ def make_card(
     t: Translator | None = None,
     *,
     playnite_enabled: bool = False,
-    playnite_mappings: dict[str, str] | None = None,
 ) -> str:
     """Return the HTML string for a single game card."""
     if t is None:
@@ -2128,11 +2127,7 @@ def make_card(
     if playnite_enabled:
         import urllib.parse  # noqa: PLC0415
 
-        _playnite_uuid = (playnite_mappings or {}).get(str(appid), "")
-        if _playnite_uuid:
-            _playnite_uri = f"playnite://playnite/showgame/{_playnite_uuid}"
-        else:
-            _playnite_uri = f"playnite://playnite/search/{urllib.parse.quote(game.name)}"
+        _playnite_uri = f"playnite://playnite/search/{urllib.parse.quote(game.name)}"
         _tt_playnite = html.escape(t("tt_playnite"))
         _playnite_btn_html = (
             f'  <a class="card-playnite-hint btn-playnite" href="{html.escape(_playnite_uri)}"'
@@ -2204,16 +2199,12 @@ def generate_html(
     diag_href: str = "steam_diagnostic.html",
     lang: str | None = None,
     playnite_enabled: bool = False,
-    playnite_mappings: dict[str, str] | None = None,
 ) -> str:
     """Render the full HTML page from a list of game records."""
     from .i18n import get_translator  # noqa: PLC0415
 
     t = get_translator(lang)
-    cards_html = "\n".join(
-        make_card(r, t, playnite_enabled=playnite_enabled, playnite_mappings=playnite_mappings)
-        for r in records
-    )
+    cards_html = "\n".join(make_card(r, t, playnite_enabled=playnite_enabled) for r in records)
     total = len(records)
     ea = sum(r.status.badge == "earlyaccess" for r in records)
     released = sum(r.status.badge == "released" for r in records)
@@ -2248,7 +2239,6 @@ def write_html(
     diag_href: str = "steam_diagnostic.html",
     lang: str | None = None,
     playnite_enabled: bool = False,
-    playnite_mappings: dict[str, str] | None = None,
 ) -> None:
     """Write the rendered HTML page to *output_path*."""
     output_path.write_text(
@@ -2259,7 +2249,6 @@ def write_html(
             diag_href,
             lang,
             playnite_enabled=playnite_enabled,
-            playnite_mappings=playnite_mappings,
         ),
         encoding="utf-8",
     )
@@ -3876,27 +3865,6 @@ button.save-btn:disabled {{ background: var(--muted); cursor: default; }}
 </div>
 </form>
 
-<section class="cfg-section" id="playnite-import-section">
-<h2 class="cfg-section-title">Playnite &mdash; Library Import</h2>
-<p style="font-size:0.82rem;color:var(--muted);margin:0 0 8px">
-  Requires the <strong>Library Exporter Advanced</strong> add-on in Playnite.
-  In the add-on settings, make sure the <strong>Id</strong>, <strong>Game Id</strong>,
-  <strong>PluginId</strong> and <strong>Sources</strong> columns are enabled, then export as CSV.
-</p>
-<p style="font-size:0.82rem;color:var(--muted);margin:0 0 14px">
-  Steam and Epic games are imported.  Without the <strong>Id</strong> column,
-  the 🎮 button will use a name search instead of a direct link.
-</p>
-<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-  <input type="file" id="playnite-file" accept=".csv"
-         style="font-size:0.85rem;color:var(--text)">
-  <button type="button" id="playnite-import-btn"
-          style="padding:8px 20px;background:var(--accent);color:#000;border:none;border-radius:6px;font-size:0.85rem;font-weight:700;cursor:pointer">
-    Import
-  </button>
-  <span id="playnite-status" style="font-size:0.82rem"></span>
-</div>
-</section>
 </main>
 <script>
 document.getElementById('cfg-form').addEventListener('submit', async function(e) {{
@@ -3962,43 +3930,6 @@ document.getElementById('cfg-form').addEventListener('submit', async function(e)
     btn.disabled = false;
     btn.textContent = 'Save configuration';
   }}
-}});
-
-// Playnite library import
-document.getElementById('playnite-import-btn').addEventListener('click', function() {{
-  const fileInput = document.getElementById('playnite-file');
-  const status = document.getElementById('playnite-status');
-  if (!fileInput.files.length) {{
-    status.style.color = 'var(--error)';
-    status.textContent = '\u26a0 Please select a CSV file first.';
-    return;
-  }}
-  const file = fileInput.files[0];
-  const reader = new FileReader();
-  reader.onload = async function(e) {{
-    try {{
-      const csvText = e.target.result;
-      status.style.color = 'var(--muted)';
-      status.textContent = 'Importing\u2026';
-      const resp = await fetch('/api/playnite/import/csv', {{
-        method: 'POST',
-        headers: {{'Content-Type': 'text/csv; charset=utf-8'}},
-        body: csvText,
-      }});
-      const result = await resp.json();
-      if (result.ok) {{
-        status.style.color = 'var(--success)';
-        status.textContent = '\u2714 ' + result.imported + ' game(s) imported, ' + result.skipped + ' skipped.';
-      }} else {{
-        status.style.color = 'var(--error)';
-        status.textContent = '\u26a0 ' + (result.error || 'Import failed');
-      }}
-    }} catch(err) {{
-      status.style.color = 'var(--error)';
-      status.textContent = '\u26a0 ' + (err.message || 'Read error');
-    }}
-  }};
-  reader.readAsText(file, 'UTF-8');
 }});
 </script>
 </body>

@@ -410,14 +410,6 @@ def test_make_card_playnite_search_uri_fallback(sample_record: GameRecord) -> No
     assert "playnite://playnite/showgame/" not in card
 
 
-def test_make_card_playnite_showgame_uri_when_mapping_exists(sample_record: GameRecord) -> None:
-    card = make_card(
-        sample_record, playnite_enabled=True, playnite_mappings={"420": "my-uuid-1234"}
-    )
-    assert "playnite://playnite/showgame/my-uuid-1234" in card
-    assert "playnite://playnite/search/" not in card
-
-
 def test_generate_html_playnite_disabled_no_buttons(sample_record: GameRecord) -> None:
     page = generate_html([sample_record], "76561198000000000")
     assert "btn-playnite" not in page

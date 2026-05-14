@@ -62,106 +62,18 @@ Commande `steam-render --export-csv` ou `--export-json` pour exporter la bibliot
 
 Vue dédiée (ou panneau expansible sur la carte) affichant l'historique complet des mises à jour d'un jeu : liste chronologique des patch notes et news, chaque entrée avec date, titre, tag de type (patch note / news), et lien direct vers l'article. Utile pour évaluer rapidement l'activité de maintenance d'un jeu.
 
-### BIZ-007 — Intégration Playnite : bouton "Ouvrir dans Playnite" + import bibliothèque
+### BIZ-007 — Intégration Playnite : bouton "Ouvrir dans Playnite"
 
-Ajouter sur chaque carte de la bibliothèque un bouton optionnel pour ouvrir le jeu directement dans Playnite via son protocole URI. Mode basique sans configuration (search URI) ; mode enrichi optionnel via upload de la bibliothèque Playnite (showgame URI avec UUID précis).
-
-**Contexte de déploiement :**
-SteamPulse tourne dans un container Docker sur un NAS. Playnite est installé sur un PC de jeu. Les liens `playnite://` sont des **protocoles custom gérés côté navigateur** : quand le navigateur du PC de jeu clique sur `playnite://playnite/...`, c'est l'OS du PC qui intercepte et lance Playnite — le serveur NAS n'intervient pas. Les URIs fonctionnent donc correctement depuis un HTML servi par le NAS, à condition que le navigateur soit sur le PC.
-
----
-
-#### Mode basique (toujours disponible)
+Ajouter sur chaque carte de la bibliothèque un bouton optionnel pour ouvrir le jeu directement dans Playnite via son protocole URI. Le bouton utilise systématiquement `playnite://playnite/search/<nom encodé>` pour tous les jeux et toutes les stores (Steam, Epic, GOG, Xbox…).
 
 **Activation :**
 - Config TOML : `[playnite] enabled = true`.
 - CLI : `--playnite` flag.
 - Sans activation, aucun bouton n'est rendu.
 
-**URI utilisée :** `playnite://playnite/search/<nom encodé>` — ouvre Playnite et lance une recherche. Fallback universel, fonctionne sans aucune configuration côté serveur.
+**URI utilisée :** `playnite://playnite/search/<nom encodé>` — ouvre Playnite et lance une recherche. Universel, fonctionne sans configuration côté serveur.
 
-**HTML / JS :**
-- `href` généré dynamiquement en JS depuis `data-name` sur la carte : `playnite://playnite/search/` + `encodeURIComponent(name)`.
-- Si un UUID est disponible dans les données injectées (voir mode enrichi), JS préfère `playnite://playnite/showgame/<uuid>` à la place.
-- Bouton conditionné à un flag `__PLAYNITE_ENABLED__` dans le template.
-
----
-
-#### Mode enrichi (optionnel) — import de la bibliothèque Playnite
-
-Permet de résoudre les AppIDs → UUIDs Playnite pour ouvrir la fiche précise du jeu (`showgame`) au lieu d'une recherche approximative.
-
-**Workflow utilisateur :**
-1. Dans Playnite : `Tools > Export Library` → exporte un fichier JSON (tableau de jeux).
-2. Sur la page `/config` de SteamPulse : section *Playnite — Import de bibliothèque* avec :
-   - Un `<input type="file" accept=".json">` pour sélectionner le fichier.
-   - Un hint textuel sous le champ : `Emplacement par défaut : %APPDATA%\Playnite\library\` (note: les navigateurs ne peuvent pas pré-remplir le chemin pour des raisons de sécurité).
-   - Un bouton **Importer**.
-3. Le navigateur upload le fichier vers `POST /api/playnite/import` (sidecar server).
-4. Le serveur parse le JSON, extrait les mappings, les persiste en DB.
-5. Un re-render automatique (ou bouton dédié) met à jour le dashboard.
-
-**Format JSON Playnite (export) :**
-```json
-[
-  {
-    "Id": "550e8400-e29b-41d4-a716-446655440000",
-    "Name": "Portal 2",
-    "GameId": "620",
-    "PluginId": "cb91dfc9-b977-43bf-8e70-55f46e410fab"
-  }
-]
-```
-- `PluginId` Steam : `cb91dfc9-b977-43bf-8e70-55f46e410fab` — seuls ces jeux sont mappés (les autres sont ignorés ou mappés par nom).
-- `GameId` pour Steam = AppID (chaîne).
-
-**DB — nouvelle table `playnite_mappings` :**
-```sql
-CREATE TABLE IF NOT EXISTS playnite_mappings (
-    game_key   TEXT PRIMARY KEY,  -- steam AppID ou "epic:<catalogItemId>"
-    playnite_uuid TEXT NOT NULL,
-    name       TEXT,
-    updated_at INTEGER NOT NULL
-);
-```
-- Ajoutée via le mécanisme `_MIGRATIONS` existant.
-- L'import écrase les entrées existantes (upsert).
-
-**Endpoint `POST /api/playnite/import` (server.py) :**
-- Accepte `multipart/form-data` avec un champ `file`.
-- Parse le JSON, valide la structure minimale (`Id`, `GameId`, `PluginId`).
-- Filtre sur `PluginId` Steam, insère dans `playnite_mappings`.
-- Retourne `{"imported": N, "skipped": M}` en JSON.
-- Taille max du fichier : 10 MB (garde-fou).
-
-**Renderer :**
-- Charge les mappings depuis la DB → dict `{appid: uuid, ...}`.
-- Injecte en JSON dans le template HTML (comme `__PLAYNITE_MAPPINGS_JSON__`).
-- JS utilise l'UUID si disponible dans ce dict, sinon repli sur le nom.
-
----
-
-**i18n :**
-- `btn_open_playnite` (EN: "Open in Playnite" / FR: "Ouvrir dans Playnite")
-- `tt_playnite` (EN: "Show in Playnite" / FR: "Afficher dans Playnite")
-- `lbl_playnite_import` (EN: "Import Playnite Library" / FR: "Importer la bibliothèque Playnite")
-- `lbl_playnite_hint` (EN: "Default location: %APPDATA%\\Playnite\\library\\" / FR: "Emplacement par défaut : %APPDATA%\\Playnite\\library\\")
-- `lbl_playnite_imported` (EN: "{n} games imported" / FR: "{n} jeux importés")
-
-**Tests :**
-- `test_renderer.py` : flag activé → bouton présent ; flag désactivé → absent ; mappings injectés → UUID utilisé dans le href.
-- `test_server.py` : `POST /api/playnite/import` avec JSON valide → 200 + count ; JSON malformé → 400 ; fichier trop gros → 413.
-- `test_db.py` : upsert dans `playnite_mappings` fonctionne.
-
-**Ce qui n'est PAS dans le scope :**
-- Support des autres plugins Playnite (GOG, Xbox…) — extension future.
-- Synchronisation automatique / polling.
-- Upload de fichiers JSON individuels du dossier `games/` (export via `Tools > Export Library` suffit).
-
-**Estimation :**
-- Mode basique : config flag + renderer + JS + i18n de base + tests = ~55 min
-- Mode enrichi : endpoint upload + DB table + parsing + renderer mappings + UI /config + i18n + tests = ~75 min
-- Total brut : ~130 min × 1,15 ≈ **~150 min** (table arrondie à **~140 min** — certaines parties se chevauchent)
+**Note :** Le mode enrichi (import CSV → UUID → `showgame` URI) a été abandonné car l'approche était fragile (dépendance au chemin exact de la DB, jointure complexe pour Epic). La recherche par nom couvre 100 % des jeux sans import.
 
 ---
 
