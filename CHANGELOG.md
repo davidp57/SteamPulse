@@ -9,6 +9,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Playnite integration (BIZ-007)** — new `[playnite] enabled = true` config flag (or `playnite = true` in the `[settings]` section) adds a 🎮 button on each library card that opens the game directly in Playnite
+  - Basic mode: button uses `playnite://playnite/search/<game name>` URI scheme
+  - Enriched mode: upload a CSV export from the **Library Exporter Advanced** Playnite add-on via the `/config` page (`POST /api/playnite/import/csv`) to store UUID mappings in a new `playnite_mappings` DB table; matched games use `playnite://playnite/showgame/<uuid>` for a direct deep-link
+  - **Steam and Epic games are supported**: Steam rows map by AppID, Epic rows are stored as `epic:<catalogId>` and resolved to their synthetic AppID via a DB JOIN at render time; other stores (GOG, Xbox, Amazon…) are skipped and counted
+  - The CSV must include the **Id**, **Game Id**, **PluginId**, and **Sources** columns (enabled in the add-on settings); without the `Id` column the button falls back to a name search
+  - Import UI: `.csv` file picker + JS FileReader on the `/config` page, no server restart required; pages are re-rendered immediately after import
+  - `POST /api/playnite/import/csv` endpoint: rejects payloads > 10 MB (413), invalid CSV (400), unauthenticated requests when a token is configured (401)
+
 ---
 
 ## [2.1.0] — 2026-04-07

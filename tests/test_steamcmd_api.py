@@ -1,4 +1,5 @@
 """Tests for steam_tracker.steamcmd_api."""
+
 from __future__ import annotations
 
 import responses as resp_mock

@@ -2,6 +2,7 @@
 
 Covers the GameSource protocol, SteamSource, EpicSource, GogSource, and GamePassSource.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -46,8 +47,7 @@ def _owned_response(appids: list[int]) -> dict:  # type: ignore[type-arg]
     return {
         "response": {
             "games": [
-                {"appid": appid, "name": f"Game {appid}", "playtime_forever": 0}
-                for appid in appids
+                {"appid": appid, "name": f"Game {appid}", "playtime_forever": 0} for appid in appids
             ]
         }
     }
@@ -653,9 +653,7 @@ def test_gog_source_synthetic_appid_when_unresolved() -> None:
     resp_mock.add(
         resp_mock.GET,
         _GOG_PRODUCTS_URL,
-        json=_gog_products_page(
-            [{"id": 9999, "title": "Some Exclusive GOG Game", "image": ""}]
-        ),
+        json=_gog_products_page([{"id": 9999, "title": "Some Exclusive GOG Game", "image": ""}]),
     )
     resp_mock.add(resp_mock.GET, _STEAM_STORE_SEARCH_URL, json={"total": 0, "items": []})
 
@@ -838,10 +836,8 @@ def test_epic_discover_games_keeps_token_when_response_omits_it() -> None:
     assert args.epic_refresh_token == "rt_original"
 
 
-
 _EPIC_CATALOG_BASE = (
-    "https://catalog-public-service-prod06.ol.epicgames.com"
-    "/catalog/api/shared/namespace"
+    "https://catalog-public-service-prod06.ol.epicgames.com/catalog/api/shared/namespace"
 )
 
 
@@ -852,14 +848,16 @@ def test_epic_discover_games_catalog_title_overrides_local() -> None:
     resp_mock.add(
         resp_mock.GET,
         _EPIC_LIBRARY_URL,
-        json=_library_response([
-            {
-                "catalogItemId": "cat_abc",
-                "appName": "BrilliantRose",          # codename — wrong title
-                "namespace": "ns_abc",
-                "sandboxName": "BrilliantRose",
-            },
-        ]),
+        json=_library_response(
+            [
+                {
+                    "catalogItemId": "cat_abc",
+                    "appName": "BrilliantRose",  # codename — wrong title
+                    "namespace": "ns_abc",
+                    "sandboxName": "BrilliantRose",
+                },
+            ]
+        ),
     )
     # Catalog API returns the real title
     resp_mock.add(
@@ -884,14 +882,16 @@ def test_epic_discover_games_catalog_fallback_to_local() -> None:
     resp_mock.add(
         resp_mock.GET,
         _EPIC_LIBRARY_URL,
-        json=_library_response([
-            {
-                "catalogItemId": "cat_xyz",
-                "appName": "MyEpicGame",
-                "namespace": "ns_xyz",
-                "sandboxName": "MyEpicGame",
-            },
-        ]),
+        json=_library_response(
+            [
+                {
+                    "catalogItemId": "cat_xyz",
+                    "appName": "MyEpicGame",
+                    "namespace": "ns_xyz",
+                    "sandboxName": "MyEpicGame",
+                },
+            ]
+        ),
     )
     # Catalog API returns empty (title not found)
     resp_mock.add(

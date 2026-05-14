@@ -1,4 +1,5 @@
 """Tests for steam_tracker.alerts."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -86,6 +87,7 @@ def sample_news_item() -> NewsItem:
 
 # ── evaluate_news ──────────────────────────────────────────────────────────────
 
+
 def test_evaluate_news_keyword_match_title(
     news_rule: AlertRule, alert_db: Database, sample_news_item: NewsItem
 ) -> None:
@@ -95,9 +97,7 @@ def test_evaluate_news_keyword_match_title(
     assert alerts[0].rule_name == "Version Update"
 
 
-def test_evaluate_news_keyword_no_match(
-    news_rule: AlertRule, alert_db: Database
-) -> None:
+def test_evaluate_news_keyword_no_match(news_rule: AlertRule, alert_db: Database) -> None:
     engine = AlertEngine([news_rule], alert_db)
     news = [
         NewsItem(
@@ -121,8 +121,7 @@ def test_evaluate_news_all_news_rule_matches_everything(
 
 
 def test_evaluate_news_multiple_rules_can_match_same_item(
-    news_rule: AlertRule, all_news_rule: AlertRule,
-    alert_db: Database, sample_news_item: NewsItem
+    news_rule: AlertRule, all_news_rule: AlertRule, alert_db: Database, sample_news_item: NewsItem
 ) -> None:
     engine = AlertEngine([news_rule, all_news_rule], alert_db)
     alerts = engine.evaluate_news(420, "Half-Life 2", [sample_news_item])
@@ -173,6 +172,7 @@ def test_evaluate_news_case_insensitive_keyword(
 
 
 # ── evaluate_field_changes ────────────────────────────────────────────────────
+
 
 def test_evaluate_field_changes_decreased_condition(
     price_rule: AlertRule, alert_db: Database
@@ -348,6 +348,7 @@ def test_evaluate_field_changes_disabled_rule_skipped(
 
 # ── DB round-trip ──────────────────────────────────────────────────────────────
 
+
 def test_upsert_alert_idempotent(
     all_news_rule: AlertRule, alert_db: Database, sample_news_item: NewsItem
 ) -> None:
@@ -360,8 +361,7 @@ def test_upsert_alert_idempotent(
 
 
 def test_get_alerts_filter_by_rule(
-    all_news_rule: AlertRule, news_rule: AlertRule,
-    alert_db: Database, sample_news_item: NewsItem
+    all_news_rule: AlertRule, news_rule: AlertRule, alert_db: Database, sample_news_item: NewsItem
 ) -> None:
     engine = AlertEngine([all_news_rule, news_rule], alert_db)
     alerts = engine.evaluate_news(420, "Half-Life 2", [sample_news_item])
@@ -383,6 +383,7 @@ def test_get_alert_count_by_rule(
 
 # ── backfill ───────────────────────────────────────────────────────────────────
 
+
 def test_backfill_creates_alerts_from_field_history(
     changed_rule: AlertRule, alert_db: Database
 ) -> None:
@@ -401,6 +402,7 @@ def test_backfill_creates_alerts_from_field_history(
 
 
 # ── AlertRule validation ──────────────────────────────────────────────────────
+
 
 def test_alert_rule_rejects_invalid_rule_type() -> None:
     """Invalid rule_type must raise a Pydantic ValidationError."""

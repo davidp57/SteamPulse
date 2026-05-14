@@ -383,6 +383,8 @@ def cmd_render() -> None:
     alerts_out = out.parent / "steam_alerts.html"
     diag_out = out.parent / "steam_diagnostic.html"
     all_alerts = db.get_alerts()
+    _playnite_enabled = bool(getattr(args, "playnite", False))
+    _playnite_mappings = db.get_playnite_mappings() if _playnite_enabled else None
     write_html(
         records,
         args.steamid,
@@ -390,6 +392,8 @@ def cmd_render() -> None:
         alerts_href=alerts_out.name,
         diag_href=diag_out.name,
         lang=args.lang,
+        playnite_enabled=_playnite_enabled,
+        playnite_mappings=_playnite_mappings,
     )
     write_alerts_html(
         all_alerts,
@@ -573,6 +577,8 @@ def cmd_run() -> None:
     alerts_out = out.parent / "steam_alerts.html"
     diag_out = out.parent / "steam_diagnostic.html"
     all_alerts = db.get_alerts()
+    _playnite_enabled_run = bool(getattr(args, "playnite", False))
+    _playnite_mappings_run = db.get_playnite_mappings() if _playnite_enabled_run else None
     write_html(
         records,
         args.steamid,
@@ -580,6 +586,8 @@ def cmd_run() -> None:
         alerts_href=alerts_out.name,
         diag_href=diag_out.name,
         lang=args.lang,
+        playnite_enabled=_playnite_enabled_run,
+        playnite_mappings=_playnite_mappings_run,
     )
     write_alerts_html(
         all_alerts,

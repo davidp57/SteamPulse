@@ -32,7 +32,7 @@ Aucun lot actif en cours de livraison.
 | BIZ-004 | Historique de prix (séries temporelles) | P3 | ~2h | 2026-05-14 | | |
 | BIZ-005 | Export CSV / JSON | P3 | ~1h | 2026-05-14 | | |
 | BIZ-006 | Timeline de news par jeu | P3 | ~1h30 | 2026-05-14 | | |
-| BIZ-007 | Intégration Playnite : bouton "Ouvrir dans Playnite" + import bibliothèque | P2 | ~140 min | 2026-05-14 | | |
+| BIZ-007 | Intégration Playnite : bouton "Ouvrir dans Playnite" + import bibliothèque | P2 | ~140 min | 2026-05-14 | ✅ terminé | 2026-05-14 |
 
 ---
 
@@ -169,6 +169,7 @@ CREATE TABLE IF NOT EXISTS playnite_mappings (
 
 | Lot | Nom | Version | Tickets | Terminé |
 | --- | --- | --- | --- | --- |
+| v2.1.1 | Playnite integration | v2.1.1 | BIZ-007 | 2026-05-14 |
 | v2.1 | New stores + web configuration | v2.1.0 | GOG, Game Pass, /config, multiselect, fetch bandeau | 2026-04-07 |
 | v2.0 | Sidecar server + self-hosted mode | v2.0.0 | steam-serve, auth, SSE refetch, /api/rerender | 2026-04-04 |
 | v1.6 | Epic data quality + diagnostic page | v1.6.x | Cleanup rules, diagnostic HTML, resolver improvements | 2026-03 |

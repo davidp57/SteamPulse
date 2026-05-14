@@ -1,4 +1,5 @@
 """Tests for steam_tracker.config — TOML config file support."""
+
 from __future__ import annotations
 
 import os
@@ -322,8 +323,10 @@ def test_save_cli_credentials_preserves_alert_rules(tmp_path: Path) -> None:
     p = tmp_path / "config.toml"
     rules = [
         AlertRule(
-            name="Price Drop", rule_type="state_change",
-            field="price", condition="decreased",
+            name="Price Drop",
+            rule_type="state_change",
+            field="price",
+            condition="decreased",
         ),
     ]
     write_config({"key": "K", "steamid": "S"}, p, alert_rules=rules)

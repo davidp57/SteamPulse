@@ -1,4 +1,5 @@
 """Tests for steam_tracker.gamepass_api — Xbox Game Pass catalog API wrappers."""
+
 from __future__ import annotations
 
 import pytest

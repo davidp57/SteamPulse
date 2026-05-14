@@ -1,4 +1,5 @@
 """Tests for steam_tracker.wizard — interactive setup wizard."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -36,8 +37,18 @@ def _steam_only(
 ) -> tuple[str, ...]:
     """Return a standard set of inputs for a Steam-only wizard run."""
     return (
-        key, steamid, skip_epic, skip_gog, enable_gamepass, skip_twitch,
-        db, workers, news_age, lang, serve_token, confirm,
+        key,
+        steamid,
+        skip_epic,
+        skip_gog,
+        enable_gamepass,
+        skip_twitch,
+        db,
+        workers,
+        news_age,
+        lang,
+        serve_token,
+        confirm,
     )
 
 
@@ -162,13 +173,20 @@ def test_wizard_summary_masks_serve_token(
 def test_wizard_saves_twitch_credentials(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     inputs = _inputs(
-        "STEAMKEY", "76561198001",            # Steam
-        "n",                                  # Skip Epic
-        "n",                                  # Skip GOG
-        "n",                                  # Disable GamePass
-        "y", "TCLIENTID", "TCLIENTSECRET",    # Twitch
-        "", "", "", "", "",                    # Default settings
-        "y",                                  # Confirm
+        "STEAMKEY",
+        "76561198001",  # Steam
+        "n",  # Skip Epic
+        "n",  # Skip GOG
+        "n",  # Disable GamePass
+        "y",
+        "TCLIENTID",
+        "TCLIENTSECRET",  # Twitch
+        "",
+        "",
+        "",
+        "",
+        "",  # Default settings
+        "y",  # Confirm
     )
     with patch("builtins.input", inputs):
         run_wizard(config_path=config_path)
@@ -194,15 +212,20 @@ def test_wizard_no_twitch_when_skipped(tmp_path: Path) -> None:
 def test_wizard_saves_epic_refresh_credentials(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     inputs = _inputs(
-        "STEAMKEY", "76561198001",   # Steam
-        "y",                          # Enable Epic
-        "n",                          # Don't open browser automatically
-        "AUTHCODE123",                # Paste auth code
-        "n",                          # Skip GOG
-        "n",                          # Disable GamePass
-        "n",                          # Skip Twitch
-        "", "", "", "", "",           # Default settings
-        "y",                          # Confirm
+        "STEAMKEY",
+        "76561198001",  # Steam
+        "y",  # Enable Epic
+        "n",  # Don't open browser automatically
+        "AUTHCODE123",  # Paste auth code
+        "n",  # Skip GOG
+        "n",  # Disable GamePass
+        "n",  # Skip Twitch
+        "",
+        "",
+        "",
+        "",
+        "",  # Default settings
+        "y",  # Confirm
     )
     mock_token = {"access_token": "tok_abc", "account_id": "ACC123", "refresh_token": "REF_XYZ"}
     with (
@@ -228,14 +251,19 @@ def test_wizard_epic_auth_failure_continues(tmp_path: Path) -> None:
     """If Epic auth fails, the wizard skips Epic and continues."""
     config_path = tmp_path / "config.toml"
     inputs = _inputs(
-        "STEAMKEY", "76561198001",
+        "STEAMKEY",
+        "76561198001",
         "y",
         "n",
         "BADCODE",
         "n",  # Skip GOG
         "n",  # Disable GamePass
         "n",  # Skip Twitch
-        "", "", "", "", "",
+        "",
+        "",
+        "",
+        "",
+        "",
         "y",
     )
     with (
@@ -253,14 +281,19 @@ def test_wizard_prints_epic_auth_url(tmp_path: Path, capsys: pytest.CaptureFixtu
     """The wizard must print the Epic auth URL for the user to open manually."""
     config_path = tmp_path / "config.toml"
     inputs = _inputs(
-        "STEAMKEY", "76561198001",
+        "STEAMKEY",
+        "76561198001",
         "y",
-        "n",         # Don't open browser
+        "n",  # Don't open browser
         "AUTHCODE",
         "n",  # Skip GOG
         "n",  # Disable GamePass
         "n",  # Skip Twitch
-        "", "", "", "", "",
+        "",
+        "",
+        "",
+        "",
+        "",
         "y",
     )
     mock_token = {"access_token": "tok", "account_id": "A", "refresh_token": "RT"}
@@ -276,14 +309,19 @@ def test_wizard_prints_epic_auth_url(tmp_path: Path, capsys: pytest.CaptureFixtu
 def test_wizard_opens_browser_when_requested(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     inputs = _inputs(
-        "STEAMKEY", "76561198001",
+        "STEAMKEY",
+        "76561198001",
         "y",
-        "y",         # Open browser automatically
+        "y",  # Open browser automatically
         "AUTHCODE",
         "n",  # Skip GOG
         "n",  # Disable GamePass
         "n",  # Skip Twitch
-        "", "", "", "", "",
+        "",
+        "",
+        "",
+        "",
+        "",
         "y",
     )
     mock_token = {"access_token": "tok", "account_id": "A", "refresh_token": "RT"}
@@ -385,14 +423,19 @@ def test_wizard_summary_masks_key_secret_and_token(
         return {"refresh_token": "RT_SECRET", "account_id": "ACC123"}
 
     inputs = _inputs(
-        "MYKEY", "MYSTEAMID",
+        "MYKEY",
+        "MYSTEAMID",
         "y",  # enable Epic
         "n",  # skip opening browser
         "MYAUTHCODE",  # auth code
         "n",  # skip GOG
         "n",  # disable GamePass
         "n",  # skip twitch
-        "", "", "", "", "",  # settings defaults
+        "",
+        "",
+        "",
+        "",
+        "",  # settings defaults
         "y",  # confirm
     )
     with (
@@ -427,14 +470,19 @@ def _with_gog_setup(
 ) -> tuple[str, ...]:
     """Return inputs for a wizard run that skips Epic, sets up GOG, skips GamePass and Twitch."""
     return (
-        key, steamid,  # Steam
-        "n",           # Skip Epic
-        "y",           # Enable GOG
-        "n",           # Don't open browser
-        gog_auth_code, # Paste GOG auth code
-        "n",           # Skip GamePass
-        skip_twitch,   # Skip Twitch
-        "", "", "", "", "",  # Default settings
+        key,
+        steamid,  # Steam
+        "n",  # Skip Epic
+        "y",  # Enable GOG
+        "n",  # Don't open browser
+        gog_auth_code,  # Paste GOG auth code
+        "n",  # Skip GamePass
+        skip_twitch,  # Skip Twitch
+        "",
+        "",
+        "",
+        "",
+        "",  # Default settings
         confirm,
     )
 
@@ -454,12 +502,17 @@ def test_wizard_saves_gog_refresh_credentials(tmp_path: Path) -> None:
 def test_wizard_no_gog_when_skipped(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     inputs = _inputs(
-        "STEAMKEY", "76561198001",  # Steam
+        "STEAMKEY",
+        "76561198001",  # Steam
         "n",  # Skip Epic
         "n",  # Skip GOG
         "n",  # Skip GamePass
         "n",  # Skip Twitch
-        "", "", "", "", "",  # Default settings
+        "",
+        "",
+        "",
+        "",
+        "",  # Default settings
         "y",  # Confirm
     )
     with patch("builtins.input", inputs):
@@ -505,12 +558,17 @@ def test_wizard_prints_gog_auth_url(tmp_path: Path, capsys: pytest.CaptureFixtur
 def test_wizard_saves_gamepass_enabled(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     inputs = _inputs(
-        "STEAMKEY", "76561198001",  # Steam
+        "STEAMKEY",
+        "76561198001",  # Steam
         "n",  # Skip Epic
         "n",  # Skip GOG
         "y",  # Enable GamePass
         "n",  # Skip Twitch
-        "", "", "", "", "",  # Default settings
+        "",
+        "",
+        "",
+        "",
+        "",  # Default settings
         "y",  # Confirm
     )
     with patch("builtins.input", inputs):
@@ -522,12 +580,17 @@ def test_wizard_saves_gamepass_enabled(tmp_path: Path) -> None:
 def test_wizard_no_gamepass_when_disabled(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     inputs = _inputs(
-        "STEAMKEY", "76561198001",
+        "STEAMKEY",
+        "76561198001",
         "n",  # Skip Epic
         "n",  # Skip GOG
         "n",  # Disable GamePass
         "n",  # Skip Twitch
-        "", "", "", "", "",
+        "",
+        "",
+        "",
+        "",
+        "",
         "y",
     )
     with patch("builtins.input", inputs):

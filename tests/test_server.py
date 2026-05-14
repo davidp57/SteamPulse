@@ -1,4 +1,5 @@
 """Tests for the SteamPulse sidecar HTTP server (steam_tracker/server.py)."""
+
 from __future__ import annotations
 
 import json
@@ -314,6 +315,7 @@ def test_make_handler_returns_handler_class(tmp_path: Path) -> None:
     Database(db_path)
     handler_cls = make_handler(db_path, tmp_path, steamid="", lang=None)
     from http.server import BaseHTTPRequestHandler  # noqa: PLC0415
+
     assert issubclass(handler_cls, BaseHTTPRequestHandler)
 
 
@@ -344,7 +346,9 @@ class TestLoginPage:
             conn = HTTPConnection("127.0.0.1", port)
             body = f"token={_TOKEN}".encode()
             conn.request(
-                "POST", "/login", body=body,
+                "POST",
+                "/login",
+                body=body,
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
             resp = conn.getresponse()
@@ -363,7 +367,9 @@ class TestLoginPage:
             conn = HTTPConnection("127.0.0.1", port)
             body = b"token=wrongpassword"
             conn.request(
-                "POST", "/login", body=body,
+                "POST",
+                "/login",
+                body=body,
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
             resp = conn.getresponse()
@@ -455,7 +461,8 @@ class TestAuthProtection:
         try:
             conn = HTTPConnection("127.0.0.1", port)
             conn.request(
-                "POST", "/api/mark-removed/56",
+                "POST",
+                "/api/mark-removed/56",
                 headers={"Cookie": _COOKIE_HDR},
             )
             resp = conn.getresponse()
@@ -547,7 +554,7 @@ class TestRefetch:
     def test_refetch_no_credentials_sends_sse_error(self, tmp_path: Path) -> None:
         """When no config exists (no key/steamid), the SSE stream emits an error event."""
         cfg_path = tmp_path / "config.toml"
-        cfg_path.write_text("[steam]\nkey = \"\"\nsteamid = \"\"\n", encoding="utf-8")
+        cfg_path.write_text('[steam]\nkey = ""\nsteamid = ""\n', encoding="utf-8")
         port, httpd = _start_server(tmp_path, config_path=cfg_path)
         try:
             conn = HTTPConnection("127.0.0.1", port)
@@ -569,7 +576,7 @@ class TestRefetch:
         it must get another SSE error event just like the first call.
         """
         cfg_path = tmp_path / "config.toml"
-        cfg_path.write_text("[steam]\nkey = \"\"\nsteamid = \"\"\n", encoding="utf-8")
+        cfg_path.write_text('[steam]\nkey = ""\nsteamid = ""\n', encoding="utf-8")
         port, httpd = _start_server(tmp_path, config_path=cfg_path)
         try:
             for _ in range(2):
@@ -589,9 +596,7 @@ class TestRefetch:
         cfg_path = tmp_path / "config.toml"
         # Provide non-empty credentials so the pre-flight check passes and the
         # handler reaches the subprocess call (where the lock is still held).
-        cfg_path.write_text(
-            "[steam]\nkey = \"FAKE\"\nsteamid = \"12345\"\n", encoding="utf-8"
-        )
+        cfg_path.write_text('[steam]\nkey = "FAKE"\nsteamid = "12345"\n', encoding="utf-8")
         port, httpd = _start_server(tmp_path, config_path=cfg_path)
 
         # Use an Event so the mock subprocess blocks until we release it.
@@ -691,9 +696,7 @@ class TestConfigPage:
         finally:
             httpd.shutdown()
 
-    def test_config_page_redirects_unauthenticated_when_token_set(
-        self, tmp_path: Path
-    ) -> None:
+    def test_config_page_redirects_unauthenticated_when_token_set(self, tmp_path: Path) -> None:
         """GET /config must redirect to /login when a token is set and user is not authed."""
         port, httpd = _start_server(tmp_path, token=_TOKEN)
         try:
@@ -729,7 +732,7 @@ class TestApiConfigGet:
     def test_get_config_bootstrap_no_auth_needed(self, tmp_path: Path) -> None:
         """GET /api/config is accessible without auth in bootstrap mode."""
         cfg_path = tmp_path / "config.toml"
-        cfg_path.write_text("[steam]\nsteamid = \"12345\"\n", encoding="utf-8")
+        cfg_path.write_text('[steam]\nsteamid = "12345"\n', encoding="utf-8")
         port, httpd = _start_server(tmp_path, config_path=cfg_path)
         try:
             conn = HTTPConnection("127.0.0.1", port)
@@ -746,7 +749,7 @@ class TestApiConfigGet:
     def test_get_config_masks_api_key(self, tmp_path: Path) -> None:
         """GET /api/config must return '***' for the Steam API key."""
         cfg_path = tmp_path / "config.toml"
-        cfg_path.write_text("[steam]\nkey = \"REAL_KEY\"\n", encoding="utf-8")
+        cfg_path.write_text('[steam]\nkey = "REAL_KEY"\n', encoding="utf-8")
         port, httpd = _start_server(tmp_path, config_path=cfg_path)
         try:
             conn = HTTPConnection("127.0.0.1", port)
@@ -794,13 +797,15 @@ class TestApiConfigPost:
     def test_post_config_saves_settings(self, tmp_path: Path) -> None:
         """POST /api/config persists non-empty, non-masked values to TOML."""
         cfg_path = tmp_path / "config.toml"
-        cfg_path.write_text("[steam]\nsteamid = \"111\"\n", encoding="utf-8")
+        cfg_path.write_text('[steam]\nsteamid = "111"\n', encoding="utf-8")
         port, httpd = _start_server(tmp_path, config_path=cfg_path)
         try:
             conn = HTTPConnection("127.0.0.1", port)
             payload = json.dumps({"workers": 8, "steamid": "222"}).encode()
             conn.request(
-                "POST", "/api/config", body=payload,
+                "POST",
+                "/api/config",
+                body=payload,
                 headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
             )
             resp = conn.getresponse()
@@ -810,6 +815,7 @@ class TestApiConfigPost:
             assert data["restarting"] is False
             # Verify the config file was updated
             from steam_tracker.config import load_config  # noqa: PLC0415
+
             saved = load_config(cfg_path)
             assert saved["workers"] == 8
             assert saved["steamid"] == "222"
@@ -819,18 +825,21 @@ class TestApiConfigPost:
     def test_post_config_ignores_masked_values(self, tmp_path: Path) -> None:
         """POST /api/config must NOT overwrite credentials with '***'."""
         cfg_path = tmp_path / "config.toml"
-        cfg_path.write_text("[steam]\nkey = \"REAL_KEY\"\n", encoding="utf-8")
+        cfg_path.write_text('[steam]\nkey = "REAL_KEY"\n', encoding="utf-8")
         port, httpd = _start_server(tmp_path, config_path=cfg_path)
         try:
             conn = HTTPConnection("127.0.0.1", port)
             payload = json.dumps({"key": "***"}).encode()
             conn.request(
-                "POST", "/api/config", body=payload,
+                "POST",
+                "/api/config",
+                body=payload,
                 headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
             )
             resp = conn.getresponse()
             resp.read()
             from steam_tracker.config import load_config  # noqa: PLC0415
+
             saved = load_config(cfg_path)
             assert saved["key"] == "REAL_KEY"
         finally:
@@ -843,7 +852,9 @@ class TestApiConfigPost:
             conn = HTTPConnection("127.0.0.1", port)
             payload = b"not json"
             conn.request(
-                "POST", "/api/config", body=payload,
+                "POST",
+                "/api/config",
+                body=payload,
                 headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
             )
             resp = conn.getresponse()
@@ -860,7 +871,9 @@ class TestApiConfigPost:
             conn = HTTPConnection("127.0.0.1", port)
             payload = json.dumps({"workers": 4}).encode()
             conn.request(
-                "POST", "/api/config", body=payload,
+                "POST",
+                "/api/config",
+                body=payload,
                 headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
             )
             resp = conn.getresponse()
@@ -879,7 +892,9 @@ class TestApiConfigPost:
             conn = HTTPConnection("127.0.0.1", port)
             payload = json.dumps({"gamepass": "false"}).encode()
             conn.request(
-                "POST", "/api/config", body=payload,
+                "POST",
+                "/api/config",
+                body=payload,
                 headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
             )
             resp = conn.getresponse()
@@ -887,6 +902,7 @@ class TestApiConfigPost:
             assert resp.status == 200
             assert data["ok"] is True
             from steam_tracker.config import load_config  # noqa: PLC0415
+
             saved = load_config(cfg_path)
             assert saved["gamepass"] is False
         finally:
@@ -899,7 +915,9 @@ class TestApiConfigPost:
             conn = HTTPConnection("127.0.0.1", port)
             payload = json.dumps({"gamepass": "maybe"}).encode()
             conn.request(
-                "POST", "/api/config", body=payload,
+                "POST",
+                "/api/config",
+                body=payload,
                 headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
             )
             resp = conn.getresponse()
@@ -909,3 +927,362 @@ class TestApiConfigPost:
         finally:
             httpd.shutdown()
 
+
+# ---------------------------------------------------------------------------
+# POST /api/playnite/import
+# ---------------------------------------------------------------------------
+
+
+class TestPlayniteImport:
+    def test_import_valid_json_returns_imported_count(self, tmp_path: Path) -> None:
+        """POST /api/playnite/import with a valid Playnite export JSON returns counts."""
+        db_path = tmp_path / "test.db"
+        Database(db_path)
+        games = [
+            {
+                "Id": "uuid-aaaa",
+                "Name": "Half-Life 2",
+                "GameId": "420",
+                "PluginId": "cb91dfc9-b977-43bf-8e70-55f46e410fab",
+            },
+            {
+                "Id": "uuid-bbbb",
+                "Name": "CS2",
+                "GameId": "730",
+                "PluginId": "cb91dfc9-b977-43bf-8e70-55f46e410fab",
+            },
+        ]
+        port, httpd = _start_server(tmp_path)
+        try:
+            body = json.dumps(games).encode()
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request(
+                "POST",
+                "/api/playnite/import",
+                body=body,
+                headers={"Content-Type": "application/json", "Content-Length": str(len(body))},
+            )
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 200
+            assert data["ok"] is True
+            assert data["imported"] == 2
+            assert data["skipped"] == 0
+        finally:
+            httpd.shutdown()
+
+    def test_import_filters_non_steam_plugin_ids(self, tmp_path: Path) -> None:
+        """Entries with non-Steam PluginId must be skipped."""
+        db_path = tmp_path / "test.db"
+        Database(db_path)
+        games = [
+            {
+                "Id": "uuid-aaaa",
+                "Name": "Half-Life 2",
+                "GameId": "420",
+                "PluginId": "cb91dfc9-b977-43bf-8e70-55f46e410fab",  # Steam
+            },
+            {
+                "Id": "uuid-cccc",
+                "Name": "Cyberpunk 2077",
+                "GameId": "77777",
+                "PluginId": "aabb1234-1234-1234-1234-aabbccddee00",  # Non-Steam
+            },
+        ]
+        port, httpd = _start_server(tmp_path)
+        try:
+            body = json.dumps(games).encode()
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request(
+                "POST",
+                "/api/playnite/import",
+                body=body,
+                headers={"Content-Type": "application/json", "Content-Length": str(len(body))},
+            )
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 200
+            assert data["imported"] == 1
+            assert data["skipped"] == 1
+        finally:
+            httpd.shutdown()
+
+    def test_import_malformed_json_returns_400(self, tmp_path: Path) -> None:
+        """Non-JSON body must return HTTP 400."""
+        port, httpd = _start_server(tmp_path)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request(
+                "POST",
+                "/api/playnite/import",
+                body=b"not json",
+                headers={"Content-Type": "application/json", "Content-Length": "8"},
+            )
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 400
+            assert data["ok"] is False
+        finally:
+            httpd.shutdown()
+
+    def test_import_body_too_large_returns_413(self, tmp_path: Path) -> None:
+        """A Content-Length larger than 10 MB must return HTTP 413 (body is not read)."""
+        port, httpd = _start_server(tmp_path)
+        try:
+            # Claim an oversized payload via Content-Length; actual body is tiny.
+            # The server rejects based on the header value alone, so we never
+            # need to actually transmit 10+ MB.
+            fake_length = 10 * 1024 * 1024 + 1
+            small_body = b"[]"
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request(
+                "POST",
+                "/api/playnite/import",
+                body=small_body,
+                headers={
+                    "Content-Type": "application/json",
+                    "Content-Length": str(fake_length),
+                },
+            )
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 413
+            assert data["ok"] is False
+        finally:
+            httpd.shutdown()
+
+    def test_import_requires_auth_when_token_set(self, tmp_path: Path) -> None:
+        """POST /api/playnite/import must return 401 when token is set and user is not authed."""
+        port, httpd = _start_server(tmp_path, token=_TOKEN)
+        try:
+            games = [{"Id": "uuid", "Name": "Game", "GameId": "1", "PluginId": "steam-plugin"}]
+            body = json.dumps(games).encode()
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request(
+                "POST",
+                "/api/playnite/import",
+                body=body,
+                headers={"Content-Type": "application/json", "Content-Length": str(len(body))},
+            )
+            resp = conn.getresponse()
+            resp.read()
+            assert resp.status == 401
+        finally:
+            httpd.shutdown()
+
+    def test_import_stores_mappings_in_db(self, tmp_path: Path) -> None:
+        """After import, the DB must contain the Playnite UUID mappings."""
+        db_path = tmp_path / "test.db"
+        Database(db_path)
+        games = [
+            {
+                "Id": "uuid-aaaa",
+                "Name": "Half-Life 2",
+                "GameId": "420",
+                "PluginId": "cb91dfc9-b977-43bf-8e70-55f46e410fab",
+            },
+        ]
+        port, httpd = _start_server(tmp_path)
+        try:
+            body = json.dumps(games).encode()
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request(
+                "POST",
+                "/api/playnite/import",
+                body=body,
+                headers={"Content-Type": "application/json", "Content-Length": str(len(body))},
+            )
+            resp = conn.getresponse()
+            resp.read()
+            assert resp.status == 200
+        finally:
+            httpd.shutdown()
+
+        # Verify DB contents after import
+        db = Database(db_path)
+        mappings = db.get_playnite_mappings()
+        assert mappings.get("420") == "uuid-aaaa"
+
+
+# ---------------------------------------------------------------------------
+# POST /api/playnite/import/csv
+# ---------------------------------------------------------------------------
+
+_CSV_HEADER = "Name,Developers,Publishers,Game Id,Installed,Platforms,PluginId,Sources,Id\r\n"
+_STEAM_PLUGIN = "cb91dfc9-b977-43bf-8e70-55f46e410fab"
+
+
+class TestPlayniteCsvImport:
+    def test_csv_import_returns_imported_count(self, tmp_path: Path) -> None:
+        """Steam and Epic rows are imported; unsupported sources are skipped."""
+        Database(tmp_path / "test.db")
+        _epic_plugin = "00000002-dbd1-46c6-b5d0-b1ba559d10e4"
+        csv_body = (
+            _CSV_HEADER
+            + f"Half-Life 2,,,420,False,PC (Windows),{_STEAM_PLUGIN},Steam,uuid-aaaa\r\n"
+            + f"CS2,,,730,False,PC (Windows),{_STEAM_PLUGIN},Steam,uuid-bbbb\r\n"
+            + f"[REDACTED],,,abc123,False,PC (Windows),{_epic_plugin},Epic,uuid-cccc\r\n"
+            + "GOG Game,,,1234567890,False,PC (Windows),gog-plugin-id,GOG,uuid-dddd\r\n"
+        )
+        port, httpd = _start_server(tmp_path)
+        try:
+            body = csv_body.encode("utf-8")
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request(
+                "POST",
+                "/api/playnite/import/csv",
+                body=body,
+                headers={
+                    "Content-Type": "text/csv; charset=utf-8",
+                    "Content-Length": str(len(body)),
+                },
+            )
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 200
+            assert data["ok"] is True
+            assert data["imported"] == 3  # Steam x2 + Epic x1
+            assert data["skipped"] == 1  # GOG
+        finally:
+            httpd.shutdown()
+
+    def test_csv_import_stores_uuid_mapping(self, tmp_path: Path) -> None:
+        """UUID from the Id column must be stored in playnite_mappings."""
+        db_path = tmp_path / "test.db"
+        Database(db_path)
+        csv_body = (
+            _CSV_HEADER
+            + f"Half-Life 2,,,420,False,PC (Windows),{_STEAM_PLUGIN},Steam,uuid-aaaa\r\n"
+        )
+        port, httpd = _start_server(tmp_path)
+        try:
+            body = csv_body.encode("utf-8")
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request(
+                "POST",
+                "/api/playnite/import/csv",
+                body=body,
+                headers={
+                    "Content-Type": "text/csv; charset=utf-8",
+                    "Content-Length": str(len(body)),
+                },
+            )
+            resp = conn.getresponse()
+            resp.read()
+            assert resp.status == 200
+        finally:
+            httpd.shutdown()
+
+        db = Database(db_path)
+        mappings = db.get_playnite_mappings()
+        assert mappings.get("420") == "uuid-aaaa"
+
+    def test_csv_import_without_id_column_still_works(self, tmp_path: Path) -> None:
+        """CSV without an Id column must still import game_key with empty uuid."""
+        db_path = tmp_path / "test.db"
+        Database(db_path)
+        csv_body = "Name,Game Id,Sources\r\nPortal,400,Steam\r\n"
+        port, httpd = _start_server(tmp_path)
+        try:
+            body = csv_body.encode("utf-8")
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request(
+                "POST",
+                "/api/playnite/import/csv",
+                body=body,
+                headers={
+                    "Content-Type": "text/csv; charset=utf-8",
+                    "Content-Length": str(len(body)),
+                },
+            )
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 200
+            assert data["imported"] == 1
+        finally:
+            httpd.shutdown()
+
+        db = Database(db_path)
+        mappings = db.get_playnite_mappings()
+        assert "400" in mappings
+
+    def test_csv_import_epic_game_key_stored(self, tmp_path: Path) -> None:
+        """Epic rows must be stored with game_key 'epic:<game_id>' in playnite_mappings."""
+        db_path = tmp_path / "test.db"
+        Database(db_path)
+        _epic_plugin = "00000002-dbd1-46c6-b5d0-b1ba559d10e4"
+        csv_body = (
+            _CSV_HEADER + f"Fortnite,,,abc123,False,PC (Windows),{_epic_plugin},Epic,uuid-epic1\r\n"
+        )
+        port, httpd = _start_server(tmp_path)
+        try:
+            body = csv_body.encode("utf-8")
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request(
+                "POST",
+                "/api/playnite/import/csv",
+                body=body,
+                headers={
+                    "Content-Type": "text/csv; charset=utf-8",
+                    "Content-Length": str(len(body)),
+                },
+            )
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 200
+            assert data["imported"] == 1
+        finally:
+            httpd.shutdown()
+
+        # game_key stored as "epic:abc123"; no game in DB yet so get_playnite_mappings
+        # returns the raw key (no JOIN match).
+        db = Database(db_path)
+        with db._connect() as con:
+            row = con.execute(
+                "SELECT game_key, playnite_uuid FROM playnite_mappings"
+                " WHERE game_key = 'epic:abc123'"
+            ).fetchone()
+        assert row is not None
+        assert row[1] == "uuid-epic1"
+
+    def test_csv_import_body_too_large_returns_413(self, tmp_path: Path) -> None:
+        """Content-Length > 10 MB must return 413."""
+        port, httpd = _start_server(tmp_path)
+        try:
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request(
+                "POST",
+                "/api/playnite/import/csv",
+                body=b"Name,Game Id,Sources\r\n",
+                headers={
+                    "Content-Type": "text/csv; charset=utf-8",
+                    "Content-Length": str(10 * 1024 * 1024 + 1),
+                },
+            )
+            resp = conn.getresponse()
+            data = json.loads(resp.read())
+            assert resp.status == 413
+            assert data["ok"] is False
+        finally:
+            httpd.shutdown()
+
+    def test_csv_import_requires_auth_when_token_set(self, tmp_path: Path) -> None:
+        """CSV import must return 401 when token is set and user is not authed."""
+        port, httpd = _start_server(tmp_path, token=_TOKEN)
+        try:
+            body = b"Name,Game Id,Sources\r\nPortal,400,Steam\r\n"
+            conn = HTTPConnection("127.0.0.1", port)
+            conn.request(
+                "POST",
+                "/api/playnite/import/csv",
+                body=body,
+                headers={
+                    "Content-Type": "text/csv; charset=utf-8",
+                    "Content-Length": str(len(body)),
+                },
+            )
+            resp = conn.getresponse()
+            resp.read()
+            assert resp.status == 401
+        finally:
+            httpd.shutdown()

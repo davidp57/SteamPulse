@@ -45,10 +45,14 @@ _ROUTE_API_CONFIG = "/api/config"
 _ROUTE_MARK_REMOVED = re.compile(r"^/api/mark-removed/(\d+)$")
 _ROUTE_MARK_ACTIVE = re.compile(r"^/api/mark-active/(\d+)$")
 _ROUTE_DELETE = re.compile(r"^/api/delete/(\d+)$")
+_ROUTE_PLAYNITE_IMPORT = "/api/playnite/import"
+_ROUTE_PLAYNITE_IMPORT_CSV = "/api/playnite/import/csv"
+_PLAYNITE_STEAM_PLUGIN_ID = "cb91dfc9-b977-43bf-8e70-55f46e410fab"
+_PLAYNITE_EPIC_PLUGIN_ID = "00000002-dbd1-46c6-b5d0-b1ba559d10e4"
 
 # Config fields that must be stored as specific Python types.
 _INT_CONFIG_KEYS: frozenset[str] = frozenset({"workers", "news_age"})
-_BOOL_CONFIG_KEYS: frozenset[str] = frozenset({"gamepass"})
+_BOOL_CONFIG_KEYS: frozenset[str] = frozenset({"gamepass", "playnite"})
 
 # Only allow plain filenames — no path traversal, no directories.
 _SAFE_FILENAME = re.compile(r"^[\w\-. ]+\.html$")
@@ -109,7 +113,13 @@ $FORM_ERROR$<form method="POST" action="/login">
 # ---------------------------------------------------------------------------
 
 
-def _rerender(db: Database, steamid: str, output_dir: Path, lang: str | None) -> None:
+def _rerender(
+    db: Database,
+    steamid: str,
+    output_dir: Path,
+    lang: str | None,
+    config_path: Path | None = None,
+) -> None:
     """Re-render all HTML pages after a mutation.
 
     Does nothing when *steamid* is empty (no credentials configured).
@@ -119,10 +129,20 @@ def _rerender(db: Database, steamid: str, output_dir: Path, lang: str | None) ->
         steamid: User's SteamID64.  Skipped when empty string.
         output_dir: Directory containing the HTML output files.
         lang: Language code (or None for system default).
+        config_path: Path to the TOML config file, or ``None`` for the
+            platform default.  Used to read Playnite settings.
     """
     if not steamid:
         return
     records = db.get_all_game_records()
+    # Load playnite settings from config
+    try:
+        _cfg_path = config_path or get_config_path()
+        _cfg = load_config(_cfg_path) if _cfg_path.exists() else {}
+    except Exception:
+        _cfg = {}
+    _playnite_enabled = bool(_cfg.get("playnite", False))
+    _playnite_mappings = db.get_playnite_mappings() if _playnite_enabled else None
     lib_path = output_dir / "steam_library.html"
     alerts_path = output_dir / "steam_alerts.html"
     diag_path = output_dir / "steam_diagnostic.html"
@@ -136,6 +156,8 @@ def _rerender(db: Database, steamid: str, output_dir: Path, lang: str | None) ->
         alerts_href=alerts_path.name,
         diag_href=diag_path.name,
         lang=lang,
+        playnite_enabled=_playnite_enabled,
+        playnite_mappings=_playnite_mappings,
     )
     write_alerts_html(
         db.get_alerts(),
@@ -464,7 +486,13 @@ def make_handler(
                             self.wfile.write(f"data: {_data}\n\n".encode())
                             self.wfile.flush()
                             try:
-                                _rerender(Database(db_path), steamid, output_dir, lang)
+                                _rerender(
+                                    Database(db_path),
+                                    steamid,
+                                    output_dir,
+                                    lang,
+                                    config_path=config_path,
+                                )
                             except Exception as _exc:
                                 ok = False
                                 log.error("re-render after fetch failed: %s", _exc)
@@ -590,7 +618,7 @@ def make_handler(
             if path == _ROUTE_RERENDER:
                 _db = Database(db_path)
                 try:
-                    _rerender(_db, steamid, output_dir, lang)
+                    _rerender(_db, steamid, output_dir, lang, config_path=config_path)
                     self._send_json(200, {"ok": True})
                 except Exception as _exc:
                     log.error("rerender failed: %s", _exc)
@@ -600,14 +628,14 @@ def make_handler(
                 db = Database(db_path)
                 changed = db.mark_removed({appid})
                 if changed:
-                    _rerender(db, steamid, output_dir, lang)
+                    _rerender(db, steamid, output_dir, lang, config_path=config_path)
                 self._send_json(200, {"ok": True, "appid": appid, "changed": changed})
             elif m := _ROUTE_MARK_ACTIVE.match(path):
                 appid = int(m.group(1))
                 db = Database(db_path)
                 changed = db.mark_active({appid})
                 if changed:
-                    _rerender(db, steamid, output_dir, lang)
+                    _rerender(db, steamid, output_dir, lang, config_path=config_path)
                 self._send_json(200, {"ok": True, "appid": appid, "changed": changed})
             elif m := _ROUTE_DELETE.match(path):
                 appid = int(m.group(1))
@@ -616,8 +644,93 @@ def make_handler(
                 if changed == 0:
                     self._send_json(404, {"ok": False, "error": "not found", "appid": appid})
                 else:
-                    _rerender(db, steamid, output_dir, lang)
+                    _rerender(db, steamid, output_dir, lang, config_path=config_path)
                     self._send_json(200, {"ok": True, "appid": appid, "changed": changed})
+            elif path == _ROUTE_PLAYNITE_IMPORT:
+                length = int(self.headers.get("Content-Length", 0))
+                if length > 10 * 1024 * 1024:  # 10 MB guard
+                    self._send_json(413, {"ok": False, "error": "file too large"})
+                    return
+                raw = self.rfile.read(max(0, length)).decode(errors="replace")
+                try:
+                    games_payload = json.loads(raw)
+                    if not isinstance(games_payload, list):
+                        raise ValueError("expected array")
+                except (json.JSONDecodeError, ValueError):
+                    self._send_json(400, {"ok": False, "error": "invalid JSON"})
+                    return
+                _steam_plugin_id = "cb91dfc9-b977-43bf-8e70-55f46e410fab"
+                entries: list[dict[str, object]] = []
+                skipped = 0
+                for g in games_payload:
+                    if not isinstance(g, dict):
+                        skipped += 1
+                        continue
+                    plugin_id = g.get("PluginId", "")
+                    game_id = g.get("GameId", "")
+                    playnite_id = g.get("Id", "")
+                    name = g.get("Name", "")
+                    if plugin_id != _steam_plugin_id or not game_id or not playnite_id:
+                        skipped += 1
+                        continue
+                    entries.append(
+                        {
+                            "game_key": str(game_id),
+                            "playnite_uuid": str(playnite_id),
+                            "name": str(name),
+                        }
+                    )
+                _db = Database(db_path)
+                imported = _db.upsert_playnite_mappings(entries)
+                if imported:
+                    _rerender(_db, steamid, output_dir, lang, config_path=config_path)
+                self._send_json(200, {"ok": True, "imported": imported, "skipped": skipped})
+            elif path == _ROUTE_PLAYNITE_IMPORT_CSV:
+                import csv as _csv
+                import io as _io
+
+                length = int(self.headers.get("Content-Length", 0))
+                if length > 10 * 1024 * 1024:  # 10 MB guard
+                    self._send_json(413, {"ok": False, "error": "file too large"})
+                    return
+                raw = self.rfile.read(max(0, length)).decode("utf-8-sig", errors="replace")
+                try:
+                    reader = _csv.DictReader(_io.StringIO(raw))
+                    csv_entries: list[dict[str, object]] = []
+                    csv_skipped = 0
+                    for row in reader:
+                        source = (row.get("Sources") or "").strip()
+                        game_id = (row.get("Game Id") or "").strip()
+                        name = (row.get("Name") or "").strip()
+                        playnite_id = (row.get("Id") or "").strip()
+                        plugin_id = (row.get("PluginId") or "").strip()
+                        if not game_id:
+                            csv_skipped += 1
+                            continue
+                        is_steam = source == "Steam" or plugin_id == _PLAYNITE_STEAM_PLUGIN_ID
+                        is_epic = source == "Epic" or plugin_id == _PLAYNITE_EPIC_PLUGIN_ID
+                        if is_steam:
+                            game_key = game_id
+                        elif is_epic:
+                            game_key = f"epic:{game_id}"
+                        else:
+                            csv_skipped += 1
+                            continue
+                        csv_entries.append(
+                            {
+                                "game_key": game_key,
+                                "playnite_uuid": playnite_id,
+                                "name": name,
+                            }
+                        )
+                except Exception as _exc:
+                    self._send_json(400, {"ok": False, "error": f"invalid CSV: {_exc}"})
+                    return
+                _db = Database(db_path)
+                imported = _db.upsert_playnite_mappings(csv_entries)
+                if imported:
+                    _rerender(_db, steamid, output_dir, lang, config_path=config_path)
+                self._send_json(200, {"ok": True, "imported": imported, "skipped": csv_skipped})
             else:
                 self._not_found()
 

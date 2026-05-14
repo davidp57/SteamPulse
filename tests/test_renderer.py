@@ -1,4 +1,5 @@
 """Tests for steam_tracker.renderer."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -86,8 +87,15 @@ def test_make_card_falls_back_to_cdn_url_when_no_details() -> None:
 def test_generate_html_replaces_all_placeholders(sample_record: GameRecord) -> None:
     page = generate_html([sample_record], "76561198000000000")
     placeholders = [
-        "__SHARED_JS__", "__GENERATED_AT__", "__STEAM_ID__", "__TOTAL__",
-        "__EA__", "__REL__", "__UNREL__", "__CARDS__", "__I18N_JS__",
+        "__SHARED_JS__",
+        "__GENERATED_AT__",
+        "__STEAM_ID__",
+        "__TOTAL__",
+        "__EA__",
+        "__REL__",
+        "__UNREL__",
+        "__CARDS__",
+        "__I18N_JS__",
         "__DIAG_HREF__",
     ]
     for ph in placeholders:
@@ -104,10 +112,11 @@ def test_generate_html_has_diagnostic_nav_link(sample_record: GameRecord) -> Non
 def test_generate_html_stat_counts(sample_record: GameRecord) -> None:
     page = generate_html([sample_record], "76561198000000000")
     # 1 total, 0 EA, 1 released, 0 unreleased
-    assert ">1<" in page or ">1 <" in page or "stat-val\">1" in page
+    assert ">1<" in page or ">1 <" in page or 'stat-val">1' in page
 
 
 # ── New field helpers ─────────────────────────────────────────────────────────
+
 
 def test_metacritic_html_green_score() -> None:
     html = _metacritic_html(96, "https://metacritic.com/game/half-life-2")
@@ -273,6 +282,7 @@ def test_generate_html_uses_aspect_ratio_for_card_img() -> None:
 
 # ── _parse_release_ts ─────────────────────────────────────────────────────────
 
+
 def test_parse_release_ts_standard_date() -> None:
     ts = _parse_release_ts("01 Jan 2020")
     assert ts == int(datetime(2020, 1, 1, tzinfo=UTC).timestamp())
@@ -299,6 +309,7 @@ def test_parse_release_ts_empty_returns_zero() -> None:
 
 
 # ── make_card — news timestamps ───────────────────────────────────────────────
+
 
 def test_make_card_sets_patchnote_timestamp(sample_record: GameRecord) -> None:
     # sample_record has a news item with tags=["patchnotes", "valve"]
@@ -354,6 +365,7 @@ def test_write_html_creates_file(sample_record: GameRecord, tmp_path: Path) -> N
 
 # ── Epic source display ───────────────────────────────────────────────────────
 
+
 def _epic_record() -> GameRecord:
     """An Epic-only game with a hash-based appid (no Steam enrichment)."""
     return GameRecord(
@@ -377,6 +389,43 @@ def test_make_card_epic_hint_is_epic_not_steam() -> None:
     card = make_card(_epic_record())
     assert "🎮 Epic" in card
     assert "↗ Steam" not in card
+
+
+# ── Playnite integration ──────────────────────────────────────────────────────
+
+
+def test_make_card_no_playnite_button_by_default(sample_record: GameRecord) -> None:
+    card = make_card(sample_record)
+    assert "btn-playnite" not in card
+
+
+def test_make_card_playnite_button_present_when_enabled(sample_record: GameRecord) -> None:
+    card = make_card(sample_record, playnite_enabled=True)
+    assert "btn-playnite" in card
+
+
+def test_make_card_playnite_search_uri_fallback(sample_record: GameRecord) -> None:
+    card = make_card(sample_record, playnite_enabled=True)
+    assert "playnite://playnite/search/" in card
+    assert "playnite://playnite/showgame/" not in card
+
+
+def test_make_card_playnite_showgame_uri_when_mapping_exists(sample_record: GameRecord) -> None:
+    card = make_card(
+        sample_record, playnite_enabled=True, playnite_mappings={"420": "my-uuid-1234"}
+    )
+    assert "playnite://playnite/showgame/my-uuid-1234" in card
+    assert "playnite://playnite/search/" not in card
+
+
+def test_generate_html_playnite_disabled_no_buttons(sample_record: GameRecord) -> None:
+    page = generate_html([sample_record], "76561198000000000")
+    assert "btn-playnite" not in page
+
+
+def test_generate_html_playnite_enabled_buttons_present(sample_record: GameRecord) -> None:
+    page = generate_html([sample_record], "76561198000000000", playnite_enabled=True)
+    assert "btn-playnite" in page
 
 
 def test_make_card_epic_playtime_shows_epic_label() -> None:
@@ -570,16 +619,15 @@ def test_make_alert_card_has_news_url_attr() -> None:
     assert 'data-news-url="https://example.com/news"' in card
 
 
-
-
 # -- data-unknown attribute -------------------------------------------------
 
 
 def test_make_card_unknown_flag_set_for_synthetic_appid() -> None:
     """Cards with synthetic appid (>= 2B) must have data-unknown='true'."""
     record = GameRecord(
-        game=OwnedGame(appid=2_000_000_001, name="Unknown Game", source="epic",
-                        external_id="epic:cat1"),
+        game=OwnedGame(
+            appid=2_000_000_001, name="Unknown Game", source="epic", external_id="epic:cat1"
+        ),
         status=GameStatus(label="—", badge="unknown", release_date="—"),
     )
     card = make_card(record)
@@ -599,8 +647,12 @@ def test_make_card_unknown_flag_absent_for_real_appid() -> None:
 def test_make_card_unknown_flag_set_for_real_appid_no_details() -> None:
     """Cards with real appid but badge='unknown' (no details) must have data-unknown."""
     record = GameRecord(
-        game=OwnedGame(appid=31292, name="Dishonored - Definitive Edition",
-                        source="epic", external_id="epic:abc123"),
+        game=OwnedGame(
+            appid=31292,
+            name="Dishonored - Definitive Edition",
+            source="epic",
+            external_id="epic:abc123",
+        ),
         status=GameStatus(label="Inconnu", badge="unknown", release_date="—"),
     )
     card = make_card(record)
@@ -610,9 +662,13 @@ def test_make_card_unknown_flag_set_for_real_appid_no_details() -> None:
 def test_make_alert_card_unknown_flag_set_for_synthetic_appid() -> None:
     """Alert cards with synthetic appid must have data-unknown='true'."""
     alert = Alert(
-        id="a1", appid=2_000_000_001, game_name="Unknown Game",
-        rule_name="version_update", rule_icon="🔧",
-        title="Version Update", details="v1→v2",
+        id="a1",
+        appid=2_000_000_001,
+        game_name="Unknown Game",
+        rule_name="version_update",
+        rule_icon="🔧",
+        title="Version Update",
+        details="v1→v2",
         source_type="field_change",
         timestamp=datetime(2024, 1, 15, tzinfo=UTC),
     )
@@ -629,15 +685,23 @@ def test_make_alert_card_unknown_flag_absent_for_real_appid() -> None:
 def test_make_alert_card_unknown_flag_set_for_real_appid_unknown_status() -> None:
     """Alert cards with real appid but unknown status must have data-unknown."""
     alert = Alert(
-        id="a2", appid=31292, game_name="Dishonored - Definitive Edition",
-        rule_name="version_update", rule_icon="🔧",
-        title="Version Update", details="v1→v2",
+        id="a2",
+        appid=31292,
+        game_name="Dishonored - Definitive Edition",
+        rule_name="version_update",
+        rule_icon="🔧",
+        title="Version Update",
+        details="v1→v2",
         source_type="field_change",
         timestamp=datetime(2024, 1, 15, tzinfo=UTC),
     )
     record = GameRecord(
-        game=OwnedGame(appid=31292, name="Dishonored - Definitive Edition",
-                        source="epic", external_id="epic:abc123"),
+        game=OwnedGame(
+            appid=31292,
+            name="Dishonored - Definitive Edition",
+            source="epic",
+            external_id="epic:abc123",
+        ),
         status=GameStatus(label="Inconnu", badge="unknown", release_date="—"),
     )
     card = make_alert_card(alert, record=record)
@@ -651,8 +715,9 @@ def test_generate_diagnostic_html_with_unknown_games() -> None:
     """Unknown games should appear in the diagnostic output."""
     unknown = [
         GameRecord(
-            game=OwnedGame(appid=2_000_000_001, name="Mystery Game", source="epic",
-                            external_id="epic:cat99"),
+            game=OwnedGame(
+                appid=2_000_000_001, name="Mystery Game", source="epic", external_id="epic:cat99"
+            ),
             status=GameStatus(label="—", badge="unknown", release_date="—"),
         ),
     ]
@@ -716,6 +781,7 @@ def test_generate_alerts_html_has_nav_in_toolbar(sample_record: GameRecord) -> N
     page = generate_alerts_html([_sample_alert()], [sample_record], "76561198000000000")
     # The link should be inside the toolbar <div class="toolbar">...</div>
     import re
+
     toolbar = re.search(r'<div class="toolbar">.*?</div>\s*<main>', page, re.DOTALL)
     assert toolbar is not None
     assert "steam_library.html" in toolbar.group()
@@ -743,15 +809,23 @@ def test_generate_alerts_html_has_collection_filter_buttons(sample_record: GameR
 
 def test_generate_alerts_html_replaces_all_placeholders(sample_record: GameRecord) -> None:
     page = generate_alerts_html([_sample_alert()], [sample_record], "76561198000000000")
-    for ph in ["__GENERATED_AT__", "__STEAM_ID__", "__LIB_HREF__", "__ALERTS__",
-               "__T_", "__I18N_", "__DIAG_HREF__"]:
+    for ph in [
+        "__GENERATED_AT__",
+        "__STEAM_ID__",
+        "__LIB_HREF__",
+        "__ALERTS__",
+        "__T_",
+        "__I18N_",
+        "__DIAG_HREF__",
+    ]:
         assert ph not in page, f"Placeholder {ph!r} still present in output"
 
 
 def test_generate_alerts_html_has_diagnostic_nav_link(sample_record: GameRecord) -> None:
     """Alerts page should contain a nav link to the diagnostic page."""
-    page = generate_alerts_html([_sample_alert()], [sample_record], "76561198000000000",
-                                diag_href="my_diag.html")
+    page = generate_alerts_html(
+        [_sample_alert()], [sample_record], "76561198000000000", diag_href="my_diag.html"
+    )
     assert 'href="my_diag.html"' in page
 
 
@@ -823,15 +897,17 @@ def test_generate_diagnostic_html_with_mappings() -> None:
 
 def test_generate_diagnostic_html_with_discovery_stats() -> None:
     """Epic discovery stats should appear in the output."""
-    stats = [DiscoveryStats(
-        total_api_items=100,
-        accepted_count=80,
-        resolved_count=70,
-        unresolved_count=10,
-        skipped_items=[
-            SkippedItem(catalog_id="cat_x", raw_name="abc123def", reason="hex_id"),
-        ],
-    )]
+    stats = [
+        DiscoveryStats(
+            total_api_items=100,
+            accepted_count=80,
+            resolved_count=70,
+            unresolved_count=10,
+            skipped_items=[
+                SkippedItem(catalog_id="cat_x", raw_name="abc123def", reason="hex_id"),
+            ],
+        )
+    ]
     html = generate_diagnostic_html(_EMPTY_SUMMARY, [], stats)
     assert "100" in html
     assert "abc123def" in html
@@ -855,8 +931,13 @@ def test_write_diagnostic_html_creates_file(tmp_path: Path) -> None:
 
 def test_generate_diagnostic_html_mapping_cards_have_data_filter() -> None:
     """Mapping stat cards should have data-filter attributes for click filtering."""
-    summary = {**_EMPTY_SUMMARY, "total_mappings": 3, "resolved_mappings": 2,
-               "unresolved_mappings": 1, "manual_mappings": 0}
+    summary = {
+        **_EMPTY_SUMMARY,
+        "total_mappings": 3,
+        "resolved_mappings": 2,
+        "unresolved_mappings": 1,
+        "manual_mappings": 0,
+    }
     html = generate_diagnostic_html(summary, [], [])
     assert 'data-filter="all"' in html
     assert 'data-filter="resolved"' in html
@@ -867,12 +948,30 @@ def test_generate_diagnostic_html_mapping_cards_have_data_filter() -> None:
 def test_generate_diagnostic_html_mapping_rows_have_data_status() -> None:
     """Mapping table rows should have data-status for JS filtering."""
     mappings: list[dict[str, object]] = [
-        {"external_source": "epic", "external_id": "c1", "external_name": "Hades",
-         "steam_appid": 1145360, "resolved_at": "2025-01-01", "manual": 0},
-        {"external_source": "epic", "external_id": "c2", "external_name": "Unknown",
-         "steam_appid": None, "resolved_at": "", "manual": 0},
-        {"external_source": "epic", "external_id": "c3", "external_name": "Custom",
-         "steam_appid": 999, "resolved_at": "2025-01-01", "manual": 1},
+        {
+            "external_source": "epic",
+            "external_id": "c1",
+            "external_name": "Hades",
+            "steam_appid": 1145360,
+            "resolved_at": "2025-01-01",
+            "manual": 0,
+        },
+        {
+            "external_source": "epic",
+            "external_id": "c2",
+            "external_name": "Unknown",
+            "steam_appid": None,
+            "resolved_at": "",
+            "manual": 0,
+        },
+        {
+            "external_source": "epic",
+            "external_id": "c3",
+            "external_name": "Custom",
+            "steam_appid": 999,
+            "resolved_at": "2025-01-01",
+            "manual": 1,
+        },
     ]
     html = generate_diagnostic_html(_EMPTY_SUMMARY, mappings, [])
     assert 'data-status="resolved"' in html
@@ -934,4 +1033,3 @@ def test_generate_html_has_availability_filter_group() -> None:
     assert 'data-avail="active"' in page
     assert 'data-avail="removed"' in page
     assert 'data-avail="all"' in page
-

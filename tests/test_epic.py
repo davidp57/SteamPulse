@@ -1,4 +1,5 @@
 """Tests for Epic Games source plugin (EpicSource) and epic_api module."""
+
 from __future__ import annotations
 
 import argparse
@@ -11,9 +12,7 @@ import responses as resp_mock
 from steam_tracker.sources import GameSource
 
 _EPIC_OAUTH = "https://account-public-service-prod03.ol.epicgames.com/account/api/oauth/token"
-_EPIC_LIBRARY = (
-    "https://library-service.live.use1a.on.epicgames.com/library/api/public/items"
-)
+_EPIC_LIBRARY = "https://library-service.live.use1a.on.epicgames.com/library/api/public/items"
 _EPIC_DEVICE_AUTH = (
     "https://account-public-service-prod03.ol.epicgames.com"
     "/account/api/public/account/{account_id}/deviceAuth"
@@ -155,16 +154,16 @@ def test_discover_games_with_auth_code() -> None:
     resp_mock.add(
         resp_mock.GET,
         _EPIC_LIBRARY,
-        json=_library_response([
-            _library_item("cat1", "Hades"),
-            _library_item("cat2", "Celeste"),
-        ]),
+        json=_library_response(
+            [
+                _library_item("cat1", "Hades"),
+                _library_item("cat2", "Celeste"),
+            ]
+        ),
     )
 
     args = _make_args(epic_auth_code="code123")
-    with patch(
-        "steam_tracker.sources.epic.resolve_steam_appid", return_value=None
-    ):
+    with patch("steam_tracker.sources.epic.resolve_steam_appid", return_value=None):
         games = EpicSource().discover_games(args)
 
     assert len(games) == 2
@@ -188,9 +187,7 @@ def test_discover_games_with_resolved_appid() -> None:
     )
 
     args = _make_args(epic_auth_code="code123")
-    with patch(
-        "steam_tracker.sources.epic.resolve_steam_appid", return_value=1145360
-    ):
+    with patch("steam_tracker.sources.epic.resolve_steam_appid", return_value=1145360):
         games = EpicSource().discover_games(args)
 
     assert len(games) == 1
@@ -212,9 +209,7 @@ def test_discover_games_unresolved_gets_hash_appid() -> None:
     )
 
     args = _make_args(epic_auth_code="code123")
-    with patch(
-        "steam_tracker.sources.epic.resolve_steam_appid", return_value=None
-    ):
+    with patch("steam_tracker.sources.epic.resolve_steam_appid", return_value=None):
         games = EpicSource().discover_games(args)
 
     assert len(games) == 1
@@ -306,10 +301,12 @@ def test_epic_get_library() -> None:
     resp_mock.add(
         resp_mock.GET,
         _EPIC_LIBRARY,
-        json=_library_response([
-            _library_item("c1", "Game One"),
-            _library_item("c2", "Game Two"),
-        ]),
+        json=_library_response(
+            [
+                _library_item("c1", "Game One"),
+                _library_item("c2", "Game Two"),
+            ]
+        ),
     )
     items = epic_get_library("tok123")
     assert len(items) == 2
@@ -467,19 +464,22 @@ def test_discover_games_sandbox_name_live_uses_appname() -> None:
     resp_mock.add(
         resp_mock.GET,
         _EPIC_LIBRARY,
-        json=_library_response([{
-            "catalogItemId": "cat_x",
-            "namespace": "ns1",
-            "appName": "GoneHomeFallback",
-            "sandboxName": "Live",
-        }]),
+        json=_library_response(
+            [
+                {
+                    "catalogItemId": "cat_x",
+                    "namespace": "ns1",
+                    "appName": "GoneHomeFallback",
+                    "sandboxName": "Live",
+                }
+            ]
+        ),
     )
 
     args = _make_args(epic_auth_code="code123")
-    with patch(
-        "steam_tracker.sources.epic.resolve_steam_appid", return_value=None
-    ), patch(
-        "steam_tracker.sources.epic.epic_get_catalog_titles", return_value={}
+    with (
+        patch("steam_tracker.sources.epic.resolve_steam_appid", return_value=None),
+        patch("steam_tracker.sources.epic.epic_get_catalog_titles", return_value={}),
     ):
         games = EpicSource().discover_games(args)
 
@@ -532,24 +532,25 @@ def test_discover_games_filters_hex_id_names() -> None:
     resp_mock.add(
         resp_mock.GET,
         _EPIC_LIBRARY,
-        json=_library_response([
-            # Real game — should be kept
-            _library_item("cat1", "Hades"),
-            # Hex ID as appName, no title — should be filtered
-            {
-                "catalogItemId": "cat_hex",
-                "namespace": "ns1",
-                "appName": "91eac4ac00304bcc9d7d4a55a95894b3",
-                "sandboxName": "Live",
-            },
-        ]),
+        json=_library_response(
+            [
+                # Real game — should be kept
+                _library_item("cat1", "Hades"),
+                # Hex ID as appName, no title — should be filtered
+                {
+                    "catalogItemId": "cat_hex",
+                    "namespace": "ns1",
+                    "appName": "91eac4ac00304bcc9d7d4a55a95894b3",
+                    "sandboxName": "Live",
+                },
+            ]
+        ),
     )
 
     args = _make_args(epic_auth_code="code123")
-    with patch(
-        "steam_tracker.sources.epic.resolve_steam_appid", return_value=None
-    ), patch(
-        "steam_tracker.sources.epic.epic_get_catalog_titles", return_value={}
+    with (
+        patch("steam_tracker.sources.epic.resolve_steam_appid", return_value=None),
+        patch("steam_tracker.sources.epic.epic_get_catalog_titles", return_value={}),
     ):
         source = EpicSource()
         games = source.discover_games(args)
@@ -570,23 +571,24 @@ def test_discover_games_populates_last_stats() -> None:
     resp_mock.add(
         resp_mock.GET,
         _EPIC_LIBRARY,
-        json=_library_response([
-            _library_item("cat1", "Hades"),
-            _library_item("cat2", "Celeste"),
-            {
-                "catalogItemId": "cat_hex",
-                "namespace": "ns1",
-                "appName": "91eac4ac00304bcc9d7d4a55a95894b3",
-                "sandboxName": "Live",
-            },
-        ]),
+        json=_library_response(
+            [
+                _library_item("cat1", "Hades"),
+                _library_item("cat2", "Celeste"),
+                {
+                    "catalogItemId": "cat_hex",
+                    "namespace": "ns1",
+                    "appName": "91eac4ac00304bcc9d7d4a55a95894b3",
+                    "sandboxName": "Live",
+                },
+            ]
+        ),
     )
 
     args = _make_args(epic_auth_code="code123")
-    with patch(
-        "steam_tracker.sources.epic.resolve_steam_appid", return_value=1145360
-    ), patch(
-        "steam_tracker.sources.epic.epic_get_catalog_titles", return_value={}
+    with (
+        patch("steam_tracker.sources.epic.resolve_steam_appid", return_value=1145360),
+        patch("steam_tracker.sources.epic.epic_get_catalog_titles", return_value={}),
     ):
         source = EpicSource()
         games = source.discover_games(args)
@@ -604,8 +606,7 @@ def test_discover_games_populates_last_stats() -> None:
 # -- Catalog API title enrichment -------------------------------------------
 
 _EPIC_CATALOG_BASE = (
-    "https://catalog-public-service-prod06.ol.epicgames.com"
-    "/catalog/api/shared/namespace"
+    "https://catalog-public-service-prod06.ol.epicgames.com/catalog/api/shared/namespace"
 )
 
 
@@ -704,9 +705,7 @@ def test_epic_client_token() -> None:
     """_epic_client_token obtains a token via client_credentials grant."""
     from steam_tracker.epic_api import _epic_client_token
 
-    resp_mock.add(
-        resp_mock.POST, _EPIC_OAUTH, json={"access_token": "cred_tok_abc"}
-    )
+    resp_mock.add(resp_mock.POST, _EPIC_OAUTH, json={"access_token": "cred_tok_abc"})
     token = _epic_client_token()
     assert token == "cred_tok_abc"
 
@@ -723,22 +722,25 @@ def test_discover_games_catalog_enriches_hex_items() -> None:
     resp_mock.add(
         resp_mock.GET,
         _EPIC_LIBRARY,
-        json=_library_response([
-            {
-                "catalogItemId": "cat_hex",
-                "namespace": "ns1",
-                "appName": "91eac4ac00304bcc9d7d4a55a95894b3",
-                "sandboxName": "Live",
-            },
-        ]),
+        json=_library_response(
+            [
+                {
+                    "catalogItemId": "cat_hex",
+                    "namespace": "ns1",
+                    "appName": "91eac4ac00304bcc9d7d4a55a95894b3",
+                    "sandboxName": "Live",
+                },
+            ]
+        ),
     )
 
     args = _make_args(epic_auth_code="code123")
-    with patch(
-        "steam_tracker.sources.epic.resolve_steam_appid", return_value=None
-    ), patch(
-        "steam_tracker.sources.epic.epic_get_catalog_titles",
-        return_value={"cat_hex": "Guacamelee! 2"},
+    with (
+        patch("steam_tracker.sources.epic.resolve_steam_appid", return_value=None),
+        patch(
+            "steam_tracker.sources.epic.epic_get_catalog_titles",
+            return_value={"cat_hex": "Guacamelee! 2"},
+        ),
     ):
         source = EpicSource()
         games = source.discover_games(args)
@@ -756,22 +758,25 @@ def test_discover_games_catalog_enriches_production_items() -> None:
     resp_mock.add(
         resp_mock.GET,
         _EPIC_LIBRARY,
-        json=_library_response([
-            {
-                "catalogItemId": "cat_prod",
-                "namespace": "ns1",
-                "appName": "dd75b5c168d546cc869582c0389f0a1d",
-                "sandboxName": "oxygen Production",
-            },
-        ]),
+        json=_library_response(
+            [
+                {
+                    "catalogItemId": "cat_prod",
+                    "namespace": "ns1",
+                    "appName": "dd75b5c168d546cc869582c0389f0a1d",
+                    "sandboxName": "oxygen Production",
+                },
+            ]
+        ),
     )
 
     args = _make_args(epic_auth_code="code123")
-    with patch(
-        "steam_tracker.sources.epic.resolve_steam_appid", return_value=None
-    ), patch(
-        "steam_tracker.sources.epic.epic_get_catalog_titles",
-        return_value={"cat_prod": "Train Sim World 2"},
+    with (
+        patch("steam_tracker.sources.epic.resolve_steam_appid", return_value=None),
+        patch(
+            "steam_tracker.sources.epic.epic_get_catalog_titles",
+            return_value={"cat_prod": "Train Sim World 2"},
+        ),
     ):
         source = EpicSource()
         games = source.discover_games(args)
@@ -811,22 +816,23 @@ def test_discover_games_filters_production_names() -> None:
     resp_mock.add(
         resp_mock.GET,
         _EPIC_LIBRARY,
-        json=_library_response([
-            _library_item("cat1", "Hades"),
-            {
-                "catalogItemId": "cat_prod",
-                "namespace": "ns1",
-                "appName": "dd75b5c168d546cc869582c0389f0a1d",
-                "sandboxName": "oxygen Production",
-            },
-        ]),
+        json=_library_response(
+            [
+                _library_item("cat1", "Hades"),
+                {
+                    "catalogItemId": "cat_prod",
+                    "namespace": "ns1",
+                    "appName": "dd75b5c168d546cc869582c0389f0a1d",
+                    "sandboxName": "oxygen Production",
+                },
+            ]
+        ),
     )
 
     args = _make_args(epic_auth_code="code123")
-    with patch(
-        "steam_tracker.sources.epic.resolve_steam_appid", return_value=None
-    ), patch(
-        "steam_tracker.sources.epic.epic_get_catalog_titles", return_value={}
+    with (
+        patch("steam_tracker.sources.epic.resolve_steam_appid", return_value=None),
+        patch("steam_tracker.sources.epic.epic_get_catalog_titles", return_value={}),
     ):
         source = EpicSource()
         games = source.discover_games(args)
@@ -847,18 +853,18 @@ def test_discover_games_deduplicates_by_name() -> None:
     resp_mock.add(
         resp_mock.GET,
         _EPIC_LIBRARY,
-        json=_library_response([
-            _library_item("cat1", "Death Stranding"),
-            _library_item("cat2", "Death Stranding"),
-            _library_item("cat3", "Death Stranding"),
-            _library_item("cat4", "Hades"),
-        ]),
+        json=_library_response(
+            [
+                _library_item("cat1", "Death Stranding"),
+                _library_item("cat2", "Death Stranding"),
+                _library_item("cat3", "Death Stranding"),
+                _library_item("cat4", "Hades"),
+            ]
+        ),
     )
 
     args = _make_args(epic_auth_code="code123")
-    with patch(
-        "steam_tracker.sources.epic.resolve_steam_appid", return_value=None
-    ):
+    with patch("steam_tracker.sources.epic.resolve_steam_appid", return_value=None):
         source = EpicSource()
         games = source.discover_games(args)
 

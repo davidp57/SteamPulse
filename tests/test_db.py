@@ -1,4 +1,5 @@
 """Tests for steam_tracker.db."""
+
 from __future__ import annotations
 
 from steam_tracker.db import Database, infer_status
@@ -48,9 +49,7 @@ def test_upsert_app_details_first_insert_returns_no_changes(
     assert changes == []
 
 
-def test_upsert_app_details_update_returns_changes(
-    db: Database, sample_game: OwnedGame
-) -> None:
+def test_upsert_app_details_update_returns_changes(db: Database, sample_game: OwnedGame) -> None:
     """Subsequent updates must return only the changed fields."""
     db.upsert_game(OwnedGame(appid=420, name="Half-Life 2"))
     db.upsert_app_details(AppDetails(appid=420, buildid=1000))
@@ -92,9 +91,7 @@ def test_upsert_app_details_scalar_new_fields(
     assert det.recommendation_count == 300000
 
 
-def test_upsert_news(
-    db: Database, sample_game: OwnedGame, sample_news: list[NewsItem]
-) -> None:
+def test_upsert_news(db: Database, sample_game: OwnedGame, sample_news: list[NewsItem]) -> None:
     db.upsert_game(sample_game)
     db.upsert_news(sample_game.appid, sample_news)
     records = db.get_all_game_records()
@@ -124,16 +121,12 @@ def test_upsert_news_deduplicates_by_url(
     assert len(records[0].news) == 1
 
 
-def test_get_cached_appids_empty_before_details(
-    db: Database, sample_game: OwnedGame
-) -> None:
+def test_get_cached_appids_empty_before_details(db: Database, sample_game: OwnedGame) -> None:
     db.upsert_game(sample_game)
     assert db.get_cached_appids() == set()
 
 
-def test_get_cached_appids_after_failed_fetch(
-    db: Database, sample_game: OwnedGame
-) -> None:
+def test_get_cached_appids_after_failed_fetch(db: Database, sample_game: OwnedGame) -> None:
     """A game whose API call returned None should still be skipped after mark_fetched."""
     db.upsert_game(sample_game)
     db.mark_fetched({sample_game.appid}, details=True)
@@ -178,9 +171,7 @@ def test_infer_status_coming_soon(db: Database, sample_game: OwnedGame) -> None:
     assert db.get_all_game_records()[0].status.badge == "unreleased"
 
 
-def test_infer_status_unknown_without_details(
-    db: Database, sample_game: OwnedGame
-) -> None:
+def test_infer_status_unknown_without_details(db: Database, sample_game: OwnedGame) -> None:
     db.upsert_game(sample_game)
     assert db.get_all_game_records()[0].status.badge == "unknown"
 
@@ -198,6 +189,45 @@ def test_games_sorted_case_insensitively(db: Database) -> None:
 def test_upsert_appid_mapping_insert(db: Database) -> None:
     db.upsert_appid_mapping("epic", "abc123", "Hades", 1145360)
     assert db.get_appid_mapping("epic", "abc123") == 1145360
+
+
+# ─── playnite_mappings ───────────────────────────────────────────────────────
+
+
+class TestPlayniteMappings:
+    def test_get_playnite_mappings_empty(self, db: Database) -> None:
+        assert db.get_playnite_mappings() == {}
+
+    def test_upsert_playnite_mappings_stores_entries(self, db: Database) -> None:
+        entries = [{"game_key": "420", "playnite_uuid": "uuid-1234", "name": "Half-Life 2"}]
+        count = db.upsert_playnite_mappings(entries)
+        assert count == 1
+        mappings = db.get_playnite_mappings()
+        assert mappings["420"] == "uuid-1234"
+
+    def test_upsert_playnite_mappings_overwrites_on_conflict(self, db: Database) -> None:
+        db.upsert_playnite_mappings(
+            [{"game_key": "420", "playnite_uuid": "old-uuid", "name": "HL2"}]
+        )
+        db.upsert_playnite_mappings(
+            [{"game_key": "420", "playnite_uuid": "new-uuid", "name": "HL2"}]
+        )
+        mappings = db.get_playnite_mappings()
+        assert mappings["420"] == "new-uuid"
+
+    def test_upsert_playnite_mappings_multiple_entries(self, db: Database) -> None:
+        entries = [
+            {"game_key": "420", "playnite_uuid": "uuid-a", "name": "Half-Life 2"},
+            {"game_key": "730", "playnite_uuid": "uuid-b", "name": "CS2"},
+        ]
+        count = db.upsert_playnite_mappings(entries)
+        assert count == 2
+        mappings = db.get_playnite_mappings()
+        assert len(mappings) == 2
+        assert mappings["730"] == "uuid-b"
+
+    def test_upsert_playnite_mappings_empty_list(self, db: Database) -> None:
+        assert db.upsert_playnite_mappings([]) == 0
 
 
 def test_upsert_appid_mapping_update(db: Database) -> None:
@@ -282,10 +312,12 @@ def test_upsert_game_owned_beats_epic(db: Database) -> None:
 
 def test_cleanup_removes_epic_live_games(db: Database) -> None:
     """Games named 'Live' with source='epic' must be deleted by cleanup."""
-    db.upsert_game(OwnedGame(appid=2_000_000_001, name="Live", source="epic",
-                              external_id="epic:cat1"))
-    db.upsert_game(OwnedGame(appid=2_000_000_002, name="Live", source="epic",
-                              external_id="epic:cat2"))
+    db.upsert_game(
+        OwnedGame(appid=2_000_000_001, name="Live", source="epic", external_id="epic:cat1")
+    )
+    db.upsert_game(
+        OwnedGame(appid=2_000_000_002, name="Live", source="epic", external_id="epic:cat2")
+    )
     assert len(db.get_all_game_records()) == 2
 
     cleaned = db.run_cleanup()
@@ -295,8 +327,9 @@ def test_cleanup_removes_epic_live_games(db: Database) -> None:
 
 def test_cleanup_removes_matching_appid_mappings(db: Database) -> None:
     """Cleanup must also delete appid_mappings for 'Live' Epic entries."""
-    db.upsert_game(OwnedGame(appid=2_000_000_001, name="Live", source="epic",
-                              external_id="epic:cat1"))
+    db.upsert_game(
+        OwnedGame(appid=2_000_000_001, name="Live", source="epic", external_id="epic:cat1")
+    )
     db.upsert_appid_mapping("epic", "epic:cat1", "Live", None)
 
     # The mapping row exists (even though steam_appid is NULL)
@@ -321,10 +354,12 @@ def test_cleanup_removes_matching_appid_mappings(db: Database) -> None:
 
 def test_cleanup_preserves_non_live_epic_games(db: Database) -> None:
     """Epic games with a real title must NOT be deleted."""
-    db.upsert_game(OwnedGame(appid=2_000_000_001, name="Hades", source="epic",
-                              external_id="epic:cat_hades"))
-    db.upsert_game(OwnedGame(appid=2_000_000_002, name="Live", source="epic",
-                              external_id="epic:cat_bad"))
+    db.upsert_game(
+        OwnedGame(appid=2_000_000_001, name="Hades", source="epic", external_id="epic:cat_hades")
+    )
+    db.upsert_game(
+        OwnedGame(appid=2_000_000_002, name="Live", source="epic", external_id="epic:cat_bad")
+    )
 
     cleaned = db.run_cleanup()
     assert cleaned == 1
@@ -344,10 +379,22 @@ def test_cleanup_preserves_non_epic_games(db: Database) -> None:
 
 def test_cleanup_removes_epic_hex_id_games(db: Database) -> None:
     """Games with hex-ID names (24+ lowercase hex chars) and source='epic' must be deleted."""
-    db.upsert_game(OwnedGame(appid=2_000_000_010, name="0074f9a408204f1f869d9d6f26b99521",
-                              source="epic", external_id="epic:hex1"))
-    db.upsert_game(OwnedGame(appid=2_000_000_011, name="002b000085aeb49b1a3f3c42e3f918f2f",
-                              source="epic", external_id="epic:hex2"))
+    db.upsert_game(
+        OwnedGame(
+            appid=2_000_000_010,
+            name="0074f9a408204f1f869d9d6f26b99521",
+            source="epic",
+            external_id="epic:hex1",
+        )
+    )
+    db.upsert_game(
+        OwnedGame(
+            appid=2_000_000_011,
+            name="002b000085aeb49b1a3f3c42e3f918f2f",
+            source="epic",
+            external_id="epic:hex2",
+        )
+    )
     assert len(db.get_all_game_records()) == 2
 
     cleaned = db.run_cleanup()
@@ -357,8 +404,14 @@ def test_cleanup_removes_epic_hex_id_games(db: Database) -> None:
 
 def test_cleanup_hex_id_removes_appid_mappings(db: Database) -> None:
     """Cleanup must also delete appid_mappings for hex-ID Epic entries."""
-    db.upsert_game(OwnedGame(appid=2_000_000_010, name="0074f9a408204f1f869d9d6f26b99521",
-                              source="epic", external_id="epic:hex1"))
+    db.upsert_game(
+        OwnedGame(
+            appid=2_000_000_010,
+            name="0074f9a408204f1f869d9d6f26b99521",
+            source="epic",
+            external_id="epic:hex1",
+        )
+    )
     db.upsert_appid_mapping("epic", "epic:hex1", "0074f9a408204f1f869d9d6f26b99521", None)
 
     db.run_cleanup()
@@ -374,10 +427,17 @@ def test_cleanup_hex_id_removes_appid_mappings(db: Database) -> None:
 
 def test_cleanup_preserves_non_hex_epic_games(db: Database) -> None:
     """Epic games with a real title must NOT be deleted by hex-ID rule."""
-    db.upsert_game(OwnedGame(appid=2_000_000_010, name="Hades", source="epic",
-                              external_id="epic:cat_hades"))
-    db.upsert_game(OwnedGame(appid=2_000_000_011, name="0074f9a408204f1f869d9d6f26b99521",
-                              source="epic", external_id="epic:hex_bad"))
+    db.upsert_game(
+        OwnedGame(appid=2_000_000_010, name="Hades", source="epic", external_id="epic:cat_hades")
+    )
+    db.upsert_game(
+        OwnedGame(
+            appid=2_000_000_011,
+            name="0074f9a408204f1f869d9d6f26b99521",
+            source="epic",
+            external_id="epic:hex_bad",
+        )
+    )
 
     cleaned = db.run_cleanup()
     assert cleaned == 1
@@ -388,14 +448,23 @@ def test_cleanup_preserves_non_hex_epic_games(db: Database) -> None:
 
 def test_cleanup_hex_id_preserves_short_hex(db: Database) -> None:
     """Hex strings shorter than 24 chars must NOT be cleaned up."""
-    db.upsert_game(OwnedGame(appid=2_000_000_010, name="abcdef1234567890abcdef12",
-                              source="epic", external_id="epic:short"))
+    db.upsert_game(
+        OwnedGame(
+            appid=2_000_000_010,
+            name="abcdef1234567890abcdef12",
+            source="epic",
+            external_id="epic:short",
+        )
+    )
     # 24 chars exactly — should match
     cleaned = db.run_cleanup()
     assert cleaned == 1
 
-    db.upsert_game(OwnedGame(appid=2_000_000_011, name="abcdef12345678",
-                              source="epic", external_id="epic:tooshort"))
+    db.upsert_game(
+        OwnedGame(
+            appid=2_000_000_011, name="abcdef12345678", source="epic", external_id="epic:tooshort"
+        )
+    )
     # 14 chars — should NOT match
     cleaned = db.run_cleanup()
     assert cleaned == 0
@@ -404,10 +473,19 @@ def test_cleanup_hex_id_preserves_short_hex(db: Database) -> None:
 
 def test_cleanup_removes_epic_production_names(db: Database) -> None:
     """Games named '<word> Production' with source='epic' must be deleted."""
-    db.upsert_game(OwnedGame(appid=2_000_000_020, name="ashishim Production",
-                              source="epic", external_id="epic:prod1"))
-    db.upsert_game(OwnedGame(appid=2_000_000_021, name="blackcoral Production",
-                              source="epic", external_id="epic:prod2"))
+    db.upsert_game(
+        OwnedGame(
+            appid=2_000_000_020, name="ashishim Production", source="epic", external_id="epic:prod1"
+        )
+    )
+    db.upsert_game(
+        OwnedGame(
+            appid=2_000_000_021,
+            name="blackcoral Production",
+            source="epic",
+            external_id="epic:prod2",
+        )
+    )
     assert len(db.get_all_game_records()) == 2
 
     cleaned = db.run_cleanup()
@@ -417,8 +495,11 @@ def test_cleanup_removes_epic_production_names(db: Database) -> None:
 
 def test_cleanup_production_name_removes_appid_mappings(db: Database) -> None:
     """Cleanup must also delete appid_mappings for Production-name entries."""
-    db.upsert_game(OwnedGame(appid=2_000_000_020, name="yorkie Production",
-                              source="epic", external_id="epic:prod3"))
+    db.upsert_game(
+        OwnedGame(
+            appid=2_000_000_020, name="yorkie Production", source="epic", external_id="epic:prod3"
+        )
+    )
     db.upsert_appid_mapping("epic", "epic:prod3", "yorkie Production", 12345)
 
     db.run_cleanup()
@@ -434,10 +515,17 @@ def test_cleanup_production_name_removes_appid_mappings(db: Database) -> None:
 
 def test_cleanup_preserves_non_production_epic_games(db: Database) -> None:
     """Epic games whose name doesn't match '*Production' must NOT be deleted."""
-    db.upsert_game(OwnedGame(appid=2_000_000_020, name="Hades", source="epic",
-                              external_id="epic:cat_hades"))
-    db.upsert_game(OwnedGame(appid=2_000_000_021, name="ashishim Production",
-                              source="epic", external_id="epic:prod_bad"))
+    db.upsert_game(
+        OwnedGame(appid=2_000_000_020, name="Hades", source="epic", external_id="epic:cat_hades")
+    )
+    db.upsert_game(
+        OwnedGame(
+            appid=2_000_000_021,
+            name="ashishim Production",
+            source="epic",
+            external_id="epic:prod_bad",
+        )
+    )
 
     cleaned = db.run_cleanup()
     assert cleaned == 1
@@ -457,10 +545,10 @@ def test_cleanup_production_name_ignores_non_epic(db: Database) -> None:
 
 def test_cleanup_removes_epic_duplicate_external_id(db: Database) -> None:
     """When both a real-appid and a synthetic-appid share external_id, remove the synthetic."""
-    db.upsert_game(OwnedGame(appid=570, name="Dota 2", source="epic",
-                              external_id="epic:dota_cat"))
-    db.upsert_game(OwnedGame(appid=2_000_000_030, name="Dota 2", source="epic",
-                              external_id="epic:dota_cat"))
+    db.upsert_game(OwnedGame(appid=570, name="Dota 2", source="epic", external_id="epic:dota_cat"))
+    db.upsert_game(
+        OwnedGame(appid=2_000_000_030, name="Dota 2", source="epic", external_id="epic:dota_cat")
+    )
     assert len(db.get_all_game_records()) == 2
 
     cleaned = db.run_cleanup()
@@ -472,10 +560,10 @@ def test_cleanup_removes_epic_duplicate_external_id(db: Database) -> None:
 
 def test_cleanup_duplicate_external_id_removes_appid_mappings(db: Database) -> None:
     """Cleanup must also delete appid_mappings for duplicate synthetic entries."""
-    db.upsert_game(OwnedGame(appid=570, name="Dota 2", source="epic",
-                              external_id="epic:dota_cat"))
-    db.upsert_game(OwnedGame(appid=2_000_000_030, name="Dota 2", source="epic",
-                              external_id="epic:dota_cat"))
+    db.upsert_game(OwnedGame(appid=570, name="Dota 2", source="epic", external_id="epic:dota_cat"))
+    db.upsert_game(
+        OwnedGame(appid=2_000_000_030, name="Dota 2", source="epic", external_id="epic:dota_cat")
+    )
     db.upsert_appid_mapping("epic", "epic:dota_cat", "Dota 2", 570)
 
     db.run_cleanup()
@@ -490,8 +578,11 @@ def test_cleanup_duplicate_external_id_removes_appid_mappings(db: Database) -> N
 
 def test_cleanup_preserves_orphan_synthetic_epic_games(db: Database) -> None:
     """Synthetic-appid games without a real-appid counterpart must NOT be deleted."""
-    db.upsert_game(OwnedGame(appid=2_000_000_030, name="Some Indie Game", source="epic",
-                              external_id="epic:indie_cat"))
+    db.upsert_game(
+        OwnedGame(
+            appid=2_000_000_030, name="Some Indie Game", source="epic", external_id="epic:indie_cat"
+        )
+    )
 
     cleaned = db.run_cleanup()
     assert cleaned == 0
@@ -507,10 +598,14 @@ def test_cleanup_noop_on_clean_db(db: Database) -> None:
 
 def test_cleanup_duplicate_external_id_cross_source(db: Database) -> None:
     """Cross-source duplicate: owned real-appid + epic synthetic with same external_id."""
-    db.upsert_game(OwnedGame(appid=632470, name="Disco Elysium", source="owned",
-                              external_id="epic:disco_cat"))
-    db.upsert_game(OwnedGame(appid=2_000_000_040, name="Disco Elysium", source="epic",
-                              external_id="epic:disco_cat"))
+    db.upsert_game(
+        OwnedGame(appid=632470, name="Disco Elysium", source="owned", external_id="epic:disco_cat")
+    )
+    db.upsert_game(
+        OwnedGame(
+            appid=2_000_000_040, name="Disco Elysium", source="epic", external_id="epic:disco_cat"
+        )
+    )
     assert len(db.get_all_game_records()) == 2
 
     cleaned = db.run_cleanup()
@@ -524,10 +619,16 @@ def test_cleanup_duplicate_external_id_cross_source(db: Database) -> None:
 def test_cleanup_removes_duplicate_name_games(db: Database) -> None:
     """Synthetic-appid games whose name matches a real-appid game must be removed."""
     db.upsert_game(OwnedGame(appid=1190460, name="Death Stranding", source="owned"))
-    db.upsert_game(OwnedGame(appid=2_000_000_050, name="Death Stranding", source="epic",
-                              external_id="epic:ds1"))
-    db.upsert_game(OwnedGame(appid=2_000_000_051, name="Death Stranding", source="epic",
-                              external_id="epic:ds2"))
+    db.upsert_game(
+        OwnedGame(
+            appid=2_000_000_050, name="Death Stranding", source="epic", external_id="epic:ds1"
+        )
+    )
+    db.upsert_game(
+        OwnedGame(
+            appid=2_000_000_051, name="Death Stranding", source="epic", external_id="epic:ds2"
+        )
+    )
     assert len(db.get_all_game_records()) == 3
 
     cleaned = db.run_cleanup()
@@ -540,8 +641,11 @@ def test_cleanup_removes_duplicate_name_games(db: Database) -> None:
 def test_cleanup_duplicate_name_removes_appid_mappings(db: Database) -> None:
     """Cleanup must also delete appid_mappings for name-duplicate entries."""
     db.upsert_game(OwnedGame(appid=1190460, name="Death Stranding", source="owned"))
-    db.upsert_game(OwnedGame(appid=2_000_000_050, name="Death Stranding", source="epic",
-                              external_id="epic:ds1"))
+    db.upsert_game(
+        OwnedGame(
+            appid=2_000_000_050, name="Death Stranding", source="epic", external_id="epic:ds1"
+        )
+    )
     db.upsert_appid_mapping("epic", "epic:ds1", "Death Stranding", 1190460)
 
     db.run_cleanup()
@@ -557,8 +661,14 @@ def test_cleanup_duplicate_name_removes_appid_mappings(db: Database) -> None:
 def test_cleanup_duplicate_name_preserves_unique_synthetics(db: Database) -> None:
     """Synthetic-appid games with unique names must NOT be deleted by name rule."""
     db.upsert_game(OwnedGame(appid=420, name="Half-Life 2", source="owned"))
-    db.upsert_game(OwnedGame(appid=2_000_000_060, name="Some Unique Epic Game", source="epic",
-                              external_id="epic:unique"))
+    db.upsert_game(
+        OwnedGame(
+            appid=2_000_000_060,
+            name="Some Unique Epic Game",
+            source="epic",
+            external_id="epic:unique",
+        )
+    )
 
     cleaned = db.run_cleanup()
     assert cleaned == 0
@@ -583,14 +693,21 @@ def test_get_diagnostic_summary_with_data(db: Database) -> None:
     """Summary should reflect inserted games and details."""
     db.upsert_game(OwnedGame(appid=10, name="CS", source="owned"))
     db.upsert_game(OwnedGame(appid=20, name="TF2", source="owned"))
-    db.upsert_game(OwnedGame(
-        appid=2_000_000_001, name="Hades", source="epic",
-        external_id="epic:cat1",
-    ))
+    db.upsert_game(
+        OwnedGame(
+            appid=2_000_000_001,
+            name="Hades",
+            source="epic",
+            external_id="epic:cat1",
+        )
+    )
     # Enrich only one game
-    db.upsert_app_details(AppDetails(
-        appid=10, name="Counter-Strike",
-    ))
+    db.upsert_app_details(
+        AppDetails(
+            appid=10,
+            name="Counter-Strike",
+        )
+    )
 
     summary = db.get_diagnostic_summary()
     assert summary["total_games"] == 3
@@ -684,9 +801,7 @@ def test_mark_removed_idempotent(db: Database, sample_game: OwnedGame) -> None:
     assert db.get_all_game_records()[0].removed_at == first_ts
 
 
-def test_get_all_active_appids_excludes_removed(
-    db: Database, sample_game: OwnedGame
-) -> None:
+def test_get_all_active_appids_excludes_removed(db: Database, sample_game: OwnedGame) -> None:
     db.upsert_game(sample_game)
     db.mark_removed({sample_game.appid})
     assert db.get_all_active_appids() == set()
@@ -702,9 +817,7 @@ def test_mark_active_clears_removed_at(db: Database, sample_game: OwnedGame) -> 
     assert rec.removed_at is None
 
 
-def test_mark_active_noop_when_already_active(
-    db: Database, sample_game: OwnedGame
-) -> None:
+def test_mark_active_noop_when_already_active(db: Database, sample_game: OwnedGame) -> None:
     """mark_active on a never-removed game must return 0."""
     db.upsert_game(sample_game)
     n = db.mark_active({sample_game.appid})
